@@ -6,9 +6,10 @@
 (function (LO) {
   'use strict';
 
-  var ROWS = 60;          // depth rows of spectrum history
-  var ROW_DT = 0.12;      // seconds per row → ~7 s of history in depth
-  var COLS = 220;         // vertices per ridge
+  var ROWS = 120;         // depth rows of spectrum history
+  var ROW_DT = 0.065;     // seconds per row → ~8 s of history in depth
+  var COLS = 200;         // vertices per ridge
+  var WEAVE = 5;          // every n-th column also runs in depth: the carpet's warp
   var RES_DEPTH = 0.3;    // depth at which resonance spires stand
 
   // Warm → pale gold → cool, along the log-frequency axis (docs/visuals.png).
@@ -187,46 +188,70 @@
         var energy = state.frame.energy.v;
         var bright = 0.55 + 0.45 * energy + flash;
 
-        // Layer A: ridges, back to front, each occluding the ones behind it.
+        // Layer A: a woven carpet, drawn back to front. Each row is a ridge
+        // (weft) whose fill hides what lies behind it; every WEAVE-th column
+        // also runs in depth (warp); a dotted mesh sits on the surface.
+        var prevX = null, prevY = null;
         for (var r = ROWS - 1; r >= 0; r--) {
           var row = history[r];
           var d = (r + frac) / ROWS;
           var g = geometry(d);
-          var xs = [], ys = [];
+          var xs = new Array(COLS + 1), ys = new Array(COLS + 1), vs = new Array(COLS + 1);
           for (var c = 0; c <= COLS; c++) {
             var u = c / COLS;
-            xs.push(W / 2 + (u - 0.5) * 2 * g.half);
-            ys.push(g.y - heightAt(row, u, d) * g.amp);
+            vs[c] = heightAt(row, u, d);
+            xs[c] = W / 2 + (u - 0.5) * 2 * g.half;
+            ys[c] = g.y - vs[c] * g.amp;
           }
+          var depthAlpha = Math.pow(1 - d, 1.25);
+
+          // Warp threads from the row behind to this one, under this row's fill.
+          if (prevX) {
+            ctx.lineWidth = 0.5 + 0.5 * g.persp;
+            for (c = 0; c <= COLS; c += WEAVE) {
+              ctx.strokeStyle = rgba(colour(c / COLS), (0.08 + 0.32 * vs[c]) * depthAlpha * bright);
+              ctx.beginPath(); ctx.moveTo(prevX[c], prevY[c]); ctx.lineTo(xs[c], ys[c]); ctx.stroke();
+            }
+          }
+
+          // Surface: a faint tint just under the crest fading into the ground.
           ctx.beginPath();
           ctx.moveTo(xs[0], H);
           for (c = 0; c <= COLS; c++) ctx.lineTo(xs[c], ys[c]);
           ctx.lineTo(xs[COLS], H);
           ctx.closePath();
-          ctx.fillStyle = 'rgba(7,8,10,0.9)';
+          ctx.fillStyle = 'rgba(7,8,10,0.93)';
+          ctx.fill();
+          var shade = ctx.createLinearGradient(xs[0], 0, xs[COLS], 0);
+          for (var k = 0; k < STOPS.length; k++) shade.addColorStop(STOPS[k][0], rgba(STOPS[k][1], 0.035 * depthAlpha * bright));
+          ctx.fillStyle = shade;
           ctx.fill();
 
-          var depthAlpha = Math.pow(1 - d, 1.4);
+          // Weft: the ridge line itself.
           var grad = ctx.createLinearGradient(xs[0], 0, xs[COLS], 0);
-          for (var k = 0; k < STOPS.length; k++) grad.addColorStop(STOPS[k][0], rgba(STOPS[k][1], Math.min(1, 0.08 + 0.75 * depthAlpha * bright)));
+          for (k = 0; k < STOPS.length; k++) grad.addColorStop(STOPS[k][0], rgba(STOPS[k][1], Math.min(1, 0.06 + 0.6 * depthAlpha * bright)));
           ctx.beginPath();
           ctx.moveTo(xs[0], ys[0]);
           for (c = 1; c <= COLS; c++) ctx.lineTo(xs[c], ys[c]);
           ctx.strokeStyle = grad;
-          ctx.lineWidth = 0.6 + 0.9 * g.persp;
+          ctx.lineWidth = 0.45 + 0.8 * g.persp;
           ctx.stroke();
 
-          // Glints on the crests of nearer rows.
-          if (r % 2 === 0 && d < 0.7) {
+          // Dotted mesh, staggered row to row; brighter and larger on crests.
+          if (d < 0.9 && !(reduced && r % 3)) {
             ctx.globalCompositeOperation = 'lighter';
-            for (c = 0; c <= COLS; c += 2) {
-              var v = row ? heightAt(row, c / COLS, d) : 0;
-              if (v < 0.35) continue;
-              ctx.fillStyle = rgba(colour(c / COLS), Math.min(0.9, 0.7 * v) * depthAlpha * bright);
-              ctx.fillRect(xs[c], ys[c] - 1, 1.5, 1.5);
+            var step = d < 0.35 ? 2 : 3, off = r % 2;
+            for (c = off; c <= COLS; c += step) {
+              var v = vs[c];
+              var a = (0.12 + 0.8 * v * v) * depthAlpha * bright;
+              if (a < 0.03) continue;
+              var sz = (0.6 + 1.3 * v) * (0.5 + g.persp);
+              ctx.fillStyle = rgba(colour(c / COLS), Math.min(0.95, a));
+              ctx.fillRect(xs[c] - sz / 2, ys[c] - sz / 2, sz, sz);
             }
             ctx.globalCompositeOperation = 'source-over';
           }
+          prevX = xs; prevY = ys;
         }
 
         // Layer B: resonances.
@@ -263,8 +288,8 @@
         ctx.globalCompositeOperation = 'source-over';
 
         if (!history[0] || state.connection !== 'connected') {
-          ctx.fillStyle = 'rgba(160,163,168,0.55)';
-          ctx.font = '12px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+          ctx.fillStyle = 'rgba(169,172,176,0.85)';
+          ctx.font = '14px ' + getComputedStyle(document.body).getPropertyValue('--mono');
           ctx.textAlign = 'center';
           ctx.fillText(state.connection === 'connected' ? 'waiting for signal' : state.connection, W / 2, H * 0.3);
         }
@@ -316,27 +341,34 @@
 
           // Label, nudged down if it would collide with one already placed.
           // A partial shared by two resonances is labelled once.
-          if (!text.label || labelled[text.label]) return;
+          // At most six labels, never pushed down into the terrain.
+          if (!text.label || labelled[text.label] || labels.length >= 6) return;
           labelled[text.label] = true;
           var ly = top - 8;
           for (var pass = 0; pass < 2; pass++) {
             for (var j = 0; j < labels.length; j++) {
-              if (Math.abs(labels[j].x - x) < 90 && Math.abs(labels[j].y - ly) < 30) ly = labels[j].y + 30;
+              if (Math.abs(labels[j].x - x) < 110 && Math.abs(labels[j].y - ly) < 36) ly = labels[j].y + 36;
             }
             for (var o = 0; o < avoid.length; o++) {
               var a = avoid[o];
-              if (x + 100 > a.left && x < a.right && ly + 20 > a.top && ly - 14 < a.bottom) ly = a.bottom + 16;
+              if (x + 120 > a.left && x < a.right && ly + 22 > a.top && ly - 16 < a.bottom) ly = a.bottom + 18;
             }
           }
+          if (ly > g.y - g.amp * 0.6) return;
           labels.push({ x: x, y: ly });
-          ctx.fillStyle = 'rgba(232,230,224,' + (0.9 * alpha).toFixed(3) + ')';
-          ctx.font = (main ? 13 : 11) + 'px ' + mono;
           ctx.textAlign = 'left';
-          ctx.fillText(text.label, x + 6, ly);
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = 'rgba(7,8,10,' + (0.85 * alpha).toFixed(3) + ')';
+          ctx.lineWidth = 4;
+          ctx.font = (main ? 15 : 13) + 'px ' + mono;
+          ctx.strokeText(text.label, x + 7, ly);
+          ctx.fillStyle = 'rgba(236,235,231,' + alpha.toFixed(3) + ')';
+          ctx.fillText(text.label, x + 7, ly);
           if (sub) {
-            ctx.fillStyle = 'rgba(160,163,168,' + (0.8 * alpha).toFixed(3) + ')';
-            ctx.font = '11px ' + mono;
-            ctx.fillText(sub, x + 6, ly + 15);
+            ctx.font = '13px ' + mono;
+            ctx.strokeText(sub, x + 7, ly + 17);
+            ctx.fillStyle = 'rgba(169,172,176,' + alpha.toFixed(3) + ')';
+            ctx.fillText(sub, x + 7, ly + 17);
           }
         }
 
