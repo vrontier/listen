@@ -88,7 +88,7 @@
       case 'narrative.update':
         if (!this.narratives.length || this.narratives[0].text !== p.text) {
           this.narratives.unshift({ text: p.text, model: p.model, time: new Date(env.timestamp) });
-          this.narratives.length = Math.min(this.narratives.length, 3);
+          this.narratives.length = Math.min(this.narratives.length, 6);
           this.narrativeVersion++;
         }
         break;

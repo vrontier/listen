@@ -26,6 +26,12 @@ $source = live_source();
     </section>
 
     <section class="dial" aria-label="Memory dial">
+      <div class="teleprinter">
+        <span class="teleprinter__label">Interpretation</span>
+        <span class="teleprinter__time" id="tp-time"></span>
+        <p class="teleprinter__text" id="tp-text" aria-hidden="true">Listening…</p>
+        <p class="visually-hidden" id="tp-live" aria-live="polite"></p>
+      </div>
       <canvas id="dial" aria-hidden="true"></canvas>
       <div id="motif-tip" class="motif-tip" role="tooltip" hidden></div>
       <p class="dial__legend"><span class="dial__title">Memory</span> each mark is a remembered motif at its
@@ -90,11 +96,11 @@ $source = live_source();
 
 
       <article class="panel panel--interpretation">
-        <h2>Live interpretation <span class="phase">phrased from measured observations</span></h2>
-        <div class="interpretation" id="interpretation" aria-live="polite">
-          <p class="interpretation__wait">Listening. The first interpretation appears within about a
-             minute and a half; after that, whenever something changes.</p>
-        </div>
+        <h2>Interpretation history <span class="phase">phrased from measured observations</span></h2>
+        <ol class="interpretation" id="interpretation">
+          <li class="interpretation__wait">The first interpretation appears within about a minute
+             and a half; after that, whenever something changes.</li>
+        </ol>
         <p class="interpretation__meta" id="interpretation-meta"></p>
       </article>
       </div>
