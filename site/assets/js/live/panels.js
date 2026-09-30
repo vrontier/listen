@@ -143,22 +143,59 @@
     if (st.lastTimestamp) $('ro-time').textContent = fmt.local(st.lastTimestamp);
   };
 
-  // Live interpretation: newest text first, the previous two dimmed.
+  // Interpretation: the newest text types in on the teleprinter line above
+  // the dial; the panel keeps the history, newest first.
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   Panels.prototype.interpretation = function () {
     var st = this.state;
     if (st.narrativeVersion === this.shownNarrative || !st.narratives.length) return;
     this.shownNarrative = st.narrativeVersion;
-    var box = $('interpretation');
-    box.innerHTML = '';
-    st.narratives.forEach(function (n, i) {
-      var p = document.createElement('p');
-      p.className = i === 0 ? 'interpretation__now' : 'interpretation__before';
-      p.textContent = n.text;
-      box.appendChild(p);
-    });
     var n = st.narratives[0];
     var model = (n.model || '').split(' - ')[0];
-    $('interpretation-meta').textContent = fmt.localShort(n.time) + (model ? ' · phrased by ' + model : '');
+
+    var list = $('interpretation');
+    list.innerHTML = '';
+    st.narratives.forEach(function (it, i) {
+      var li = document.createElement('li');
+      if (i === 0) li.className = 'interpretation__now';
+      var tm = document.createElement('time');
+      tm.dateTime = it.time.toISOString();
+      tm.textContent = fmt.localShort(it.time);
+      var tx = document.createElement('span');
+      tx.textContent = it.text;
+      li.appendChild(tm); li.appendChild(tx);
+      list.appendChild(li);
+    });
+    $('interpretation-meta').textContent = model ? 'phrased by ' + model : '';
+
+    $('tp-time').textContent = fmt.localShort(n.time);
+    $('tp-live').textContent = n.text;   // announced once, in full
+    this.teletype(n.text);
+  };
+
+  // Types text onto the teleprinter line: the old line fades, the new one
+  // appears letter by letter (about 40 per second), then the cursor goes.
+  Panels.prototype.teletype = function (text) {
+    var el = $('tp-text');
+    clearInterval(this.typing);
+    if (reducedMotion) { el.textContent = text; el.classList.remove('is-typing'); return; }
+    var self = this;
+    el.classList.add('is-fading');
+    setTimeout(function () {
+      el.classList.remove('is-fading');
+      el.classList.add('is-typing');
+      var i = 0;
+      el.textContent = '';
+      self.typing = setInterval(function () {
+        i = Math.min(text.length, i + 2);
+        el.textContent = text.slice(0, i);
+        if (i >= text.length) {
+          clearInterval(self.typing);
+          setTimeout(function () { el.classList.remove('is-typing'); }, 1500);
+        }
+      }, 50);
+    }, 400);
   };
 
   Panels.prototype.connection = function (s, stream) {
