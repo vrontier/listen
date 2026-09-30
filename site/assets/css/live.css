@@ -233,6 +233,7 @@ body.live {
 .events li[data-kind="transient"] span { color: var(--cool); }
 .events li[data-kind="resonance"] span { color: var(--warm); }
 .events li[data-kind="end"] span { color: var(--label); }
+.events li[data-kind="motif"] span { color: #c9b8f0; }
 
 .interpretation {
   font-family: var(--mono);

@@ -47,7 +47,7 @@ $source = live_source();
       </article>
 
       <article class="panel panel--harmonic">
-        <h2>Harmonic map <span class="phase">motif memory · phase 2</span></h2>
+        <h2>Harmonic map <span class="phase">coloured by motif</span></h2>
         <div class="plot plot--yaxis">
           <ol class="axis axis--y" aria-hidden="true" id="hm-yaxis"></ol>
           <canvas id="harmonic-map" width="800" height="150"></canvas>
@@ -70,6 +70,8 @@ $source = live_source();
           <div><dt>RMS energy</dt><dd id="f-energy">—</dd></div>
           <div><dt>Harmonicity</dt><dd id="f-harmonicity">—</dd></div>
           <div><dt>State</dt><dd id="f-state">—</dd></div>
+          <div><dt>Known motifs</dt><dd id="f-motifs">—</dd></div>
+          <div><dt>Dominant (1 h)</dt><dd id="f-dominant-motifs">—</dd></div>
         </dl>
       </article>
 

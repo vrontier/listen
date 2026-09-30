@@ -20,6 +20,13 @@
     return HEAT[HEAT.length - 1][1];
   }
 
+  function ago(s) {
+    if (s == null) return '—';
+    if (s < 90) return Math.round(s) + ' s';
+    if (s < 5400) return Math.round(s / 60) + ' min';
+    return (s / 3600).toFixed(1) + ' h';
+  }
+
   function logPos(hz, lo, hi) { return Math.log(hz / lo) / Math.log(hi / lo); }
 
   function axisY(el, ticks, lo, hi) {
@@ -124,6 +131,10 @@
     $('f-energy').textContent = st.levelDb != null ? fmt.num(fr.energy.target) + '  (' + st.levelDb.toFixed(1) + ' dBFS)' : '—';
     $('f-harmonicity').textContent = fmt.num(fr.harmonicity.target);
     $('f-state').textContent = f ? fmt.state(f.state) : '—';
+    var mem = st.memory && st.memory['1h'];
+    $('f-motifs').textContent = st.motifs.size ? String(st.motifs.size) : (mem ? String(mem.known_motifs) : '—');
+    $('f-dominant-motifs').textContent = mem && mem.dominant_motifs.length
+      ? mem.dominant_motifs.map(LO.motifName).join(', ') : '—';
 
     $('ro-state').textContent = f ? fmt.state(f.state) : '—';
     $('ro-harmonicity').textContent = f ? fmt.num(f.harmonicity) : '—';
@@ -156,6 +167,15 @@
         text = 'Resonance ' + Math.round(p.fundamental_hz) + ' Hz faded after ' + Math.round(p.duration_s) + ' s';
       }
     }
+    if (env.type === 'motif.detected') {
+      kind = 'motif';
+      text = 'New ' + LO.motifName(p.motif_id) + ' · ' + (p.kind === 'texture'
+        ? 'texture around ' + fmt.hz(p.signature.centroid_hz)
+        : fmt.hz(p.signature.fundamental_hz)) + ' (' + p.occurrences + '×)';
+    } else if (env.type === 'motif.returned') {
+      kind = 'motif';
+      text = LO.motifName(p.motif_id) + ' returned after ' + ago(p.last_seen_s) + ' (' + p.similarity.toFixed(2) + ')';
+    }
     if (env.type === 'event.resonance') this.harmonicPoint(env);
     if (!text) return;
     // Short-lived resonances churn; only list those that held for a while.
@@ -184,9 +204,11 @@
   Panels.prototype.harmonicPoint = function (env) {
     var p = env.payload, t = Date.parse(env.timestamp);
     if (p.status === 'end') return;
-    this.hmPoints.push({ t: t, hz: p.fundamental_hz, s: p.strength, h: false });
+    var mo = p.motif_id ? this.state.motifs.get(p.motif_id) : null;
+    var hue = mo && mo.visual ? LO.motifHue(mo.visual.visual_seed) : null;
+    this.hmPoints.push({ t: t, hz: p.fundamental_hz, s: p.strength, h: false, hue: hue });
     var self = this;
-    p.harmonics.forEach(function (h) { self.hmPoints.push({ t: t, hz: h.hz, s: h.strength, h: true }); });
+    p.harmonics.forEach(function (h) { self.hmPoints.push({ t: t, hz: h.hz, s: h.strength, h: true, hue: hue }); });
   };
 
   // Harmonic map: resonance fundamentals (gold) and their overtones over the
@@ -208,7 +230,8 @@
       var px = w - (now - pt.t) / span * w;
       var py = h - logPos(pt.hz, lo, hi) * h;
       var r = pt.h ? 1 + pt.s * 1.5 : 1.5 + pt.s * 4;
-      x.fillStyle = pt.h ? 'rgba(156,200,242,0.35)' : 'rgba(240,178,110,0.35)';
+      if (pt.hue != null) x.fillStyle = 'hsla(' + pt.hue + ',60%,' + (pt.h ? 72 : 66) + '%,' + (pt.h ? 0.4 : 0.55) + ')';
+      else x.fillStyle = pt.h ? 'rgba(156,200,242,0.25)' : 'rgba(240,178,110,0.25)';
       x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill();
     });
     x.globalCompositeOperation = 'source-over';

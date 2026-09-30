@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 	"github.com/vrontier/listen/listener/internal/analysis"
 	"github.com/vrontier/listen/listener/internal/events"
 	"github.com/vrontier/listen/listener/internal/hub"
+	"github.com/vrontier/listen/listener/internal/memory"
 	"github.com/vrontier/listen/listener/internal/relay"
 	"github.com/vrontier/listen/listener/internal/source"
 )
@@ -42,9 +44,13 @@ func main() {
 			"comma-separated Origin host patterns allowed to open /ws/live")
 		audio = flag.Bool("audio", false, "relay the audio to browsers on /ws/audio, in step with the events "+
 			"(only enable where the source's terms allow it)")
-		ffmpeg  = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
-		ffprobe = flag.String("ffprobe", "ffprobe", "ffprobe binary")
-		start   = flag.String("start", "", "recording time of a file's first sample (RFC 3339); "+
+		memDir = flag.String("memory-dir", "", "keep the acoustic memory (motifs, history) under this directory, "+
+			"in a subdirectory per source and input; empty: no memory")
+		motifReturn = flag.Duration("motif-return", 3*time.Minute, "absence after which a known motif counts as returned")
+		historyDays = flag.Int("history-days", 30, "days of history files to keep")
+		ffmpeg      = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
+		ffprobe     = flag.String("ffprobe", "ffprobe", "ffprobe binary")
+		start       = flag.String("start", "", "recording time of a file's first sample (RFC 3339); "+
 			"default: parsed from a YYYYMMDDTHHMMSSZ stamp in the file name")
 	)
 	flag.Parse()
@@ -74,19 +80,48 @@ func main() {
 		}
 	}
 
+	stamper := events.NewStamper(*src)
+	var mem *memory.Memory
+	if *memDir != "" {
+		var err error
+		mem, err = memory.New(memory.Config{
+			Dir:         filepath.Join(*memDir, safeName(*src), inputKey(*in)),
+			ReturnAfter: *motifReturn,
+			HistoryDays: *historyDays,
+		}, stamper)
+		if err != nil {
+			log.Fatalf("memory: %v", err)
+		}
+		defer mem.Close()
+	}
+	// Events pass through the memory (if any) before they are sent.
+	through := func(send func(events.Message)) func(events.Message) {
+		if mem == nil {
+			return send
+		}
+		return func(m events.Message) {
+			for _, o := range mem.Process(m) {
+				send(o)
+			}
+		}
+	}
+
 	if *dump {
-		runDump(ctx, *in, *src, *loop, *realtime, *ffmpeg, rec)
+		runDump(ctx, *in, stamper, through, *loop, *realtime, *ffmpeg, rec)
 		return
 	}
 
 	h := hub.New(splitList(*origins))
-	stamper := events.NewStamper(*src)
-	a := analysis.New(stamper, h.Broadcast)
+	a := analysis.New(stamper, through(h.Broadcast))
 
 	a.Live(!rec.known && (isURL || *realtime))
 	st := &status{input: describe(*in), started: time.Now(), stream: source.Connecting}
 	mux := http.NewServeMux()
 	h.Routes(mux)
+	if mem != nil {
+		h.SetMemory(mem)
+		mem.Routes(mux)
+	}
 	var outputs []source.Output
 	if *audio {
 		rl := relay.New(analysis.SampleRate, splitList(*origins))
@@ -162,14 +197,14 @@ func main() {
 	_ = srv.Shutdown(shutdown)
 }
 
-func runDump(ctx context.Context, in, src string, loop, realtime bool, ffmpeg string, rec replay) {
+func runDump(ctx context.Context, in string, stamper *events.Stamper, through func(func(events.Message)) func(events.Message),
+	loop, realtime bool, ffmpeg string, rec replay) {
 	w := bufio.NewWriterSize(os.Stdout, 1<<16)
 	defer w.Flush()
-	stamper := events.NewStamper(src)
-	a := analysis.New(stamper, func(m events.Message) {
+	a := analysis.New(stamper, through(func(m events.Message) {
 		w.Write(m.Data)
 		w.WriteByte('\n')
-	})
+	}))
 	// Offline runs use the recording time, or a fixed epoch, so repeated
 	// runs produce identical output.
 	switch {
@@ -286,6 +321,28 @@ func describe(in string) string {
 		return "file:" + in[i+1:]
 	}
 	return "file:" + in
+}
+
+// inputKey names the memory of one input, so switching between a replay and
+// the live stream starts (or resumes) a separate memory.
+func inputKey(in string) string {
+	if source.IsURL(in) {
+		if u, err := url.Parse(in); err == nil {
+			return "live-" + safeName(u.Host+u.Path)
+		}
+		return "live-" + safeName(in)
+	}
+	return "replay-" + safeName(filepath.Base(in))
+}
+
+func safeName(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.') {
+			b[i] = '_'
+		}
+	}
+	return strings.Trim(string(b), "._")
 }
 
 func splitList(s string) []string {

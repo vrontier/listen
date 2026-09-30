@@ -30,6 +30,8 @@
     this.peaks = [];
     this.features = null;                        // last feature.state payload
     this.resonances = new Map();                 // id -> entity
+    this.motifs = new Map();                     // motif id -> {id, kind, visual, signature, occurrences, active, lastSeen, flare}
+    this.memory = {};                            // latest memory.summary per window
     this.spectrumListeners = [];
     this.eventListeners = [];
   }
@@ -66,9 +68,23 @@
         break;
       case 'event.resonance':
         this.applyResonance(env, p, replay);
+        if (p.motif_id) {
+          var mo = this.motifs.get(p.motif_id);
+          if (mo) { mo.active = p.status !== 'end'; mo.lastSeen = performance.now(); }
+        }
+        break;
+      case 'motif.detected':
+      case 'motif.returned':
+        this.upsertMotif({
+          motif_id: p.motif_id, kind: p.kind, visual: p.visual, signature: p.signature,
+          occurrences: p.occurrences || p.occurrence, active: true
+        }, !replay);
+        break;
+      case 'memory.summary':
+        this.memory[p.window] = p;
         break;
     }
-    if (env.type.indexOf('event.') === 0) {
+    if (env.type.indexOf('event.') === 0 || env.type.indexOf('motif.') === 0) {
       for (var k = 0; k < this.eventListeners.length; k++) this.eventListeners[k](env, replay);
     }
   };
@@ -87,8 +103,29 @@
     r.ending = false;
   };
 
+  // Adds or refreshes a motif; flare marks a fresh detection or return.
+  State.prototype.upsertMotif = function (v, flare) {
+    var mo = this.motifs.get(v.motif_id) || { id: v.motif_id, flare: 0 };
+    mo.kind = v.kind || mo.kind;
+    mo.visual = v.visual || mo.visual;
+    mo.signature = v.signature || mo.signature;
+    if (v.occurrences) mo.occurrences = v.occurrences;
+    if (v.active !== undefined) mo.active = v.active;
+    mo.lastSeen = v.last_seen_s != null ? performance.now() - v.last_seen_s * 1000 : performance.now();
+    if (flare) mo.flare = performance.now();
+    this.motifs.set(mo.id, mo);
+    return mo;
+  };
+
+  State.prototype.loadMotifs = function (list) {
+    var self = this;
+    (list || []).forEach(function (v) { self.upsertMotif(v, false); });
+  };
+
   State.prototype.applySnapshot = function (snap) {
     var self = this;
+    if (snap.memory) this.memory = mapPayloads(snap.memory);
+    (snap.active_motifs || []).forEach(function (v) { self.upsertMotif(v, false); });
     this.resonances.clear();
     ['frame', 'spectrum', 'features', 'system'].forEach(function (k) {
       if (snap[k]) self.apply(snap[k], true);
@@ -118,6 +155,22 @@
     return Math.log(hz / m.min_hz) / Math.log(m.max_hz / m.min_hz);
   };
 
+  function mapPayloads(m) {
+    var out = {};
+    for (var k in m) out[k] = m[k] && m[k].payload ? m[k].payload : m[k];
+    return out;
+  }
+
+  // "motif-009" -> "motif 9"
+  function motifName(id) {
+    var n = /(\d+)$/.exec(id || '');
+    return n ? 'motif ' + parseInt(n[1], 10) : id;
+  }
+  // A stable, soft colour per motif from its seed.
+  function motifHue(seed) { return (seed || 0) % 360; }
+
+  LO.motifName = motifName;
+  LO.motifHue = motifHue;
   LO.BANDS = BANDS;
   LO.State = State;
 
