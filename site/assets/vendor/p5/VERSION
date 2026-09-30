@@ -1,0 +1,14 @@
+p5.js 2.3.4 — unmodified p5.min.js, LGPL-2.1 (see LICENSE.txt)
+
+Source:  https://registry.npmjs.org/p5/-/p5-2.3.4.tgz  (package/lib/p5.min.js)
+Checked: npm tarball sha512 matches registry integrity
+           sha512-bU5oNunn4L51hFu3+b6+zAQj+sPIlVyY0JmUCjABVytYwjNwf06EKFiLQgU70z5HPW58qTHRf5G8vM8gNtfbng==
+         identical to GitHub release asset
+           https://github.com/processing/p5.js/releases/download/v2.3.4/p5.min.js
+Vendored: 2026-09-30
+
+sha256  bb8b82b97fcbcd5bb2d5475d1b6a3904f3ab4ed01b821134fd8f1e7710fce559
+SRI     sha384-Cs48F1uukMPysq29xNsf/FZL5ZNGsPfi6lDSGOxo6dypVFFiWO9Q3YbRKoXPPBii
+
+To upgrade: repeat the same checks, replace p5.min.js and LICENSE.txt, update this
+file and the integrity attribute in site/_view/live.php.

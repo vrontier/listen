@@ -3,6 +3,7 @@
       <h1>Listening Observatory</h1>
       <p class="lede">An experimental system for continuous computational listening.</p>
       <p class="links">
+        <a href="/live">Live listening (prototype) →</a>
         <a href="https://github.com/vrontier/listen" target="_blank" rel="noopener noreferrer">Source on GitHub →</a>
       </p>
     </header>
@@ -47,12 +48,4 @@
           system has detected. It does not decide what happened in the sound.
         </p>
       </article>
-    </section>
-
-    <section class="source">
-      <h2>Sources</h2>
-      <p>
-        The system is designed as a general listening instrument
-        for environmental and continuous audio sources.
-      </p>
     </section>
