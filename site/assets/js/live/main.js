@@ -61,6 +61,10 @@
     onEvent: schedule,
     onSnapshot: function (snap) {
       state.applySnapshot(snap);
+      fetch(endpoints.api + '/history/events?type=narrative.update', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { if (j) state.loadNarratives(j.events); })
+        .catch(function () { /* no memory on this listener */ });
       fetch(endpoints.api + '/motifs', { cache: 'no-store' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) { if (j) state.loadMotifs(j.motifs); })

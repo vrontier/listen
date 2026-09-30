@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,5 +194,22 @@ func TestMemorySurvivesRestart(t *testing.T) {
 		if d, ok := m.Env.Payload.(events.MotifDetected); ok && d.Kind == KindResonance {
 			t.Fatalf("known resonance motif detected again after restart: %+v", d)
 		}
+	}
+}
+
+func TestNarrativesGoToHistory(t *testing.T) {
+	dir := t.TempDir()
+	f := newFeeder(t, dir)
+	f.idle(2, flat(0.4), quiet)
+	f.m.Process(f.st.Stamp(events.TypeNarrative, time.Now(), 0, events.Narrative{Mode: "observational", Text: "Motif 9 holds at 727 Hz."}))
+	var found []string
+	f.m.store.scan(f.m.now.Add(-time.Hour), f.m.now.Add(time.Hour), func(r record) bool {
+		if r.Event != nil && strings.Contains(string(r.Event), `"narrative.update"`) {
+			found = append(found, string(r.Event))
+		}
+		return true
+	})
+	if len(found) != 1 || !strings.Contains(found[0], "727 Hz") {
+		t.Fatalf("narrative not in history: %v", found)
 	}
 }

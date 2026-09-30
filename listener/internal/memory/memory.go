@@ -154,6 +154,8 @@ func (m *Memory) Process(msg events.Message) []events.Message {
 	case events.Transient:
 		m.cur.Events++
 		m.log(msg)
+	case events.Narrative:
+		m.log(msg)
 	case events.Resonance:
 		var extra []events.Message
 		p, extra = m.onResonance(p)

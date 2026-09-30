@@ -88,7 +88,7 @@
       case 'narrative.update':
         if (!this.narratives.length || this.narratives[0].text !== p.text) {
           this.narratives.unshift({ text: p.text, model: p.model, time: new Date(env.timestamp) });
-          this.narratives.length = Math.min(this.narratives.length, 6);
+          this.narratives.length = Math.min(this.narratives.length, 20);
           this.narrativeVersion++;
         }
         break;
@@ -124,6 +124,24 @@
     if (flare) mo.flare = performance.now();
     this.motifs.set(mo.id, mo);
     return mo;
+  };
+
+  // Earlier interpretations from the history API (oldest first).
+  State.prototype.loadNarratives = function (envs) {
+    var known = {}, self = this;
+    this.narratives.forEach(function (n) { known[n.text] = true; });
+    var added = 0;
+    (envs || []).forEach(function (env) {
+      var p = env.payload || {};
+      if (!p.text || known[p.text]) return;
+      known[p.text] = true;
+      self.narratives.push({ text: p.text, model: p.model, time: new Date(env.timestamp), old: true });
+      added++;
+    });
+    if (!added) return;
+    this.narratives.sort(function (a, b) { return b.time - a.time; });
+    this.narratives.length = Math.min(this.narratives.length, 20);
+    this.narrativeVersion++;
   };
 
   State.prototype.loadMotifs = function (list) {
