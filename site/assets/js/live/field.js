@@ -43,17 +43,6 @@
     var reduced = !!opts.reducedMotion;
     var maxParticles = reduced ? 150 : 1400;
 
-    // Constellation dots as drawn in the last frame, for hover lookup.
-    var hits = [];
-    LO.motifAt = function (x, y) {
-      var best = null, bd = 14 * 14;
-      hits.forEach(function (h) {
-        var d = (h.x - x) * (h.x - x) + (h.y - y) * (h.y - y);
-        if (d < bd) { bd = d; best = h; }
-      });
-      return best;
-    };
-
     return new p5(function (p) {
       var ctx, W, H;
       var history = [];
@@ -240,9 +229,6 @@
           }
         }
 
-        // Layer D: memory — known motifs as a small constellation.
-        drawConstellation();
-
         // Layer B: resonances.
         drawResonances();
 
@@ -286,53 +272,6 @@
         flash *= Math.exp(-dt * 3);
         ctx.restore();
       };
-
-      // Known motifs as points in the sky above the horizon: x by their
-      // frequency anchor (the terrain's axis), height by their seed, size by
-      // how often they occurred, brightness by how recently. Resonance motifs
-      // are dots, texture motifs small rings. A detection or return flares.
-      function drawConstellation() {
-        hits.length = 0;
-        if (!state.motifs.size) return;
-        var now = performance.now();
-        var g = geometry(1);
-        var horizon = g.y;
-        ctx.globalCompositeOperation = 'lighter';
-        state.motifs.forEach(function (mo) {
-          var v = mo.visual;
-          if (!v || !v.frequency_anchor) return;
-          var u = state.u(v.frequency_anchor);
-          if (u < 0 || u > 1) return;
-          var x = W / 2 + (u - 0.5) * 2 * g.half;
-          var y = horizon - H * (0.05 + 0.2 * ((v.visual_seed % 997) / 997));
-          var ageMin = (now - (mo.lastSeen || now)) / 60000;
-          var recent = mo.active ? 1 : Math.max(0.25, Math.exp(-ageMin / 20));
-          var r = 1.2 + Math.min(3, Math.log(1 + (mo.occurrences || 1)));
-          var hue = LO.motifHue(v.visual_seed);
-          var a = 0.35 + 0.55 * recent;
-          if (mo.kind === 'texture') {
-            ctx.strokeStyle = 'hsla(' + hue + ',55%,75%,' + a.toFixed(3) + ')';
-            ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI * 2); ctx.stroke();
-          } else {
-            ctx.fillStyle = 'hsla(' + hue + ',60%,78%,' + a.toFixed(3) + ')';
-            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-          }
-          hits.push({ x: x, y: y, r: r, mo: mo });
-          if (LO.hoverMotif === mo.id) {
-            ctx.strokeStyle = 'hsla(' + hue + ',70%,85%,0.9)';
-            ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
-          }
-          var fa = (now - (mo.flare || 0)) / 2500;
-          if (fa >= 0 && fa < 1) {
-            ctx.strokeStyle = 'hsla(' + hue + ',70%,80%,' + (0.8 * (1 - fa)).toFixed(3) + ')';
-            ctx.lineWidth = 1.2;
-            ctx.beginPath(); ctx.arc(x, y, r + 4 + 36 * fa, 0, Math.PI * 2); ctx.stroke();
-          }
-        });
-        ctx.globalCompositeOperation = 'source-over';
-      }
 
       function drawResonances() {
         var list = Array.from(state.resonances.values());

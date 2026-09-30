@@ -28,7 +28,7 @@ $description = $page['description'] ?? '';
   <script src="<?= e(asset('vendor/p5/p5.min.js')) ?>"
           integrity="sha384-Cs48F1uukMPysq29xNsf/FZL5ZNGsPfi6lDSGOxo6dypVFFiWO9Q3YbRKoXPPBii"
           crossorigin="anonymous" defer></script>
-<?php foreach (['stream', 'state', 'field', 'panels', 'audio', 'main'] as $js): ?>
+<?php foreach (['stream', 'state', 'field', 'dial', 'panels', 'audio', 'main'] as $js): ?>
   <script src="<?= e(asset('js/live/' . $js . '.js')) ?>" defer></script>
 <?php endforeach; ?>
 </body>

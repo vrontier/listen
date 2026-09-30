@@ -111,8 +111,10 @@
     }
   };
 
-  // Hover (or tap) a constellation dot for its details.
-  var stage = document.querySelector('.stage');
+  // The memory dial; hover (or tap) a mark for its details.
+  var dialEl = document.getElementById('dial');
+  var dial = LO.dial.create(dialEl, state);
+  var dialBox = document.querySelector('.dial');
   var tip = document.getElementById('motif-tip');
   function ago(ms) {
     var s = ms / 1000;
@@ -121,30 +123,28 @@
     return (s / 3600).toFixed(1) + ' h ago';
   }
   function showTip(ev) {
-    if (!LO.motifAt) return;
-    var box = stage.getBoundingClientRect();
-    var x = ev.clientX - box.left, y = ev.clientY - box.top;
-    var h = LO.motifAt(x, y);
-    LO.hoverMotif = h ? h.mo.id : null;
-    if (!h) { tip.hidden = true; stage.style.cursor = ''; return; }
-    var mo = h.mo, v = mo.visual || {}, sig = mo.signature || {};
+    var c = dialEl.getBoundingClientRect(), box = dialBox.getBoundingClientRect();
+    var m = dial.markAt(ev.clientX - c.left, ev.clientY - c.top);
+    dial.setHover(m ? m.mo.id : null);
+    dialEl.style.cursor = m ? 'pointer' : '';
+    if (!m) { tip.hidden = true; return; }
+    var mo = m.mo, v = mo.visual || {}, sig = mo.signature || {};
     var hz = mo.kind === 'texture' ? 'texture around ' + LO.fmt.hz(sig.centroid_hz || v.frequency_anchor)
       : LO.fmt.hz(sig.fundamental_hz || v.frequency_anchor);
     var when = mo.active ? 'sounding now' : 'heard ' + ago(performance.now() - (mo.lastSeen || performance.now()));
-    tip.innerHTML = '';
     var name = LO.motifName(mo.id);
+    tip.innerHTML = '';
     var b = document.createElement('b'); b.textContent = name.charAt(0).toUpperCase() + name.slice(1) + ' · ' + hz;
     var sp = document.createElement('span'); sp.textContent = ' · ' + (mo.occurrences || 1) + '× · ' + when;
     tip.appendChild(b); tip.appendChild(sp);
     tip.hidden = false;
-    var left = Math.min(h.x + 14, box.width - tip.offsetWidth - 8);
-    tip.style.left = Math.max(8, left) + 'px';
-    tip.style.top = Math.max(8, h.y - tip.offsetHeight - 10) + 'px';
-    stage.style.cursor = 'pointer';
+    var x = c.left - box.left + m.x;
+    tip.style.left = Math.max(8, Math.min(x - tip.offsetWidth / 2, box.width - tip.offsetWidth - 8)) + 'px';
+    tip.style.top = (c.top - box.top + m.top - tip.offsetHeight - 8) + 'px';
   }
-  stage.addEventListener('pointermove', showTip);
-  stage.addEventListener('pointerdown', showTip);
-  stage.addEventListener('pointerleave', function () { tip.hidden = true; LO.hoverMotif = null; });
+  dialEl.addEventListener('pointermove', showTip);
+  dialEl.addEventListener('pointerdown', showTip);
+  dialEl.addEventListener('pointerleave', function () { tip.hidden = true; dial.setHover(null); });
 
   setInterval(function () { panels.features(); panels.interpretation(); }, 250);
   setInterval(function () { panels.drawHarmonicMap(); }, 1000);
