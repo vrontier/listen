@@ -32,6 +32,8 @@
     this.resonances = new Map();                 // id -> entity
     this.motifs = new Map();                     // motif id -> {id, kind, visual, signature, occurrences, active, lastSeen, flare}
     this.memory = {};                            // latest memory.summary per window
+    this.narratives = [];                        // newest first: {text, model, time}
+    this.narrativeVersion = 0;
     this.spectrumListeners = [];
     this.eventListeners = [];
   }
@@ -83,6 +85,13 @@
       case 'memory.summary':
         this.memory[p.window] = p;
         break;
+      case 'narrative.update':
+        if (!this.narratives.length || this.narratives[0].text !== p.text) {
+          this.narratives.unshift({ text: p.text, model: p.model, time: new Date(env.timestamp) });
+          this.narratives.length = Math.min(this.narratives.length, 3);
+          this.narrativeVersion++;
+        }
+        break;
     }
     if (env.type.indexOf('event.') === 0 || env.type.indexOf('motif.') === 0) {
       for (var k = 0; k < this.eventListeners.length; k++) this.eventListeners[k](env, replay);
@@ -125,6 +134,7 @@
   State.prototype.applySnapshot = function (snap) {
     var self = this;
     if (snap.memory) this.memory = mapPayloads(snap.memory);
+    if (snap.narrative) this.apply(snap.narrative, true);
     (snap.active_motifs || []).forEach(function (v) { self.upsertMotif(v, false); });
     this.resonances.clear();
     ['frame', 'spectrum', 'features', 'system'].forEach(function (k) {

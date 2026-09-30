@@ -82,13 +82,12 @@ $source = live_source();
 
 
       <article class="panel panel--interpretation">
-        <h2>Live interpretation <span class="phase">language layer · phase 3</span></h2>
-        <div class="interpretation">
-          <p>The narrative layer is not connected yet.</p>
-          <p>When it is, short descriptions will be written from the measured
-             observations above. It gives language to what was detected; it does
-             not decide what happened in the sound.</p>
+        <h2>Live interpretation <span class="phase">phrased from measured observations</span></h2>
+        <div class="interpretation" id="interpretation" aria-live="polite">
+          <p class="interpretation__wait">Listening. The first interpretation appears within about a
+             minute and a half; after that, whenever something changes.</p>
         </div>
+        <p class="interpretation__meta" id="interpretation-meta"></p>
       </article>
       </div>
     </section>

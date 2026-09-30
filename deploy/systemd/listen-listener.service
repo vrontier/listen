@@ -11,6 +11,9 @@ Type=simple
 User=listen
 Group=listen
 EnvironmentFile=/etc/default/listen-listener
+# Optional, root-only (0600): LLM_API_KEY, NARRATOR_URL, NARRATOR_MODEL for
+# the interpretation layer. Without it the narrator stays off.
+EnvironmentFile=-/etc/listen/llm.env
 ExecStart=/usr/local/bin/listen-listener -addr 127.0.0.1:8095 $LISTEN_ARGS
 Restart=always
 RestartSec=5

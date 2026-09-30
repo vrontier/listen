@@ -63,6 +63,17 @@ source and input: `motifs.json` and daily `history/*.jsonl`, kept for
 `-history-days`. It is served at `/api/motifs`, `/api/motifs/{id}`,
 `/api/history/events` and `/api/history/features`.
 
+Interpretation (phase 3, §17): with `-narrator-url` and `-narrator-model` (or the
+`NARRATOR_URL` / `NARRATOR_MODEL` environment variables) and an API key in
+`LLM_API_KEY`, the listener phrases what it measured through any OpenAI-compatible
+chat endpoint. It emits `narrative.update` at most every `-narrate-every` (90 s), and
+only while someone has `/live` open and something has changed. Go builds the evidence
+(leading resonances, returns, new motifs, transients, state changes, the last hour)
+and the model only phrases it. Text naming a frequency or motif that isn't in the
+evidence is retried once, then dropped. Modes: `observational` (default), `minimal`,
+`poetic`. For local development put `LLM_API_KEY=...` in `.llm` (gitignored);
+`scripts/dev.sh` loads it.
+
 Optional in-sync audio: with `-audio` the listener relays the audio it analyses
 on `/ws/audio`, as fragmented MP4 (AAC and Opus). Every event carries
 `position_s` on the same timeline, so the page shows each event when its sound

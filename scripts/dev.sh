@@ -15,6 +15,9 @@ fi
 loop=()
 [[ "$in" == *://* ]] || loop=(-loop)
 
+# LLM credentials for the narrator (LLM_API_KEY), kept out of git.
+if [[ -f .llm ]]; then set -a; . ./.llm; set +a; fi
+
 (cd listener && go build -o ../bin/listener ./cmd/listener)
 bin/listener -in "$in" ${loop[@]+"${loop[@]}"} -addr 127.0.0.1:8080 "$@" &
 listener=$!

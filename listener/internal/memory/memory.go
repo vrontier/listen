@@ -550,7 +550,8 @@ func (m *Memory) log(msg events.Message) {
 		return
 	}
 	switch msg.Type {
-	case events.TypeTransient, events.TypeResonance, events.TypeMotifDetected, events.TypeMotifReturned, events.TypeMemorySummary:
+	case events.TypeTransient, events.TypeResonance, events.TypeMotifDetected, events.TypeMotifReturned,
+		events.TypeMemorySummary, events.TypeNarrative:
 		if err := m.store.append(record{T: m.now, Event: msg.Data}); err != nil {
 			log.Printf("memory: history: %v", err)
 		}

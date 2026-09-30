@@ -44,6 +44,7 @@ type Hub struct {
 
 	// snapshot
 	frame, spectrum, feature, status *events.Envelope
+	narrative                        *events.Envelope
 	resonances                       map[string]events.Envelope
 	recent                           []events.Envelope
 }
@@ -78,6 +79,8 @@ func (h *Hub) Broadcast(m events.Message) {
 		h.feature = &env
 	case events.TypeStatus:
 		h.status = &env
+	case events.TypeNarrative:
+		h.narrative = &env
 	case events.TypeResonance:
 		r := env.Payload.(events.Resonance)
 		if r.Status == "end" {
@@ -116,8 +119,8 @@ type Snapshot struct {
 	ActiveResonances []events.Envelope          `json:"active_resonances"`
 	RecentEvents     []events.Envelope          `json:"recent_events"`
 	ActiveMotifs     []any                      `json:"active_motifs"`
-	Memory           map[string]events.Envelope `json:"memory"`    // latest memory.summary per window
-	Narrative        any                        `json:"narrative"` // phase 3
+	Memory           map[string]events.Envelope `json:"memory"` // latest memory.summary per window
+	Narrative        *events.Envelope           `json:"narrative"`
 	System           *events.Envelope           `json:"system"`
 }
 
@@ -125,7 +128,7 @@ func (h *Hub) Snapshot() Snapshot {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	s := Snapshot{
-		Frame: h.frame, Spectrum: h.spectrum, Features: h.feature, System: h.status,
+		Frame: h.frame, Spectrum: h.spectrum, Features: h.feature, System: h.status, Narrative: h.narrative,
 		ActiveResonances: make([]events.Envelope, 0, len(h.resonances)),
 		RecentEvents:     append([]events.Envelope{}, h.recent...),
 		ActiveMotifs:     []any{},

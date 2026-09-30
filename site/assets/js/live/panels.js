@@ -143,6 +143,24 @@
     if (st.lastTimestamp) $('ro-time').textContent = fmt.local(st.lastTimestamp);
   };
 
+  // Live interpretation: newest text first, the previous two dimmed.
+  Panels.prototype.interpretation = function () {
+    var st = this.state;
+    if (st.narrativeVersion === this.shownNarrative || !st.narratives.length) return;
+    this.shownNarrative = st.narrativeVersion;
+    var box = $('interpretation');
+    box.innerHTML = '';
+    st.narratives.forEach(function (n, i) {
+      var p = document.createElement('p');
+      p.className = i === 0 ? 'interpretation__now' : 'interpretation__before';
+      p.textContent = n.text;
+      box.appendChild(p);
+    });
+    var n = st.narratives[0];
+    var model = (n.model || '').split(' - ')[0];
+    $('interpretation-meta').textContent = fmt.localShort(n.time) + (model ? ' · phrased by ' + model : '');
+  };
+
   Panels.prototype.connection = function (s, stream) {
     var el = $('conn');
     var shown = s === 'connected' && stream && stream.stream !== 'connected' ? stream.stream : s;
@@ -174,7 +192,8 @@
         : fmt.hz(p.signature.fundamental_hz)) + ' (' + p.occurrences + '×)';
     } else if (env.type === 'motif.returned') {
       kind = 'motif';
-      text = LO.motifName(p.motif_id) + ' returned after ' + ago(p.last_seen_s) + ' (' + p.similarity.toFixed(2) + ')';
+      var name = LO.motifName(p.motif_id);
+      text = name.charAt(0).toUpperCase() + name.slice(1) + ' returned after ' + ago(p.last_seen_s) + ' (' + p.similarity.toFixed(2) + ')';
     }
     if (env.type === 'event.resonance') this.harmonicPoint(env);
     if (!text) return;

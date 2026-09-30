@@ -111,6 +111,6 @@
     }
   };
 
-  setInterval(function () { panels.features(); }, 250);
+  setInterval(function () { panels.features(); panels.interpretation(); }, 250);
   setInterval(function () { panels.drawHarmonicMap(); }, 1000);
 })(window.LO = window.LO || {});
