@@ -1,0 +1,41 @@
+# Listening Observatory listener: ingests the configured audio source and
+# serves the realtime event stream on 127.0.0.1:8095 (proxied by nginx).
+# The input is set in /etc/default/listen-listener (LISTEN_ARGS).
+[Unit]
+Description=Listening Observatory listener
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=listen
+Group=listen
+EnvironmentFile=/etc/default/listen-listener
+ExecStart=/usr/local/bin/listen-listener -addr 127.0.0.1:8095 $LISTEN_ARGS
+Restart=always
+RestartSec=5
+StateDirectory=listen
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
