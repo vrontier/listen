@@ -12,7 +12,10 @@ $err = $f['errors'];
 
     <section class="page__section">
 <?php if ($f['state'] === 'sent'): ?>
-      <p class="notice notice--ok" role="status">Thank you. Your message is on its way; we will reply by email.</p>
+      <p class="notice notice--ok" role="status">Thank you. Your message is on its way; we will reply by email.<?= $v['copy'] === '1' ? ' A copy has been sent to ' . e($v['email']) . '.' : '' ?></p>
+<?php elseif ($f['state'] === 'sent-nocopy'): ?>
+      <p class="notice notice--ok" role="status">Thank you. Your message is on its way; we will reply by email.
+        The copy to <?= e($v['email']) ?> could not be sent.</p>
 <?php elseif ($f['state'] === 'unconfigured'): ?>
       <p class="notice" role="status">The form isn't connected yet. Please write to
         <a href="mailto:contact@vrontier.org">contact@vrontier.org</a> in the meantime.</p>
@@ -39,6 +42,10 @@ $err = $f['errors'];
           <span>Message</span>
           <textarea name="message" rows="8" maxlength="5000" required<?= isset($err['message']) ? ' aria-invalid="true" aria-describedby="e-message"' : '' ?>><?= e($v['message']) ?></textarea>
 <?php if (isset($err['message'])): ?><small id="e-message"><?= e($err['message']) ?></small><?php endif; ?>
+        </label>
+        <label class="check">
+          <input type="checkbox" name="copy" value="1"<?= $v['copy'] === '1' ? ' checked' : '' ?>>
+          <span>Send me a copy</span>
         </label>
         <p class="contact__note">Your message goes to contact@vrontier.org. We use your address only to reply.</p>
         <button type="submit" class="button">Send message</button>

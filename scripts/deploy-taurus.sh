@@ -64,6 +64,10 @@ scp -q bin/listen-listener-linux-amd64 "deploy/systemd/listen-listener@.service"
   deploy/nginx/listen.home.arpa.conf deploy/php-fpm/listen.conf "$gen/listen-sources.conf" "$host:$stage/"
 scp -q "$gen"/sources/*.env "$host:$stage/sources/"
 
+# Contact form: mail.php (gitignored) from .email (gitignored), with the
+# rate-limit directory that exists on taurus.
+scripts/mail-config.sh /var/lib/listen-web
+
 echo "syncing site"
 rsync -rlt --delete --exclude .DS_Store --exclude '*.example.*' \
   --rsync-path="sudo rsync" site/ "$host:/var/www/listen.home.arpa/"
@@ -74,6 +78,11 @@ set -euo pipefail
 chown -R root:root /var/www/listen.home.arpa
 find /var/www/listen.home.arpa -type d -exec chmod 0755 {} +
 find /var/www/listen.home.arpa -type f -exec chmod 0644 {} +
+# Credentials: readable by PHP only.
+if [ -f /var/www/listen.home.arpa/_config/mail.php ]; then
+  chown root:www-data /var/www/listen.home.arpa/_config/mail.php
+  chmod 0640 /var/www/listen.home.arpa/_config/mail.php
+fi
 install -m 0755 $stage/listen-listener-linux-amd64 /usr/local/bin/listen-listener
 install -m 0644 "$stage/listen-listener@.service" "/etc/systemd/system/listen-listener@.service"
 
@@ -84,6 +93,7 @@ if [ -f /etc/systemd/system/listen-listener.service ]; then
 fi
 
 install -d -m 0755 /etc/listen/sources
+install -d -o www-data -g www-data -m 0700 /var/lib/listen-web   # contact form rate limit
 for f in /etc/listen/sources/*.env; do
   [ -e "\$f" ] || continue
   slug=\$(basename "\$f" .env)

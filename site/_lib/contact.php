@@ -47,7 +47,7 @@ function contact_token_ok(array $cfg, string $token): bool
 function contact_handle(): array
 {
     $cfg = contact_config();
-    $out = ['state' => $cfg ? 'form' : 'unconfigured', 'errors' => [], 'values' => ['name' => '', 'email' => '', 'message' => ''], 'token' => $cfg ? contact_token($cfg) : ''];
+    $out = ['state' => $cfg ? 'form' : 'unconfigured', 'errors' => [], 'values' => ['name' => '', 'email' => '', 'message' => '', 'copy' => ''], 'token' => $cfg ? contact_token($cfg) : ''];
     if ($cfg === null || ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
         return $out;
     }
@@ -56,6 +56,7 @@ function contact_handle(): array
     foreach (['name', 'email', 'message'] as $k) {
         $v[$k] = trim(str_replace("\r", '', (string) ($_POST[$k] ?? '')));
     }
+    $v['copy'] = ($_POST['copy'] ?? '') === '1' ? '1' : '';
     $out['values'] = $v;
 
     // Bots: the honeypot is invisible to people; pretend success.
@@ -66,29 +67,85 @@ function contact_handle(): array
     if (!contact_token_ok($cfg, (string) ($_POST['token'] ?? ''))) {
         $out['errors']['form'] = 'The form expired or was sent too quickly. Please try again.';
     }
-    if ($v['name'] === '' || mb_strlen($v['name']) > 120 || str_contains($v['name'], "\n")) {
-        $out['errors']['name'] = 'Please give your name (up to 120 characters).';
+    if ($v['name'] === '') {
+        $out['errors']['name'] = 'Please give your name.';
+    } elseif (mb_strlen($v['name']) > 120 || str_contains($v['name'], "\n")) {
+        $out['errors']['name'] = 'Please give your name on one line (up to 120 characters).';
     }
     if (!filter_var($v['email'], FILTER_VALIDATE_EMAIL) || mb_strlen($v['email']) > 200) {
         $out['errors']['email'] = 'Please give a valid email address, so we can reply.';
     }
-    if (mb_strlen($v['message']) < 10 || mb_strlen($v['message']) > 5000) {
-        $out['errors']['message'] = 'Please write a message between 10 and 5000 characters.';
+    if ($v['message'] === '') {
+        $out['errors']['message'] = 'Please write a message.';
+    } elseif (mb_strlen($v['message']) > 5000) {
+        $out['errors']['message'] = 'Please keep the message under 5000 characters.';
     }
     if ($out['errors']) {
         return $out;
     }
+    // A copy goes to an address the visitor typed in, so limit how often
+    // any one address can make the server send mail.
+    if (!contact_rate_ok($cfg, (string) ($_SERVER['REMOTE_ADDR'] ?? ''))) {
+        $out['errors']['form'] = 'Too many messages from your connection in the last hour. Please try again later, or write to ' . $cfg['to'] . '.';
+        return $out;
+    }
 
-    $subject = 'Listening Observatory: message from ' . $v['name'];
-    $body = $v['message'] . "\n\n-- \n" . $v['name'] . ' <' . $v['email'] . ">\nsent via https://" . ($_SERVER['HTTP_HOST'] ?? SITE_HOST) . "/contact\n";
+    $site = 'https://' . ($_SERVER['HTTP_HOST'] ?? SITE_HOST);
+    $subject = 'Message from ' . $v['name'];
+    $body = $v['message'] . "\n\n-- \n" . $v['name'] . ' <' . $v['email'] . ">\nsent via " . $site . "/contact\n";
     $err = smtp_send($cfg, (string) $cfg['to'], $subject, $body, $v['name'], $v['email']);
     if ($err !== null) {
         error_log('contact: ' . $err);
         $out['errors']['form'] = 'The message could not be sent just now. Please try again later, or write to ' . $cfg['to'] . '.';
         return $out;
     }
+    if ($v['copy'] === '1') {
+        $copy = "This is a copy of the message you sent to " . SITE_NAME . " (" . $site . ").\n"
+            . "We will reply to this address.\n\n" . str_repeat('-', 60) . "\n\n" . $v['message'] . "\n";
+        $err = smtp_send($cfg, $v['email'], 'Your message to ' . SITE_NAME, $copy, SITE_NAME, (string) $cfg['to']);
+        if ($err !== null) {
+            error_log('contact copy: ' . $err);
+            $out['state'] = 'sent-nocopy';
+            return $out;
+        }
+    }
     $out['state'] = 'sent';
     return $out;
+}
+
+// At most 5 submissions per hour per client address, counted in a small file
+// in state_dir (writable by PHP). Without a state_dir there is no limit.
+function contact_rate_ok(array $cfg, string $ip): bool
+{
+    $dir = (string) ($cfg['state_dir'] ?? '');
+    if ($dir === '' || !is_dir($dir) || !is_writable($dir)) {
+        return true;
+    }
+    $file = $dir . '/contact-rate.json';
+    $fp = fopen($file, 'c+');
+    if (!$fp) {
+        return true;
+    }
+    flock($fp, LOCK_EX);
+    $data = json_decode((string) stream_get_contents($fp), true) ?: [];
+    $now = time();
+    $key = hash('sha256', $ip . '|' . $cfg['secret']); // no plain addresses stored
+    foreach ($data as $k => $times) {
+        $data[$k] = array_values(array_filter((array) $times, fn ($t) => $t > $now - 3600));
+        if (!$data[$k]) {
+            unset($data[$k]);
+        }
+    }
+    $ok = count($data[$key] ?? []) < 5;
+    if ($ok) {
+        $data[$key][] = $now;
+    }
+    ftruncate($fp, 0);
+    rewind($fp);
+    fwrite($fp, (string) json_encode($data));
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return $ok;
 }
 
 /** Sends one plain-text mail; returns null on success or an error message. */
@@ -142,7 +199,7 @@ function smtp_send(array $cfg, string $to, string $subject, string $body, string
     $enc = fn (string $t) => '=?UTF-8?B?' . base64_encode($t) . '?=';
     $headers = [
         'Date: ' . date(DATE_RFC2822),
-        'From: ' . $enc(SITE_NAME) . ' <' . $from . '>',
+        'From: ' . $enc((string) ($cfg['from_name'] ?? SITE_NAME)) . ' <' . $from . '>',
         'To: <' . $to . '>',
         'Reply-To: ' . $enc($replyName) . ' <' . $replyEmail . '>',
         'Subject: ' . $enc($subject),

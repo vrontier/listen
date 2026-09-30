@@ -19,3 +19,5 @@ site/_config/sources.json
 site/_config/mail.php
 # LLM credentials (LLM_API_KEY), never committed
 .llm
+# SMTP credentials for the contact form, never committed
+.email
