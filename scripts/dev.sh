@@ -13,6 +13,9 @@ cfg=site/_config/sources.json
 # LLM credentials for the narrator (LLM_API_KEY, NARRATOR_URL, NARRATOR_MODEL), kept out of git.
 if [[ -f .llm ]]; then set -a; . ./.llm; set +a; fi
 
+# Contact form config from .email (if present); no rate limit locally.
+scripts/mail-config.sh >/dev/null
+
 (cd listener && go build -o ../bin/listener ./cmd/listener)
 
 pids=()

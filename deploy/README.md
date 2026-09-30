@@ -15,6 +15,7 @@ installs the files below. It is idempotent.
 | PHP-FPM pool | `/etc/php/8.3/fpm/pool.d/listen.conf`, socket `/run/php/php8.3-fpm-listen.sock` | `php-fpm/listen.conf` |
 | nginx vhost | `/etc/nginx/sites-available/listen.home.arpa` | `nginx/listen.home.arpa.conf` |
 | TLS | `/etc/ssl/home-arpa/listen.{key,csr,crt}` | — |
+| Contact form | `site/_config/mail.php` (generated from `.email` by `scripts/mail-config.sh`, deployed with the site, 0644 in a directory nginx never serves); rate limit in `/var/lib/listen-web` (www-data, 0700) | `.email` (gitignored) |
 | Narrator credentials | `/etc/listen/llm.env` (root, 0600): `LLM_API_KEY`, `NARRATOR_URL`, `NARRATOR_MODEL`; optional, narrator off without it | — |
 
 The listener listens on `127.0.0.1:8095` (8080 belongs to llama-server). nginx

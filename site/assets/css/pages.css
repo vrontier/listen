@@ -253,6 +253,8 @@ body.page {
 .field [aria-invalid="true"] { border-color: #e0786e; }
 .field small { color: #e0786e; font-size: .85rem; }
 .contact__note { font-size: .85rem; color: var(--label); }
+.check { display: inline-flex; align-items: center; gap: .6rem; cursor: pointer; color: var(--value); }
+.check input { width: 1.05rem; height: 1.05rem; accent-color: var(--warm); }
 .button {
   justify-self: start;
   font-family: var(--mono);
