@@ -1,0 +1,5 @@
+# /etc/default/listen-listener — input of the listen-listener service.
+# Replay a local capture (looped, clock pinned to the recording time):
+LISTEN_ARGS="-in /var/lib/listen/samples/capture.mp3 -loop"
+# Or analyse a live stream:
+# LISTEN_ARGS="-in https://stream.example.org/live"

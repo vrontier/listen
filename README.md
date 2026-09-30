@@ -22,7 +22,8 @@ docs/       concept, event model, visual study, audio sources
 listener/   Go daemon: ffmpeg ingestion, DSP, event detection, WebSocket API
 site/       website for listen.vrontier.org (vanilla PHP front controller, served by NGINX + PHP-FPM)
             /live is the p5.js visualization (site/assets/js/live/)
-scripts/    local development helpers
+deploy/     nginx, PHP-FPM and systemd files for listen.home.arpa (see deploy/README.md)
+scripts/    local development and deployment helpers
 ```
 
 ## Development
