@@ -2,7 +2,7 @@
 /** @var array $page */
 $source = live_source();
 ?>
-  <div class="observatory" data-ws="<?= e(live_ws_url()) ?>" data-tz="<?= e($source['timezone']) ?>">
+  <div class="observatory" data-ws="<?= e(live_ws_url()) ?>" data-tz="<?= e($source['timezone']) ?>"<?= $source['audio'] ? ' data-audio="1"' : '' ?>>
     <section class="stage" aria-label="Live visualization">
       <div id="terrain" class="stage__canvas" aria-hidden="true"></div>
 
@@ -19,6 +19,9 @@ $source = live_source();
         <div><dt>Spectral entropy</dt><dd id="ro-entropy">—</dd></div>
         <div><dt>Novelty</dt><dd id="ro-novelty">—</dd></div>
         <div class="readout__conn"><dd><span id="conn" class="conn" data-state="connecting">connecting</span></dd></div>
+<?php if ($source['audio']): ?>
+        <div class="readout__listen"><dd><button id="listen" class="listen" type="button" aria-pressed="false" hidden>listen</button></dd></div>
+<?php endif; ?>
       </dl>
     </section>
 

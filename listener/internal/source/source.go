@@ -11,9 +11,11 @@ import (
 	"io"
 	"log"
 	"math"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -36,6 +38,21 @@ type Config struct {
 
 	OnSamples func([]float32)
 	OnState   func(state string)
+
+	// Outputs are extra ffmpeg outputs from the same decode (e.g. encoded
+	// audio for the browser). Each is written to its own pipe and must be
+	// drained by Handle until EOF, or ffmpeg stalls.
+	Outputs []Output
+}
+
+// Output is an additional ffmpeg output. Args are the output options
+// (codec, format); the destination pipe is appended. Handle is called once
+// per ffmpeg run with the pipe and the number of PCM samples delivered
+// before this run started, which anchors the output's media time on the
+// listener's audio timeline.
+type Output struct {
+	Args   []string
+	Handle func(r io.Reader, baseSamples int64)
 }
 
 // Duration asks ffprobe for the length of a media file.
@@ -68,7 +85,14 @@ func (c Config) args() []string {
 			a = append(a, "-stream_loop", "-1")
 		}
 	}
-	return append(a, "-i", c.Input, "-vn", "-ac", "1", "-ar", strconv.Itoa(c.SampleRate), "-f", "f32le", "pipe:1")
+	a = append(a, "-i", c.Input,
+		"-map", "0:a:0", "-ac", "1", "-ar", strconv.Itoa(c.SampleRate), "-f", "f32le", "pipe:1")
+	for i, o := range c.Outputs {
+		a = append(a, "-map", "0:a:0")
+		a = append(a, o.Args...)
+		a = append(a, "pipe:"+strconv.Itoa(3+i)) // ExtraFiles start at fd 3
+	}
+	return a
 }
 
 // Run decodes until ctx is cancelled. A file without Loop returns nil at its
@@ -85,8 +109,10 @@ func Run(ctx context.Context, c Config) error {
 		}
 	}
 	state(Connecting)
+	var delivered int64
 	for attempt := 0; ; attempt++ {
-		got, err := c.once(ctx, state)
+		got, err := c.once(ctx, state, delivered)
+		delivered += got
 		if ctx.Err() != nil {
 			state(Offline)
 			return nil
@@ -114,10 +140,25 @@ func Run(ctx context.Context, c Config) error {
 }
 
 // once runs a single ffmpeg process and returns the number of samples read.
-func (c Config) once(ctx context.Context, state func(string)) (int64, error) {
+func (c Config) once(ctx context.Context, state func(string), base int64) (int64, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, c.FFmpeg, c.args()...)
+	var readers []*os.File
+	var drained sync.WaitGroup
+	defer func() {
+		for _, r := range readers {
+			r.Close()
+		}
+	}()
+	for range c.Outputs {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return 0, err
+		}
+		readers = append(readers, r)
+		cmd.ExtraFiles = append(cmd.ExtraFiles, w)
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return 0, err
@@ -126,9 +167,22 @@ func (c Config) once(ctx context.Context, state func(string)) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := cmd.Start(); err != nil {
+	err = cmd.Start()
+	for _, w := range cmd.ExtraFiles {
+		w.Close() // ffmpeg holds its own copies
+	}
+	if err != nil {
 		return 0, fmt.Errorf("start ffmpeg: %w", err)
 	}
+	for i, o := range c.Outputs {
+		drained.Add(1)
+		go func(r io.Reader, h func(io.Reader, int64)) {
+			defer drained.Done()
+			h(r, base)
+			io.Copy(io.Discard, r) // keep ffmpeg unblocked if the handler stops early
+		}(readers[i], o.Handle)
+	}
+	defer drained.Wait()
 	go func() {
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {

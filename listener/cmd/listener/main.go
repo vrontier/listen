@@ -26,6 +26,7 @@ import (
 	"github.com/vrontier/listen/listener/internal/analysis"
 	"github.com/vrontier/listen/listener/internal/events"
 	"github.com/vrontier/listen/listener/internal/hub"
+	"github.com/vrontier/listen/listener/internal/relay"
 	"github.com/vrontier/listen/listener/internal/source"
 )
 
@@ -39,6 +40,8 @@ func main() {
 		dump     = flag.Bool("dump", false, "write events as JSON lines to stdout instead of serving; implies -realtime=false for files")
 		origins  = flag.String("origins", "localhost:*,127.0.0.1:*,listen.home.arpa,listen.vrontier.org",
 			"comma-separated Origin host patterns allowed to open /ws/live")
+		audio = flag.Bool("audio", false, "relay the audio to browsers on /ws/audio, in step with the events "+
+			"(only enable where the source's terms allow it)")
 		ffmpeg  = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
 		ffprobe = flag.String("ffprobe", "ffprobe", "ffprobe binary")
 		start   = flag.String("start", "", "recording time of a file's first sample (RFC 3339); "+
@@ -82,6 +85,16 @@ func main() {
 
 	a.Live(!rec.known && (isURL || *realtime))
 	st := &status{input: describe(*in), started: time.Now(), stream: source.Connecting}
+	mux := http.NewServeMux()
+	h.Routes(mux)
+	var outputs []source.Output
+	if *audio {
+		rl := relay.New(analysis.SampleRate, splitList(*origins))
+		rl.Routes(mux)
+		outputs = rl.Outputs()
+		st.audio = rl.Names()
+		log.Printf("audio relay on: /ws/audio?codec=%s", strings.Join(st.audio, "|"))
+	}
 	if rec.known {
 		// Timestamps are recording times; the distance to now isn't latency.
 		log.Printf("replay: clock pinned to recording time %s", rec.start.Format(time.RFC3339))
@@ -93,7 +106,7 @@ func main() {
 		t := time.NewTicker(5 * time.Second)
 		defer t.Stop()
 		for {
-			h.Broadcast(stamper.Stamp(events.TypeStatus, time.Now(), st.payload(h.Listeners())))
+			h.Broadcast(stamper.Stamp(events.TypeStatus, time.Now(), 0, st.payload(h.Listeners())))
 			select {
 			case <-ctx.Done():
 				return
@@ -107,6 +120,7 @@ func main() {
 		srcDone <- source.Run(ctx, source.Config{
 			Input: *in, SampleRate: analysis.SampleRate, Realtime: *realtime, Loop: *loop, FFmpeg: *ffmpeg,
 			OnSamples: a.Feed,
+			Outputs:   outputs,
 			OnState: func(s string) {
 				switch {
 				case s != source.Connected:
@@ -120,14 +134,12 @@ func main() {
 				prev := st.setStream(s)
 				if s != prev {
 					log.Printf("stream: %s", s)
-					h.Broadcast(stamper.Stamp(events.TypeStatus, time.Now(), st.payload(h.Listeners())))
+					h.Broadcast(stamper.Stamp(events.TypeStatus, time.Now(), 0, st.payload(h.Listeners())))
 				}
 			},
 		})
 	}()
 
-	mux := http.NewServeMux()
-	h.Routes(mux)
 	srv := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		log.Printf("listening on http://%s (ws: /ws/live, snapshot: /api/state/current), input %s", *addr, describe(*in))
@@ -223,6 +235,7 @@ type status struct {
 	stream     string
 	latency    time.Duration
 	reconnects int
+	audio      []string
 }
 
 func (s *status) setStream(v string) (prev string) {
@@ -260,6 +273,7 @@ func (s *status) payload(listeners int) events.Status {
 		SampleRate: analysis.SampleRate,
 		UptimeS:    float64(int(time.Since(s.started).Seconds())),
 		Reconnects: s.reconnects,
+		Audio:      s.audio,
 	}
 }
 

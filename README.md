@@ -52,6 +52,12 @@ in `samples/` are never committed.
 The source shown on `/live` is named in `site/_config/source.php` (not committed;
 see `source.example.php`). Without it the page uses neutral defaults.
 
+Optional in-sync audio: with `-audio` the listener relays the audio it analyses
+on `/ws/audio`, as fragmented MP4 (AAC and Opus). Every event carries
+`position_s` on the same timeline, so the page shows each event when its sound
+is heard. The site offers playback only if `'audio' => true` is set in its local
+source config. Both switches are off by default.
+
 ## Principle
 
 ```text

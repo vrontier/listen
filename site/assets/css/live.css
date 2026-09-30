@@ -103,6 +103,24 @@ body.live {
 .conn[data-state="buffering"] { color: var(--warm); }
 .conn[data-state="offline"] { color: #e0786e; }
 
+.readout__listen { margin-top: .6rem; }
+.listen {
+  pointer-events: auto;
+  font: inherit;
+  font-size: .68rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--value);
+  background: rgba(7, 8, 10, .6);
+  border: 1px solid rgba(228, 228, 226, .25);
+  padding: .3rem .7rem;
+  cursor: pointer;
+}
+.listen:hover, .listen:focus-visible { border-color: var(--warm); color: var(--warm); outline: none; }
+.listen[aria-pressed="true"] { border-color: var(--warm); color: var(--warm); }
+.listen::before { content: '▶ '; }
+.listen[aria-pressed="true"]::before { content: '■ '; }
+
 /* ---- Panels ------------------------------------------------------------- */
 
 .panels {
