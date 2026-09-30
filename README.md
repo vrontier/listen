@@ -18,11 +18,38 @@ Early development. See [`docs/`](docs/) for the concept and the
 ## Layout
 
 ```text
-docs/   concept, event model, visual study
-site/   website for listen.vrontier.org (vanilla PHP front controller, served by NGINX + PHP-FPM)
+docs/       concept, event model, visual study, audio sources
+listener/   Go daemon: ffmpeg ingestion, DSP, event detection, WebSocket API
+site/       website for listen.vrontier.org (vanilla PHP front controller, served by NGINX + PHP-FPM)
+            /live is the p5.js visualization (site/assets/js/live/)
+scripts/    local development helpers
 ```
 
-Planned: `listener/` — Go daemon for stream ingestion, DSP, event detection and the WebSocket API.
+## Development
+
+Requires Go ≥ 1.23, ffmpeg and PHP 8.
+
+```sh
+scripts/dev.sh                     # loop the newest capture in samples/
+scripts/dev.sh https://…/live      # or analyse a live stream
+# → http://127.0.0.1:8000/live?ws=ws://127.0.0.1:8080/ws/live
+
+cd listener && go test ./...
+bin/listener -in capture.mp3 -dump > events.jsonl   # offline, as fast as possible
+```
+
+The listener implements the MVP of the [event model](docs/sonic_division_live_visualization_event_model.md)
+(§27): `signal.frame` and `signal.spectrum` at 10 Hz, `feature.state` at 2 Hz,
+`event.transient`, `event.resonance` and `system.status`, over `GET /ws/live`, with
+the reconnect snapshot at `GET /api/state/current`.
+
+Dependencies are pinned and kept in the repository: `github.com/coder/websocket`
+(pure Go, no transitive dependencies) is vendored in `listener/vendor/`, and p5.js is
+vendored in `site/assets/vendor/p5/` with checksums in `VERSION`. Audio captures
+in `samples/` are never committed.
+
+The source shown on `/live` is named in `site/_config/source.php` (not committed;
+see `source.example.php`). Without it the page uses neutral defaults.
 
 ## Principle
 

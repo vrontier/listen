@@ -12,3 +12,8 @@ samples/
 .env
 # Local Claude Code MCP config
 .mcp.json
+# Playwright MCP session artefacts
+.playwright-mcp/
+# Source details stay local until the source agrees to publication
+docs/sources.md
+site/_config/source.php
