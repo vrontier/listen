@@ -288,7 +288,7 @@
           if (u < 0 || u > 1) return;
           var x = W / 2 + (u - 0.5) * 2 * g.half;
           var ground = g.y - heightAt(row, u, RES_DEPTH) * g.amp;
-          var top = Math.max(H * 0.06, ground - H * (main ? 0.3 + 0.35 * strength : 0.15 + 0.2 * strength));
+          var top = Math.max(H * 0.06 + 18, ground - H * (main ? 0.3 + 0.35 * strength : 0.15 + 0.2 * strength));
           var c = colour(u);
 
           ctx.globalCompositeOperation = 'lighter';
