@@ -10,8 +10,6 @@ The live visualization is generated in the browser and evolves with the signal. 
 
 A language model can add a slower narrative layer, turning structured observations into concise textual descriptions. It does not decide what happened in the sound; it gives language to events detected by the analytical system.
 
-**[listen.vrontier.org](https://listen.vrontier.org)**
-
 ## Status
 
 Early development. See [`docs/`](docs/) for the concept and the
