@@ -123,6 +123,39 @@ body.live {
 .listen::before { content: '▶ '; }
 .listen[aria-pressed="true"]::before { content: '■ '; }
 
+.stage__legend {
+  position: absolute;
+  left: clamp(1rem, 2vw, 2rem);
+  bottom: .8rem;
+  z-index: 1;
+  max-width: 60ch;
+  font-family: var(--mono);
+  font-size: .74rem;
+  color: var(--label);
+  text-shadow: var(--halo);
+  pointer-events: none;
+}
+
+.motif-tip {
+  position: absolute;
+  z-index: 2;
+  padding: .35rem .6rem;
+  font-family: var(--mono);
+  font-size: .8rem;
+  line-height: 1.5;
+  color: var(--value);
+  background: rgba(7, 8, 10, .88);
+  border: 1px solid rgba(228, 228, 226, .2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.motif-tip b { font-weight: 400; }
+.motif-tip span { color: var(--label); }
+
+@media (max-width: 640px) {
+  .stage__legend { display: none; }
+}
+
 /* ---- Panels ------------------------------------------------------------- */
 
 /* Two independent column groups: the signal plots (with the harmonic map

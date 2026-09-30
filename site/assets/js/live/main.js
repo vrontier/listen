@@ -111,6 +111,41 @@
     }
   };
 
+  // Hover (or tap) a constellation dot for its details.
+  var stage = document.querySelector('.stage');
+  var tip = document.getElementById('motif-tip');
+  function ago(ms) {
+    var s = ms / 1000;
+    if (s < 60) return 'just now';
+    if (s < 5400) return Math.round(s / 60) + ' min ago';
+    return (s / 3600).toFixed(1) + ' h ago';
+  }
+  function showTip(ev) {
+    if (!LO.motifAt) return;
+    var box = stage.getBoundingClientRect();
+    var x = ev.clientX - box.left, y = ev.clientY - box.top;
+    var h = LO.motifAt(x, y);
+    LO.hoverMotif = h ? h.mo.id : null;
+    if (!h) { tip.hidden = true; stage.style.cursor = ''; return; }
+    var mo = h.mo, v = mo.visual || {}, sig = mo.signature || {};
+    var hz = mo.kind === 'texture' ? 'texture around ' + LO.fmt.hz(sig.centroid_hz || v.frequency_anchor)
+      : LO.fmt.hz(sig.fundamental_hz || v.frequency_anchor);
+    var when = mo.active ? 'sounding now' : 'heard ' + ago(performance.now() - (mo.lastSeen || performance.now()));
+    tip.innerHTML = '';
+    var name = LO.motifName(mo.id);
+    var b = document.createElement('b'); b.textContent = name.charAt(0).toUpperCase() + name.slice(1) + ' · ' + hz;
+    var sp = document.createElement('span'); sp.textContent = ' · ' + (mo.occurrences || 1) + '× · ' + when;
+    tip.appendChild(b); tip.appendChild(sp);
+    tip.hidden = false;
+    var left = Math.min(h.x + 14, box.width - tip.offsetWidth - 8);
+    tip.style.left = Math.max(8, left) + 'px';
+    tip.style.top = Math.max(8, h.y - tip.offsetHeight - 10) + 'px';
+    stage.style.cursor = 'pointer';
+  }
+  stage.addEventListener('pointermove', showTip);
+  stage.addEventListener('pointerdown', showTip);
+  stage.addEventListener('pointerleave', function () { tip.hidden = true; LO.hoverMotif = null; });
+
   setInterval(function () { panels.features(); panels.interpretation(); }, 250);
   setInterval(function () { panels.drawHarmonicMap(); }, 1000);
 })(window.LO = window.LO || {});
