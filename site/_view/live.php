@@ -5,9 +5,6 @@ $source = live_source();
   <div class="observatory" data-ws="<?= e(live_ws_url()) ?>" data-tz="<?= e($source['timezone']) ?>"<?= $source['audio'] ? ' data-audio="1"' : '' ?>>
     <section class="stage" aria-label="Live visualization">
       <div id="terrain" class="stage__canvas" aria-hidden="true"></div>
-      <div id="motif-tip" class="motif-tip" role="tooltip" hidden></div>
-      <p class="stage__legend">Dots above the horizon: remembered motifs, placed by frequency ·
-        size = how often · brightness = how recently · ring = texture · point at one for details</p>
 
       <header class="stage__title">
         <h1><?= e($source['name']) ?></h1>
@@ -26,6 +23,14 @@ $source = live_source();
         <div class="readout__listen"><dd><button id="listen" class="listen" type="button" aria-pressed="false" hidden>listen</button></dd></div>
 <?php endif; ?>
       </dl>
+    </section>
+
+    <section class="dial" aria-label="Memory dial">
+      <canvas id="dial" aria-hidden="true"></canvas>
+      <div id="motif-tip" class="motif-tip" role="tooltip" hidden></div>
+      <p class="dial__legend"><span class="dial__title">Memory</span> each mark is a remembered motif at its
+        frequency · taller = heard more often · brighter = more recent · shaded band = texture ·
+        <span class="dial__needle">needle</span> = dominant frequency now · point at a mark for details</p>
     </section>
 
     <section class="panels" aria-label="Analysis">

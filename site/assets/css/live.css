@@ -123,18 +123,28 @@ body.live {
 .listen::before { content: '▶ '; }
 .listen[aria-pressed="true"]::before { content: '■ '; }
 
-.stage__legend {
-  position: absolute;
-  left: clamp(1rem, 2vw, 2rem);
-  bottom: .8rem;
-  z-index: 1;
-  max-width: 60ch;
+/* ---- Memory dial: motifs as stations on a tuning scale ---------------- */
+
+.dial {
+  position: relative;
+  padding: .4rem clamp(1rem, 2vw, 2rem) .7rem;
+  border-top: 1px solid var(--panel-line);
+  background: linear-gradient(180deg, rgba(240, 178, 110, .025), rgba(7, 8, 10, 0));
+}
+.dial canvas { display: block; width: 100%; height: 88px; cursor: default; }
+.dial__legend {
+  margin-top: .2rem;
   font-family: var(--mono);
   font-size: .74rem;
   color: var(--label);
-  text-shadow: var(--halo);
-  pointer-events: none;
 }
+.dial__title {
+  margin-right: 1ch;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--value);
+}
+.dial__needle { color: #f07854; }
 
 .motif-tip {
   position: absolute;
@@ -144,17 +154,13 @@ body.live {
   font-size: .8rem;
   line-height: 1.5;
   color: var(--value);
-  background: rgba(7, 8, 10, .88);
+  background: rgba(7, 8, 10, .92);
   border: 1px solid rgba(228, 228, 226, .2);
   white-space: nowrap;
   pointer-events: none;
 }
 .motif-tip b { font-weight: 400; }
 .motif-tip span { color: var(--label); }
-
-@media (max-width: 640px) {
-  .stage__legend { display: none; }
-}
 
 /* ---- Panels ------------------------------------------------------------- */
 
