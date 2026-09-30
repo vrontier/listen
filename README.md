@@ -52,6 +52,17 @@ in `samples/` are never committed.
 The source shown on `/live` is named in `site/_config/source.php` (not committed;
 see `source.example.php`). Without it the page uses neutral defaults.
 
+Acoustic memory (phase 2, §12–§16): with `-memory-dir` the listener recognises
+recurring structures. *Resonance motifs* are recurring partials, matched on
+frequency, harmonic profile and context. *Texture motifs* are recurring
+overall sound states, compared over 20-second windows. Each motif gets a
+persistent id and a visual seed, and the listener emits `motif.detected`,
+`motif.returned` (after `-motif-return` of absence, 3 min by default) and
+`memory.summary` (1 h and 24 h). Memory lives in plain files, one directory per
+source and input: `motifs.json` and daily `history/*.jsonl`, kept for
+`-history-days`. It is served at `/api/motifs`, `/api/motifs/{id}`,
+`/api/history/events` and `/api/history/features`.
+
 Optional in-sync audio: with `-audio` the listener relays the audio it analyses
 on `/ws/audio`, as fragmented MP4 (AAC and Opus). Every event carries
 `position_s` on the same timeline, so the page shows each event when its sound

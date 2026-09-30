@@ -9,7 +9,7 @@ installs the files below. It is idempotent.
 | Listener binary | `/usr/local/bin/listen-listener` | `listener/` |
 | systemd unit | `/etc/systemd/system/listen-listener.service` | `systemd/listen-listener.service` |
 | Listener input | `/etc/default/listen-listener` (`LISTEN_ARGS`, installed once, then edited on the host) | `systemd/listen-listener.default` |
-| Listener state | `/var/lib/listen` (user `listen`, 0700; captures in `samples/`) | — |
+| Listener state | `/var/lib/listen` (user `listen`, 0700; captures in `samples/`, memory in `memory/<source>/<input>/`) | — |
 | Site | `/var/www/listen.home.arpa` | `site/` |
 | PHP-FPM pool | `/etc/php/8.3/fpm/pool.d/listen.conf`, socket `/run/php/php8.3-fpm-listen.sock` | `php-fpm/listen.conf` |
 | nginx vhost | `/etc/nginx/sites-available/listen.home.arpa` | `nginx/listen.home.arpa.conf` |

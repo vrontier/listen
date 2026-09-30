@@ -52,6 +52,17 @@ type Message struct {
 type Stamper struct {
 	source string
 	seq    atomic.Uint64
+	last   atomic.Int64 // UnixNano of the latest audio-positioned event
+}
+
+// LastTimestamp is the observation time of the most recent event tied to
+// the audio (zero time before the first one).
+func (s *Stamper) LastTimestamp() time.Time {
+	n := s.last.Load()
+	if n == 0 {
+		return time.Now()
+	}
+	return time.Unix(0, n)
 }
 
 func NewStamper(source string) *Stamper { return &Stamper{source: source} }
@@ -67,6 +78,9 @@ func (s *Stamper) Stamp(typ string, ts time.Time, pos float64, payload any) Mess
 		Source:    s.source,
 		Position:  math.Round(pos*1000) / 1000,
 		Payload:   payload,
+	}
+	if pos > 0 {
+		s.last.Store(ts.UnixNano())
 	}
 	return encode(env)
 }

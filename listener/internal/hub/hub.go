@@ -29,8 +29,15 @@ type client struct {
 	dropped atomic.Int64
 }
 
+// MemoryView is what the memory contributes to the snapshot.
+type MemoryView interface {
+	ActiveMotifs() []any
+	Summaries() map[string]events.Envelope
+}
+
 type Hub struct {
 	origins []string
+	memory  MemoryView
 
 	mu      sync.RWMutex
 	clients map[*client]struct{}
@@ -47,6 +54,9 @@ type Hub struct {
 func New(origins []string) *Hub {
 	return &Hub{origins: origins, clients: map[*client]struct{}{}, resonances: map[string]events.Envelope{}}
 }
+
+// SetMemory adds the memory's active motifs and summaries to snapshots.
+func (h *Hub) SetMemory(m MemoryView) { h.memory = m }
 
 func (h *Hub) Listeners() int {
 	h.mu.RLock()
@@ -78,7 +88,7 @@ func (h *Hub) Broadcast(m events.Message) {
 		if r.Status != "update" {
 			h.addRecent(env)
 		}
-	case events.TypeTransient:
+	case events.TypeTransient, events.TypeMotifDetected, events.TypeMotifReturned:
 		h.addRecent(env)
 	}
 	for c := range h.clients {
@@ -100,14 +110,15 @@ func (h *Hub) addRecent(env events.Envelope) {
 
 // Snapshot is the /api/state/current response.
 type Snapshot struct {
-	Frame            *events.Envelope  `json:"frame"`
-	Spectrum         *events.Envelope  `json:"spectrum"`
-	Features         *events.Envelope  `json:"features"`
-	ActiveResonances []events.Envelope `json:"active_resonances"`
-	RecentEvents     []events.Envelope `json:"recent_events"`
-	ActiveMotifs     []any             `json:"active_motifs"` // phase 2
-	Narrative        any               `json:"narrative"`     // phase 3
-	System           *events.Envelope  `json:"system"`
+	Frame            *events.Envelope           `json:"frame"`
+	Spectrum         *events.Envelope           `json:"spectrum"`
+	Features         *events.Envelope           `json:"features"`
+	ActiveResonances []events.Envelope          `json:"active_resonances"`
+	RecentEvents     []events.Envelope          `json:"recent_events"`
+	ActiveMotifs     []any                      `json:"active_motifs"`
+	Memory           map[string]events.Envelope `json:"memory"`    // latest memory.summary per window
+	Narrative        any                        `json:"narrative"` // phase 3
+	System           *events.Envelope           `json:"system"`
 }
 
 func (h *Hub) Snapshot() Snapshot {
@@ -121,6 +132,10 @@ func (h *Hub) Snapshot() Snapshot {
 	}
 	for _, r := range h.resonances {
 		s.ActiveResonances = append(s.ActiveResonances, r)
+	}
+	if h.memory != nil {
+		s.ActiveMotifs = h.memory.ActiveMotifs()
+		s.Memory = h.memory.Summaries()
 	}
 	return s
 }

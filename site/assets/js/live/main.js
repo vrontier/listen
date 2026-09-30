@@ -61,6 +61,10 @@
     onEvent: schedule,
     onSnapshot: function (snap) {
       state.applySnapshot(snap);
+      fetch(endpoints.api + '/motifs', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { if (j) state.loadMotifs(j.motifs); })
+        .catch(function () { /* no memory on this listener */ });
       panels.replayRecent(snap.recent_events);
       panels.connection(state.connection, state.stream);
       updateListen();
@@ -99,7 +103,12 @@
     lastDelivered: function () { return lastDelivered; },
     pending: function () { return pending.length; },
     codec: function () { return player && player.codec ? player.codec.name : null; },
-    element: function () { return player ? player.el : null; }
+    element: function () { return player ? player.el : null; },
+    motifs: function () {
+      var now = performance.now(), out = [];
+      state.motifs.forEach(function (m) { out.push({ id: m.id, kind: m.kind, flareAgo: m.flare ? Math.round(now - m.flare) : null, occ: m.occurrences, active: m.active }); });
+      return out;
+    }
   };
 
   setInterval(function () { panels.features(); }, 250);
