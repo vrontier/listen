@@ -29,7 +29,9 @@ func Classify(in StateInput) string {
 		return "evolving_texture"
 	case in.CentroidHz < 700 && in.Harmonicity < 0.25:
 		return "wind_like"
-	case in.Flatness >= 0.3 && in.Harmonicity < 0.25:
+	case in.Harmonicity < 0.25 && (in.Flatness >= 0.3 || (in.CentroidHz >= 2000 && in.Entropy >= 0.55)):
+		// Flat noise, or impulsive crackle spread high across the spectrum
+		// (e.g. lightning sferics on VLF radio).
 		return "broadband_noise"
 	case in.ActiveResonances > 0:
 		return "stable_resonance"

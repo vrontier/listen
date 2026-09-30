@@ -12,7 +12,7 @@ func TestReplayClockWrapsWithinRecording(t *testing.T) {
 	start := time.Date(2026, 9, 30, 8, 35, 4, 0, time.UTC)
 	length := 2 * time.Second
 	var stamps []time.Time
-	a := New(events.NewStamper("test"), func(m events.Message) {
+	a := New(0, events.NewStamper("test"), func(m events.Message) {
 		if m.Type == events.TypeFrame {
 			stamps = append(stamps, m.Env.Timestamp)
 		}
@@ -20,9 +20,9 @@ func TestReplayClockWrapsWithinRecording(t *testing.T) {
 	a.Replay(start, length)
 
 	// 5 s of a quiet tone: the looped file plays two and a half times.
-	x := make([]float32, 5*SampleRate)
+	x := make([]float32, 5*DefaultSampleRate)
 	for i := range x {
-		x[i] = float32(0.1 * math.Sin(2*math.Pi*440*float64(i)/SampleRate))
+		x[i] = float32(0.1 * math.Sin(2*math.Pi*440*float64(i)/DefaultSampleRate))
 	}
 	a.Feed(x)
 

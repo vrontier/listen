@@ -84,6 +84,7 @@ func TestClassifyIsDescriptive(t *testing.T) {
 		{StateInput{LevelDB: -30, Energy: 0.5, Harmonicity: 0.6, ActiveResonances: 1, Novelty: 0.1}, "stable_resonance"},
 		{StateInput{LevelDB: -30, Energy: 0.5, CentroidHz: 400, Harmonicity: 0.1}, "wind_like"},
 		{StateInput{LevelDB: -30, Energy: 0.5, CentroidHz: 3000, Flatness: 0.5, Harmonicity: 0.1}, "broadband_noise"},
+		{StateInput{LevelDB: -30, Energy: 0.5, CentroidHz: 7000, Entropy: 0.63, Flatness: 0.1, Harmonicity: 0.08}, "broadband_noise"},
 	}
 	for _, c := range cases {
 		if got := Classify(c.in); got != c.want {

@@ -55,6 +55,9 @@ func main() {
 		narratorKey   = flag.String("narrator-key-env", "LLM_API_KEY", "environment variable holding the API key")
 		narrateEvery  = flag.Duration("narrate-every", 90*time.Second, "at most one interpretation per interval (only while someone watches)")
 		narrateMode   = flag.String("narrate-mode", "observational", "observational | minimal | poetic")
+		transientK    = flag.Float64("transient-k", 6, "transient threshold in MADs above the median flux; raise for constantly crackling sources")
+		transientGap  = flag.Duration("transient-gap", 300*time.Millisecond, "minimum gap between transients")
+		sampleRate    = flag.Int("sample-rate", analysis.DefaultSampleRate, "analysis sample rate; raise for sources with content above 11 kHz (e.g. 32000 for VLF radio)")
 		ffmpeg        = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
 		ffprobe       = flag.String("ffprobe", "ffprobe", "ffprobe binary")
 		start         = flag.String("start", "", "recording time of a file's first sample (RFC 3339); "+
@@ -114,7 +117,7 @@ func main() {
 	}
 
 	if *dump {
-		runDump(ctx, *in, stamper, through, *loop, *realtime, *ffmpeg, rec)
+		runDump(ctx, *in, *sampleRate, analysis.Options{TransientK: *transientK, TransientGap: *transientGap}, stamper, through, *loop, *realtime, *ffmpeg, rec)
 		return
 	}
 
@@ -132,10 +135,10 @@ func main() {
 		go nar.Run(ctx)
 		log.Printf("narrator on: %s (%s, %s, every %s while watched)", *narratorURL, *narratorModel, *narrateMode, *narrateEvery)
 	}
-	a := analysis.New(stamper, through(broadcast))
+	a := analysis.New(*sampleRate, stamper, through(broadcast), analysis.Options{TransientK: *transientK, TransientGap: *transientGap})
 
 	a.Live(!rec.known && (isURL || *realtime))
-	st := &status{input: describe(*in), started: time.Now(), stream: source.Connecting}
+	st := &status{input: describe(*in), started: time.Now(), stream: source.Connecting, sampleRate: *sampleRate}
 	mux := http.NewServeMux()
 	h.Routes(mux)
 	if mem != nil {
@@ -144,7 +147,7 @@ func main() {
 	}
 	var outputs []source.Output
 	if *audio {
-		rl := relay.New(analysis.SampleRate, splitList(*origins))
+		rl := relay.New(*sampleRate, splitList(*origins))
 		rl.Routes(mux)
 		outputs = rl.Outputs()
 		st.audio = rl.Names()
@@ -173,7 +176,7 @@ func main() {
 	srcDone := make(chan error, 1)
 	go func() {
 		srcDone <- source.Run(ctx, source.Config{
-			Input: *in, SampleRate: analysis.SampleRate, Realtime: *realtime, Loop: *loop, FFmpeg: *ffmpeg,
+			Input: *in, SampleRate: *sampleRate, Realtime: *realtime, Loop: *loop, FFmpeg: *ffmpeg,
 			OnSamples: a.Feed,
 			Outputs:   outputs,
 			OnState: func(s string) {
@@ -217,14 +220,14 @@ func main() {
 	_ = srv.Shutdown(shutdown)
 }
 
-func runDump(ctx context.Context, in string, stamper *events.Stamper, through func(func(events.Message)) func(events.Message),
+func runDump(ctx context.Context, in string, sampleRate int, opts analysis.Options, stamper *events.Stamper, through func(func(events.Message)) func(events.Message),
 	loop, realtime bool, ffmpeg string, rec replay) {
 	w := bufio.NewWriterSize(os.Stdout, 1<<16)
 	defer w.Flush()
-	a := analysis.New(stamper, through(func(m events.Message) {
+	a := analysis.New(sampleRate, stamper, through(func(m events.Message) {
 		w.Write(m.Data)
 		w.WriteByte('\n')
-	}))
+	}), opts)
 	// Offline runs use the recording time, or a fixed epoch, so repeated
 	// runs produce identical output.
 	switch {
@@ -234,7 +237,7 @@ func runDump(ctx context.Context, in string, stamper *events.Stamper, through fu
 		a.Anchor(time.Unix(0, 0))
 	}
 	err := source.Run(ctx, source.Config{
-		Input: in, SampleRate: analysis.SampleRate, Realtime: realtime, Loop: loop, FFmpeg: ffmpeg,
+		Input: in, SampleRate: sampleRate, Realtime: realtime, Loop: loop, FFmpeg: ffmpeg,
 		OnSamples: a.Feed,
 	})
 	if err != nil {
@@ -291,6 +294,7 @@ type status struct {
 	latency    time.Duration
 	reconnects int
 	audio      []string
+	sampleRate int
 }
 
 func (s *status) setStream(v string) (prev string) {
@@ -325,7 +329,7 @@ func (s *status) payload(listeners int) events.Status {
 		LatencyMs:  float64(lat.Milliseconds()),
 		Listeners:  listeners,
 		Input:      s.input,
-		SampleRate: analysis.SampleRate,
+		SampleRate: s.sampleRate,
 		UptimeS:    float64(int(time.Since(s.started).Seconds())),
 		Reconnects: s.reconnects,
 		Audio:      s.audio,
@@ -348,7 +352,11 @@ func describe(in string) string {
 func inputKey(in string) string {
 	if source.IsURL(in) {
 		if u, err := url.Parse(in); err == nil {
-			return "live-" + safeName(u.Host+u.Path)
+			key := u.Host + u.Path
+			if u.RawQuery != "" {
+				key += "_" + u.RawQuery // streams that differ only by query are different sources
+			}
+			return "live-" + safeName(key)
 		}
 		return "live-" + safeName(in)
 	}

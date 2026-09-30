@@ -4,53 +4,117 @@ declare(strict_types=1);
 const SITE_NAME = 'Listening Observatory';
 const SITE_HOST = 'listen.vrontier.org';
 
-// Exact-match routes: path => view + page metadata.
-const ROUTES = [
+// Fixed pages: path => view + page metadata. Each source in
+// _config/sources.json adds /<slug> (see route()).
+const PAGES = [
     '/' => [
         'view'        => 'home',
         'title'       => SITE_NAME,
         'description' => 'An experimental system for continuous computational listening.',
+        'scripts'     => ['js/home.js'],
     ],
-    '/live' => [
-        'view'        => 'live',
-        'layout'      => 'layout-live',
-        'title'       => 'Live listening',
-        'description' => 'A live computational listening of a continuous environmental audio stream.',
+    '/contact' => [
+        'view'        => 'contact',
+        'title'       => 'Contact',
+        'description' => 'Get in touch with the Listening Observatory.',
     ],
 ];
 
-// WebSocket endpoint of the listener daemon. Empty means same host, /ws/live
-// (NGINX proxies it). Set LISTEN_WS_URL for other setups; ?ws= overrides it
-// in the browser during development.
-function live_ws_url(): string
-{
-    $url = getenv('LISTEN_WS_URL');
-    return is_string($url) ? $url : '';
-}
+// ---- sources ---------------------------------------------------------------
 
-// Naming and credit of the analysed source on /live. The public defaults are
-// neutral; a deployment names its source in _config/source.php (gitignored,
-// see _config/source.example.php).
-function live_source(): array
+// The streams the observatory listens to, from _config/sources.json
+// (gitignored; see sources.example.json). Without it there are no streams.
+function sources_config(): array
 {
-    $source = [
-        'name'     => 'Live listening',
-        'subtitle' => 'Computational listening',
-        'meta'     => ['Live audio stream', 'Computational interpretation'],
-        'timezone' => 'UTC',
-        'credit'   => null, // ['text' => …, 'url' => …, 'note' => …]
-        // Offer in-sync playback of the relayed audio (the listener must run
-        // with -audio as well). Only where the source's terms allow it.
-        'audio'    => false,
-    ];
-    $file = dirname(__DIR__) . '/_config/source.php';
+    static $cfg = null;
+    if ($cfg !== null) {
+        return $cfg;
+    }
+    $cfg  = ['default' => '', 'sources' => []];
+    $file = dirname(__DIR__) . '/_config/sources.json';
     if (is_file($file)) {
-        $local = require $file;
-        if (is_array($local)) {
-            $source = array_merge($source, $local);
+        $data = json_decode((string) file_get_contents($file), true);
+        if (is_array($data) && isset($data['sources']) && is_array($data['sources'])) {
+            $cfg = $data + $cfg;
         }
     }
-    return $source;
+    return $cfg;
+}
+
+function source(string $slug): ?array
+{
+    foreach (sources_config()['sources'] as $s) {
+        if (($s['slug'] ?? '') === $slug) {
+            return $s + [
+                'listed'   => false,
+                'name'     => $slug,
+                'subtitle' => 'Live listening',
+                'meta'     => [],
+                'timezone' => 'UTC',
+                'summary'  => '',
+                'credit'   => null,
+                'audio'    => false,
+            ];
+        }
+    }
+    return null;
+}
+
+/** @return array<int, array> the sources shown on the landing page */
+function listed_sources(): array
+{
+    $out = [];
+    foreach (sources_config()['sources'] as $s) {
+        if (!empty($s['listed']) && ($src = source((string) $s['slug'])) !== null) {
+            $out[] = $src;
+        }
+    }
+    return $out;
+}
+
+// Where the page reaches a source's listener. Normally through NGINX under
+// /<slug>/ws/live; in local development (LISTEN_DIRECT_PORTS=1, set by
+// scripts/dev.sh) straight at the listener's port.
+function live_ws_url(array $source): string
+{
+    if (getenv('LISTEN_DIRECT_PORTS') === '1' && isset($source['listener']['port'])) {
+        return 'ws://127.0.0.1:' . (int) $source['listener']['port'] . '/ws/live';
+    }
+    return '/' . $source['slug'] . '/ws/live';
+}
+
+// Base URL of a source's listener API (for the stream cards' live status).
+function live_api_base(array $source): string
+{
+    if (getenv('LISTEN_DIRECT_PORTS') === '1' && isset($source['listener']['port'])) {
+        return 'http://127.0.0.1:' . (int) $source['listener']['port'] . '/api';
+    }
+    return '/' . $source['slug'] . '/api';
+}
+
+// ---- routing ---------------------------------------------------------------
+
+/** Resolves a path to a page, a redirect ['redirect' => url], or null (404). */
+function route(string $path): ?array
+{
+    if (isset(PAGES[$path])) {
+        return PAGES[$path];
+    }
+    if ($path === '/live') {
+        $default = (string) (sources_config()['default'] ?? '');
+        return $default !== '' ? ['redirect' => '/' . $default] : null;
+    }
+    if (preg_match('#^/([a-z0-9][a-z0-9-]{0,62})/?$#', $path, $m) && ($src = source($m[1])) !== null) {
+        return [
+            'view'        => 'live',
+            'layout'      => 'layout-live',
+            'title'       => $src['subtitle'],
+            'description' => $src['summary'] !== '' ? $src['summary'] : 'A live computational listening of ' . $src['name'] . '.',
+            'source'      => $src,
+            'noindex'     => empty($src['listed']),
+        ];
+    }
+    return null;
 }
 
 function request_path(): string
@@ -58,6 +122,8 @@ function request_path(): string
     $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
     return is_string($path) && $path !== '' ? $path : '/';
 }
+
+// ---- rendering -------------------------------------------------------------
 
 function e(string $s): string
 {

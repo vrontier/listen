@@ -1,0 +1,38 @@
+{
+  "_comment": "Copy to sources.json (gitignored). One entry per stream: its page at /<slug> and its listener on taurus. listed=false keeps a source off the landing page (reachable by URL, noindex). listener.input is a URL or a file on the server; local_input overrides it for scripts/dev.sh. Ports must be unique.",
+  "default": "vlf-heidelberg",
+  "sources": [
+    {
+      "slug": "vlf-heidelberg",
+      "listed": true,
+      "name": "VLF Natural Radio",
+      "subtitle": "Live listening",
+      "meta": [
+        "Heidelberg, Germany",
+        "Very low frequency radio, up to 16 kHz",
+        "Lightning, whistlers, the magnetosphere",
+        "Computational interpretation"
+      ],
+      "timezone": "Europe/Berlin",
+      "summary": "Earth's own radio. A receiver near Heidelberg turns very low frequency radio waves into sound: the crackle of lightning strikes thousands of kilometres away (sferics), falling tones that travel along the magnetic field (whistlers), and the steady hum of the power grid.",
+      "credit": {
+        "text": "VLF receiver Heidelberg, Stefan Schäfer",
+        "url": "https://dk7fc.info/vlfstreams.html",
+        "note": "stream via dk7fc.info"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8096,
+        "input": "https://dk7fc.info/live-stream.php?stream=vlf15",
+        "args": [
+          "-sample-rate",
+          "32000",
+          "-transient-k",
+          "10",
+          "-transient-gap",
+          "5s"
+        ]
+      }
+    }
+  ]
+}

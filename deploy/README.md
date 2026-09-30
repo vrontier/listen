@@ -7,8 +7,9 @@ installs the files below. It is idempotent.
 | Piece | Where on taurus | Source |
 |---|---|---|
 | Listener binary | `/usr/local/bin/listen-listener` | `listener/` |
-| systemd unit | `/etc/systemd/system/listen-listener.service` | `systemd/listen-listener.service` |
-| Listener input | `/etc/default/listen-listener` (`LISTEN_ARGS`, installed once, then edited on the host) | `systemd/listen-listener.default` |
+| systemd template | `/etc/systemd/system/listen-listener@.service`, one instance per source | `systemd/listen-listener@.service` |
+| Per-source arguments | `/etc/listen/sources/<slug>.env` (generated: port, input, flags) | `site/_config/sources.json` |
+| Per-source routes | `/etc/nginx/snippets/listen-sources.conf` (generated: `/<slug>/ws/…`, `/<slug>/api/…`) | `site/_config/sources.json` |
 | Listener state | `/var/lib/listen` (user `listen`, 0700; captures in `samples/`, memory in `memory/<source>/<input>/`) | — |
 | Site | `/var/www/listen.home.arpa` | `site/` |
 | PHP-FPM pool | `/etc/php/8.3/fpm/pool.d/listen.conf`, socket `/run/php/php8.3-fpm-listen.sock` | `php-fpm/listen.conf` |
@@ -39,16 +40,18 @@ random serial). Then install the new `listen.crt` on taurus and reload nginx.
 
 ## Audio playback
 
-Off by default, and gated twice. The listener needs `-audio` in `LISTEN_ARGS`,
-and the site needs `'audio' => true` in `site/_config/source.php`. Only when
-both are set does `/live` show a *listen* button. The listener then encodes
-AAC and Opus from the same decode it analyses and serves them on `/ws/audio`,
-and the page holds each event back until its audio is heard.
-Only enable it where the source's terms allow redistribution.
+Per source, `"audio": true` in `sources.json` turns on both halves: the listener
+runs with `-audio` (encoding AAC and Opus from the same decode it analyses, served
+on `/<slug>/ws/audio`) and the page shows the *listen* button, holding each event
+back until its sound is heard. Only enable it where the source's terms allow it.
 
-## Switching the input
+## Adding or changing a source
 
-Edit `LISTEN_ARGS` in `/etc/default/listen-listener`, then run
-`sudo systemctl restart listen-listener`. A file input replays with the clock
-pinned to the recording time, taken from a `YYYYMMDDTHHMMSSZ` stamp in the file
-name or from `-start`. A URL input runs live.
+Edit `site/_config/sources.json` and run `scripts/deploy-taurus.sh`. The script
+checks the file (slugs, unique ports, no spaces in inputs or flags), writes one env
+file and one pair of nginx routes per source, starts or restarts
+`listen-listener@<slug>` for every source and removes instances whose source is gone.
+Memory is kept per source and input under `/var/lib/listen/memory/<slug>/`, so a
+changed input starts a fresh memory and switching back resumes the old one.
+A file input replays with the clock pinned to the recording time (from a
+`YYYYMMDDTHHMMSSZ` stamp in the file name); a URL input runs live.

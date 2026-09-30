@@ -1,31 +1,37 @@
 #!/usr/bin/env bash
-# Local development: the Go listener on :8080 and the PHP site on :8000.
-#   scripts/dev.sh                        # loop the newest capture in samples/
-#   scripts/dev.sh https://…/live         # analyse a live stream
-#   scripts/dev.sh <file|url> -audio      # extra arguments go to the listener
+# Local development: one listener per source in site/_config/sources.json
+# (on its configured port, local_input or input) and the PHP site on :8000.
+#   scripts/dev.sh                 # all sources
+#   scripts/dev.sh vlf-heidelberg  # only these slugs
+# Extra listener flags can be added per source in sources.json ("args").
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-in="${1:-$(ls -t samples/*.mp3 2>/dev/null | head -1 || true)}"
-shift || true
-if [[ -z "$in" ]]; then
-  echo "usage: scripts/dev.sh <file|url>  (no capture found in samples/)" >&2
-  exit 2
-fi
-loop=()
-[[ "$in" == *://* ]] || loop=(-loop)
+cfg=site/_config/sources.json
+[[ -f $cfg ]] || { echo "$cfg is missing (see sources.example.json)" >&2; exit 1; }
 
-# LLM credentials for the narrator (LLM_API_KEY), kept out of git.
+# LLM credentials for the narrator (LLM_API_KEY, NARRATOR_URL, NARRATOR_MODEL), kept out of git.
 if [[ -f .llm ]]; then set -a; . ./.llm; set +a; fi
 
 (cd listener && go build -o ../bin/listener ./cmd/listener)
-bin/listener -in "$in" ${loop[@]+"${loop[@]}"} -addr 127.0.0.1:8080 "$@" &
-listener=$!
-php -S 127.0.0.1:8000 -t site scripts/dev-router.php >/dev/null 2>&1 &
-site=$!
-trap 'kill $listener $site 2>/dev/null' EXIT INT TERM
 
-echo
-echo "  open http://127.0.0.1:8000/live?ws=ws://127.0.0.1:8080/ws/live"
-echo
+pids=()
+trap 'kill "${pids[@]}" 2>/dev/null' EXIT INT TERM
+mkdir -p bin/dev-memory
+while read -r s; do
+  slug=$(jq -r .slug <<<"$s")
+  if [[ $# -gt 0 && " $* " != *" $slug "* ]]; then continue; fi
+  port=$(jq -r .listener.port <<<"$s")
+  in=$(jq -r '.listener.local_input // .listener.input' <<<"$s")
+  args=()
+  while IFS= read -r a; do args+=("$a"); done < <(jq -r '(.listener.args // [])[], (if .audio then "-audio" else empty end)' <<<"$s")
+  bin/listener -source "$slug" -addr "127.0.0.1:$port" -in "$in" -memory-dir bin/dev-memory ${args[@]+"${args[@]}"} \
+    2>&1 | sed -u "s/^/[$slug] /" &
+  pids+=($!)
+  echo "  http://127.0.0.1:8000/$slug"
+done < <(jq -c '.sources[]' "$cfg")
+
+LISTEN_DIRECT_PORTS=1 php -S 127.0.0.1:8000 -t site scripts/dev-router.php >/dev/null 2>&1 &
+pids+=($!)
+echo "  http://127.0.0.1:8000/   (landing page)"
 wait

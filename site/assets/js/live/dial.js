@@ -7,8 +7,8 @@
 (function (LO) {
   'use strict';
 
-  var LO_HZ = 40, HI_HZ = 9000;
-  var MARKINGS = [[50, '50'], [100, '100'], [200, '200'], [500, '500'], [1000, '1k'], [2000, '2k'], [5000, '5k Hz']];
+  var LO_HZ = 40, HI_HZ = 9000;  // HI_HZ follows the source's analysed range
+  var MARKINGS = [[50, '50'], [100, '100'], [200, '200'], [500, '500'], [1000, '1k'], [2000, '2k'], [5000, '5k'], [10000, '10k']];
 
   function create(canvas, state) {
     var ctx = canvas.getContext('2d');
@@ -33,6 +33,8 @@
 
     function draw() {
       var now = performance.now();
+      var top = state.spectrumMeta && state.spectrumMeta.max_hz;
+      if (top > 1000) HI_HZ = Math.min(top, 20000);
       ctx.clearRect(0, 0, W, H);
       var base = H - 26;  // room for the printed markings below
 
@@ -61,7 +63,8 @@
       ctx.fillStyle = 'rgba(169,172,176,0.9)';
       ctx.font = '11px ' + mono;
       ctx.textAlign = 'center';
-      MARKINGS.forEach(function (m) { ctx.fillText(m[1], xOf(m[0]), base + 18); });
+      var shown = MARKINGS.filter(function (m) { return m[0] < HI_HZ * 0.9; });
+      shown.forEach(function (m, i) { ctx.fillText(m[1] + (i === shown.length - 1 ? ' Hz' : ''), xOf(m[0]), base + 18); });
 
       // Stations.
       marks.length = 0;
