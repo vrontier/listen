@@ -75,23 +75,42 @@
         };
       }
 
-      // Static shape of a history row, computed once when the row is born:
-      // band contour with extra contrast plus narrow ridges at the peaks.
-      function rowShape(bands, peaks) {
-        var base = new Float32Array(COLS + 1);
-        for (var c = 0; c <= COLS; c++) {
-          var bv = sample(bands, c / COLS);
-          base[c] = 0.25 * bv + 0.9 * Math.max(0, (bv - 0.35) / 0.65);
-        }
-        for (var j = 0; j < peaks.length; j++) {
-          var pc = peaks[j].u * COLS, w = 0.01 * COLS;
-          var lo = Math.max(0, Math.floor(pc - 4 * w)), hi = Math.min(COLS, Math.ceil(pc + 4 * w));
-          for (c = lo; c <= hi; c++) {
-            var dx = (c - pc) / w;
-            base[c] += peaks[j].a * 0.45 * Math.exp(-dx * dx);
+      // Spectral peaks as a smoothed field over the columns: a peak rises
+      // within ~50 ms and decays over ~0.4 s, so a peak that detection
+      // loses for one update doesn't blink out of the terrain.
+      var peakTarget = new Float32Array(COLS + 1), peakField = new Float32Array(COLS + 1);
+      var peaksSeen = null;
+      function updatePeakField(dt) {
+        if (state.peaks !== peaksSeen) {
+          peaksSeen = state.peaks;
+          peakTarget.fill(0);
+          for (var j = 0; j < state.peaks.length; j++) {
+            var pk = state.peaks[j];
+            var pc = state.u(pk.hz) * COLS, w = 0.01 * COLS;
+            var lo = Math.max(0, Math.floor(pc - 4 * w)), hi = Math.min(COLS, Math.ceil(pc + 4 * w));
+            for (var c = lo; c <= hi; c++) {
+              var dx = (c - pc) / w;
+              peakTarget[c] = Math.max(peakTarget[c], pk.amplitude * 0.45 * Math.exp(-dx * dx));
+            }
           }
         }
-        return base;
+        var up = 1 - Math.exp(-dt / 0.05), down = 1 - Math.exp(-dt / 0.4);
+        for (var k = 0; k <= COLS; k++) {
+          var tg = peakTarget[k];
+          peakField[k] += (tg - peakField[k]) * (tg > peakField[k] ? up : down);
+        }
+      }
+
+      // Static shape of a history row, computed once when the row is born:
+      // band contour with extra contrast plus the current peak field.
+      var rowSerial = 0;
+      function rowShape() {
+        var base = new Float32Array(COLS + 1);
+        for (var c = 0; c <= COLS; c++) {
+          var bv = sample(state.bands, c / COLS);
+          base[c] = 0.25 * bv + 0.9 * Math.max(0, (bv - 0.35) / 0.65) + peakField[c];
+        }
+        return { base: base, serial: rowSerial++ };
       }
 
       // Slow undulation that keeps flat stretches alive. sin(a+b) is
@@ -216,12 +235,11 @@
         t += dt;
         state.step(dt);
 
+        updatePeakField(dt);
         rowClock += dt;
         while (rowClock >= ROW_DT) {
           rowClock -= ROW_DT;
-          history.unshift({
-            base: rowShape(state.bands, state.peaks.map(function (pk) { return { u: state.u(pk.hz), a: pk.amplitude }; }))
-          });
+          history.unshift(rowShape());
           if (history.length > ROWS + 1) history.pop();
         }
         var frac = rowClock / ROW_DT;
@@ -300,8 +318,8 @@
             ctx.globalAlpha = Math.min(1, 0.85 * depthAlpha * bright);
             ctx.fillStyle = grad;
             ctx.beginPath();
-            var step = d < 0.35 ? 2 : 3;
-            for (c = r % 2; c <= COLS; c += step) {
+            var step = 2;
+            for (c = row ? row.serial % 2 : 0; c <= COLS; c += step) {
               var v = vs[c];
               if (v < 0.22) continue;
               var sz = (0.5 + 1.4 * v) * (0.5 + g.persp);
@@ -316,7 +334,7 @@
 
         var perf1 = performance.now();
         // Layer B: resonances.
-        drawResonances();
+        drawResonances(dt);
         var perf2 = performance.now();
 
         // Layer C: shockwaves.
@@ -365,26 +383,41 @@
         ctx.restore();
       };
 
-      function drawResonances() {
+      // Resonances with hysteresis. A spire becomes "main" (thick, rings,
+      // harmonics, label) in the top 4 by strength and only drops out below
+      // 6th; the lead ("resonant structure") changes only when another is
+      // clearly stronger. Every change fades over ~0.4 s and labels glide,
+      // so near-equal strengths don't make lines blink on and off.
+      var lead = null;
+      function drawResonances(dt) {
         var list = Array.from(state.resonances.values());
         list.sort(function (a, b) { return b.data.strength - a.data.strength; });
-        var labels = [];
+        var ease = 1 - Math.exp(-dt / 0.4), glide = 1 - Math.exp(-dt / 0.25);
+        list.forEach(function (r, idx) {
+          if (r.mainW === undefined) { r.mainW = 0; r.isMain = false; r.labelY = null; }
+          if (r.ending) r.isMain = false;
+          else if (idx < 4) r.isMain = true;
+          else if (idx >= 6) r.isMain = false;
+          r.mainW += ((r.isMain ? 1 : 0) - r.mainW) * ease;
+        });
+        var top = list.filter(function (r) { return !r.ending; })[0] || null;
+        if (!lead || lead.ending || !state.resonances.has(lead.id)) lead = top;
+        else if (top && top !== lead && top.data.strength > lead.data.strength * 1.25) lead = top;
+
         var g = geometry(RES_DEPTH);
         var row = history[Math.round(RES_DEPTH * ROWS)];
-        var mono = MONO;
         var resRow = scratch;
         rowHeights(row, RES_DEPTH, resRow);
         var avoid = overlays();
-        var labelled = {};
+        var placed = [], labelled = {};
 
-        function spire(hz, strength, alpha, main, text, sub) {
+        function spire(hz, strength, alpha, w) {
           var u = state.u(hz);
-          if (u < 0 || u > 1) return;
+          if (u < 0 || u > 1) return null;
           var x = W / 2 + (u - 0.5) * 2 * g.half;
           var ground = g.y - resRow[Math.round(u * COLS)] * g.amp;
-          var top = Math.max(H * 0.06, ground - H * (main ? 0.3 + 0.35 * strength : 0.15 + 0.2 * strength));
+          var top = Math.max(H * 0.06, ground - H * ((0.15 + 0.2 * strength) + w * (0.15 + 0.15 * strength)));
           var c = colour(u);
-
           ctx.globalCompositeOperation = 'lighter';
           var lg = ctx.createLinearGradient(0, ground, 0, top);
           lg.addColorStop(0, rgba(c, 0.95 * alpha));
@@ -392,72 +425,96 @@
           ctx.strokeStyle = lg;
           ctx.beginPath(); ctx.moveTo(x, ground); ctx.lineTo(x, top);
           ctx.globalAlpha = 0.18;             // soft glow: a wide faint pass…
-          ctx.lineWidth = main ? 7 : 3;
+          ctx.lineWidth = 3 + 4 * w;
           ctx.stroke();
           ctx.globalAlpha = 1;                // …under the bright core
-          ctx.lineWidth = main ? 1.8 : 1;
+          ctx.lineWidth = 1 + 0.8 * w;
           ctx.stroke();
+          ctx.globalCompositeOperation = 'source-over';
+          return { x: x, ground: ground, top: top, c: c };
+        }
 
-          if (main) {
-            var rings = 2 + Math.min(3, (text.harmonics || 0));
-            var ry = ground - (ground - top) * 0.42;
-            for (var i = 0; i < rings; i++) {
-              var rw = (26 + i * 30) * (1 + 0.05 * Math.sin(t * 0.8 + i + hz));
-              ctx.strokeStyle = rgba(c, (0.35 - i * 0.05) * alpha);
-              ctx.lineWidth = 0.8;
-              ctx.beginPath(); ctx.ellipse(x, ry, rw, rw * 0.2, 0, 0, Math.PI * 2); ctx.stroke();
-            }
+        function rings(sp, hz, n, alpha) {
+          ctx.globalCompositeOperation = 'lighter';
+          var ry = sp.ground - (sp.ground - sp.top) * 0.42;
+          ctx.lineWidth = 0.8;
+          for (var i = 0; i < n; i++) {
+            var rw = (26 + i * 30) * (1 + 0.05 * Math.sin(t * 0.8 + i + hz));
+            ctx.strokeStyle = rgba(sp.c, (0.35 - i * 0.05) * alpha);
+            ctx.beginPath(); ctx.ellipse(sp.x, ry, rw, rw * 0.2, 0, 0, Math.PI * 2); ctx.stroke();
           }
           ctx.globalCompositeOperation = 'source-over';
+        }
 
-          // Label, nudged down if it would collide with one already placed.
-          // A partial shared by two resonances is labelled once.
-          // At most six labels, never pushed down into the terrain.
-          if (!text.label || labelled[text.label] || labels.length >= 6) return;
-          labelled[text.label] = true;
-          var ly = top - 8;
+        function label(owner, key, sp, text, sub, alpha, big) {
+          if (!sp || alpha < 0.02 || labelled[text]) return;
+          labelled[text] = true;
+          var ly = sp.top - 8;
           for (var pass = 0; pass < 2; pass++) {
-            for (var j = 0; j < labels.length; j++) {
-              if (Math.abs(labels[j].x - x) < 110 && Math.abs(labels[j].y - ly) < 36) ly = labels[j].y + 36;
+            for (var j = 0; j < placed.length; j++) {
+              if (Math.abs(placed[j].x - sp.x) < 110 && Math.abs(placed[j].y - ly) < 36) ly = placed[j].y + 36;
             }
             for (var o = 0; o < avoid.length; o++) {
               var a = avoid[o];
-              if (x + 120 > a.left && x < a.right && ly + 22 > a.top && ly - 16 < a.bottom) ly = a.bottom + 18;
+              if (sp.x + 120 > a.left && sp.x < a.right && ly + 22 > a.top && ly - 16 < a.bottom) ly = a.bottom + 18;
             }
           }
-          if (ly > g.y - g.amp * 0.6) return;
-          labels.push({ x: x, y: ly });
+          if (ly > g.y - g.amp * 0.6) alpha = 0;  // would sit in the terrain: fade instead
+          placed.push({ x: sp.x, y: ly });
+          owner.labelYs = owner.labelYs || {};
+          var prev = owner.labelYs[key];
+          ly = prev == null ? ly : prev + (ly - prev) * glide;
+          owner.labelYs[key] = ly;
+          if (alpha < 0.02) return;
           ctx.textAlign = 'left';
           ctx.lineJoin = 'round';
           ctx.strokeStyle = 'rgba(7,8,10,' + (0.85 * alpha).toFixed(3) + ')';
           ctx.lineWidth = 4;
-          ctx.font = (main ? 15 : 13) + 'px ' + mono;
-          ctx.strokeText(text.label, x + 7, ly);
+          ctx.font = (big ? 15 : 13) + 'px ' + MONO;
+          ctx.strokeText(text, sp.x + 7, ly);
           ctx.fillStyle = 'rgba(236,235,231,' + alpha.toFixed(3) + ')';
-          ctx.fillText(text.label, x + 7, ly);
+          ctx.fillText(text, sp.x + 7, ly);
           if (sub) {
-            ctx.font = '13px ' + mono;
-            ctx.strokeText(sub, x + 7, ly + 17);
+            ctx.font = '13px ' + MONO;
+            ctx.strokeText(sub, sp.x + 7, ly + 17);
             ctx.fillStyle = 'rgba(169,172,176,' + alpha.toFixed(3) + ')';
-            ctx.fillText(sub, x + 7, ly + 17);
+            ctx.fillText(sub, sp.x + 7, ly + 17);
           }
         }
 
-        list.forEach(function (r, idx) {
-          var d = r.data;
-          var main = idx < 4;
-          var sub = null;
-          if (idx === 0) sub = 'resonant structure · ' + Math.round(d.duration_s) + ' s';
-          else if (main) sub = Math.round(d.duration_s) + ' s';
-          spire(d.fundamental_hz, d.strength, r.alpha, main,
-            { label: Math.round(d.fundamental_hz) + ' Hz', harmonics: d.harmonics.length }, sub);
-          if (main) {
-            d.harmonics.forEach(function (h, k) {
-              var label = idx < 2 && k < 2 ? Math.round(h.hz) + ' Hz' : '';
-              spire(h.hz, h.strength, r.alpha * 0.6, false, { label: label }, null);
+        // Spires, strongest last so they sit on top.
+        var drawn = [];
+        for (var i = list.length - 1; i >= 0; i--) {
+          var r = list[i], d = r.data;
+          var sp = spire(d.fundamental_hz, d.strength, r.alpha, r.mainW);
+          if (!sp) continue;
+          if (r.mainW > 0.01) {
+            rings(sp, d.fundamental_hz, 2 + Math.min(3, d.harmonics.length), r.alpha * r.mainW);
+            r.harmonicSpires = d.harmonics.map(function (h) {
+              return { hz: h.hz, sp: spire(h.hz, h.strength, r.alpha * 0.6 * r.mainW, 0) };
             });
+          } else {
+            r.harmonicSpires = [];
           }
+          drawn.push({ r: r, sp: sp });
+        }
+
+        // Labels in a stable order (oldest first), so placement doesn't
+        // reshuffle when strengths wobble.
+        drawn.sort(function (a, b) { return a.r.born - b.r.born; });
+        if (lead) {
+          drawn.sort(function (a, b) { return (b.r === lead) - (a.r === lead); });
+        }
+        drawn.forEach(function (e) {
+          var r = e.r, d = r.data, a = r.alpha * r.mainW;
+          var sub = r === lead ? 'resonant structure · ' + Math.round(d.duration_s) + ' s' : Math.round(d.duration_s) + ' s';
+          label(r, 'f', e.sp, Math.round(d.fundamental_hz) + ' Hz', sub, a, true);
         });
+        if (lead && lead.harmonicSpires) {
+          lead.harmonicSpires.slice(0, 2).forEach(function (h, k) {
+            label(lead, 'h' + k, h.sp, Math.round(h.hz) + ' Hz', null, lead.alpha * lead.mainW * 0.9, false);
+          });
+        }
       }
 
       // Hooks for the event layer.
