@@ -39,6 +39,9 @@ function live_source(): array
         'meta'     => ['Live audio stream', 'Computational interpretation'],
         'timezone' => 'UTC',
         'credit'   => null, // ['text' => …, 'url' => …, 'note' => …]
+        // Offer in-sync playback of the relayed audio (the listener must run
+        // with -audio as well). Only where the source's terms allow it.
+        'audio'    => false,
     ];
     $file = dirname(__DIR__) . '/_config/source.php';
     if (is_file($file)) {

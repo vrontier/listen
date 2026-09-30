@@ -7,6 +7,7 @@ return [
     'subtitle' => 'Live listening',
     'meta'     => ['Somewhere, CA', 'Wind, environment', 'Live audio stream', 'Computational interpretation'],
     'timezone' => 'America/Los_Angeles', // local time of the source (IANA name)
+    'audio'    => false, // offer playback of the relayed audio (listener needs -audio too)
     'credit'   => [
         'text' => 'Example Studio — Example Stream',
         'url'  => 'https://example.org/stream',

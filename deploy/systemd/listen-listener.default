@@ -1,5 +1,7 @@
 # /etc/default/listen-listener — input of the listen-listener service.
 # Replay a local capture (looped, clock pinned to the recording time):
 LISTEN_ARGS="-in /var/lib/listen/samples/capture.mp3 -loop"
+# Add -audio to relay the audio to browsers in sync (the site also needs
+# 'audio' => true in site/_config/source.php). Only where the source allows it.
 # Or analyse a live stream:
 # LISTEN_ARGS="-in https://stream.example.org/live"

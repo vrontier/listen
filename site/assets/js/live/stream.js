@@ -9,7 +9,8 @@
     var ws = q || configured || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/live');
     var u = new URL(ws, location.href);
     var http = (u.protocol === 'wss:' ? 'https:' : 'http:') + '//' + u.host + '/api/state/current';
-    return { ws: u.href, snapshot: http };
+    var audio = u.protocol + '//' + u.host + '/ws/audio';
+    return { ws: u.href, snapshot: http, audio: audio };
   }
 
   // handlers: onEvent(env), onSnapshot(snap), onConnection(state)
@@ -67,7 +68,7 @@
     }, 3000);
 
     open();
-    return stats;
+    return { stats: stats, audio: ep.audio };
   }
 
   LO.stream = { connect: connect, endpoints: endpoints };

@@ -4,6 +4,7 @@ package events
 
 import (
 	"encoding/json"
+	"math"
 	"sync/atomic"
 	"time"
 )
@@ -27,7 +28,12 @@ type Envelope struct {
 	Timestamp time.Time `json:"timestamp"`
 	Sequence  uint64    `json:"sequence"`
 	Source    string    `json:"source"`
-	Payload   any       `json:"payload"`
+	// Position is where the observation lies in the analysed audio, in
+	// seconds since the listener started. It never wraps or resets, so the
+	// browser can line events up with relayed audio. Omitted for events
+	// not tied to a moment in the audio (system.status).
+	Position float64 `json:"position_s,omitempty"`
+	Payload  any     `json:"payload"`
 }
 
 // Message is an encoded envelope ready to fan out to clients.
@@ -45,13 +51,16 @@ type Stamper struct {
 
 func NewStamper(source string) *Stamper { return &Stamper{source: source} }
 
-func (s *Stamper) Stamp(typ string, ts time.Time, payload any) Message {
+// Stamp wraps payload in an envelope. pos is the audio position in seconds
+// (0 for events without one).
+func (s *Stamper) Stamp(typ string, ts time.Time, pos float64, payload any) Message {
 	env := Envelope{
 		Type:      typ,
 		Version:   Version,
 		Timestamp: ts.UTC(),
 		Sequence:  s.seq.Add(1),
 		Source:    s.source,
+		Position:  math.Round(pos*1000) / 1000,
 		Payload:   payload,
 	}
 	data, err := json.Marshal(env)
@@ -144,4 +153,7 @@ type Status struct {
 	SampleRate int     `json:"sample_rate"`
 	UptimeS    float64 `json:"uptime_s"`
 	Reconnects int     `json:"reconnects"`
+	// Audio lists the codecs relayed on /ws/audio; empty when the relay
+	// is off.
+	Audio []string `json:"audio,omitempty"`
 }

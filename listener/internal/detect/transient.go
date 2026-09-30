@@ -30,6 +30,7 @@ func DefaultTransientConfig() TransientConfig {
 // TransientObs is the per-frame input to the transient detector.
 type TransientObs struct {
 	Time        time.Time
+	Pos         float64 // audio position in seconds
 	FluxDB      float64
 	Broadband   float64 // share of bands rising by ≥3 dB since last frame
 	CentroidHz  float64
@@ -40,6 +41,7 @@ type TransientObs struct {
 // Transient is a completed detection.
 type Transient struct {
 	Start       time.Time
+	StartPos    float64
 	Duration    time.Duration
 	Strength    float64
 	CentroidHz  float64
@@ -53,6 +55,7 @@ type TransientDetector struct {
 	sorted   []float64
 	active   bool
 	start    time.Time
+	startPos float64
 	lastEnd  time.Time
 	peak     TransientObs
 	baseline float64
@@ -79,7 +82,7 @@ func (d *TransientDetector) Update(o TransientObs) *Transient {
 	switch {
 	case !d.active && warm && o.FluxDB > thresh && o.Broadband >= d.cfg.MinBroadband &&
 		o.Time.Sub(d.lastEnd) >= d.cfg.Refractory:
-		d.active, d.start, d.peak, d.baseline, d.thresh = true, o.Time, o, med, thresh
+		d.active, d.start, d.startPos, d.peak, d.baseline, d.thresh = true, o.Time, o.Pos, o, med, thresh
 	case d.active:
 		if o.FluxDB > d.peak.FluxDB {
 			d.peak = o
@@ -90,6 +93,7 @@ func (d *TransientDetector) Update(o TransientObs) *Transient {
 			d.lastEnd = o.Time
 			done = &Transient{
 				Start:       d.start,
+				StartPos:    d.startPos,
 				Duration:    o.Time.Sub(d.start),
 				Strength:    Clamp01((d.peak.FluxDB - d.baseline) / (4 * (d.thresh - d.baseline + 1))),
 				CentroidHz:  d.peak.CentroidHz,

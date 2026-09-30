@@ -36,6 +36,15 @@ Renewal: copy `/etc/ssl/home-arpa/listen.csr` to nubes and sign it with the CA
 `extendedKeyUsage=serverAuth`, `basicConstraints=critical,CA:false`, `-days 397`,
 random serial). Then install the new `listen.crt` on taurus and reload nginx.
 
+## Audio playback
+
+Off by default, and gated twice. The listener needs `-audio` in `LISTEN_ARGS`,
+and the site needs `'audio' => true` in `site/_config/source.php`. Only when
+both are set does `/live` show a *listen* button. The listener then encodes
+AAC and Opus from the same decode it analyses and serves them on `/ws/audio`,
+and the page holds each event back until its audio is heard.
+Only enable it where the source's terms allow redistribution.
+
 ## Switching the input
 
 Edit `LISTEN_ARGS` in `/etc/default/listen-listener`, then run

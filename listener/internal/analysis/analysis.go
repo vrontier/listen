@@ -179,6 +179,8 @@ func (a *Analyzer) hop(x []float64) {
 		copy(a.ring[fftSize-len(x):], x)
 	}
 	ts := a.now()
+	// The window is centred half an FFT before its newest sample.
+	pos := float64(a.samples-fftSize/2) / SampleRate
 	a.frame++
 
 	td := dsp.TimeDomain(x)
@@ -223,11 +225,11 @@ func (a *Analyzer) hop(x []float64) {
 
 	// Transients.
 	if t := a.transients.Update(detect.TransientObs{
-		Time: ts, FluxDB: fluxDB, Broadband: float64(rising) / bandCount,
+		Time: ts, Pos: pos, FluxDB: fluxDB, Broadband: float64(rising) / bandCount,
 		CentroidHz: shape.CentroidHz, BandwidthHz: shape.BandwidthHz, Novelty: novelty,
 	}); t != nil {
 		a.recentTransients = append(a.recentTransients, t.Start)
-		a.emit(a.stamper.Stamp(events.TypeTransient, t.Start, events.Transient{
+		a.emit(a.stamper.Stamp(events.TypeTransient, t.Start, t.StartPos, events.Transient{
 			Strength:    round(t.Strength, 3),
 			DurationMs:  round(float64(t.Duration.Milliseconds()), 0),
 			CentroidHz:  round(t.CentroidHz, 1),
@@ -246,7 +248,7 @@ func (a *Analyzer) hop(x []float64) {
 		for i, x := range r.Harmonics {
 			h[i] = events.Harmonic{Order: x.Order, Hz: round(x.Hz, 1), Strength: round(x.Strength, 3)}
 		}
-		a.emit(a.stamper.Stamp(events.TypeResonance, ts, events.Resonance{
+		a.emit(a.stamper.Stamp(events.TypeResonance, ts, pos, events.Resonance{
 			ID: r.ID, Status: r.Status,
 			FundamentalHz: round(r.Fundamental, 1),
 			Strength:      round(r.Strength, 3),
@@ -270,7 +272,7 @@ func (a *Analyzer) hop(x []float64) {
 		s.bands[i] += b
 	}
 	if a.frame%framesPerSignal == 0 {
-		a.emitSignal(ts, energy)
+		a.emitSignal(ts, pos, energy)
 	}
 
 	// 2 Hz feature layer.
@@ -286,7 +288,7 @@ func (a *Analyzer) hop(x []float64) {
 	f.level += levelDB
 	f.flat += shape.Flatness
 	if a.frame%framesPerFeature == 0 {
-		a.emitFeature(ts, novelty)
+		a.emitFeature(ts, pos, novelty)
 	}
 
 	if a.onFrame != nil {
@@ -294,7 +296,7 @@ func (a *Analyzer) hop(x []float64) {
 	}
 }
 
-func (a *Analyzer) emitSignal(ts time.Time, energy float64) {
+func (a *Analyzer) emitSignal(ts time.Time, pos, energy float64) {
 	s := &a.sig
 	n := float64(s.n)
 	bands := make([]float64, bandCount)
@@ -306,7 +308,7 @@ func (a *Analyzer) emitSignal(ts time.Time, energy float64) {
 	for _, p := range a.lastPeaks {
 		peaks = append(peaks, events.Peak{Hz: round(p.Hz, 1), Amplitude: round(a.bandRange.Norm(p.DB), 3)})
 	}
-	a.emit(a.stamper.Stamp(events.TypeFrame, ts, events.Frame{
+	a.emit(a.stamper.Stamp(events.TypeFrame, ts, pos, events.Frame{
 		RMS:              round(s.rms/n, 5),
 		LevelDB:          round(s.level/n, 1),
 		Energy:           round(energy, 3),
@@ -317,14 +319,14 @@ func (a *Analyzer) emitSignal(ts time.Time, energy float64) {
 		Entropy:          round(s.ent/n, 3),
 		Harmonicity:      round(s.har/n, 3),
 	}))
-	a.emit(a.stamper.Stamp(events.TypeSpectrum, ts, events.Spectrum{
+	a.emit(a.stamper.Stamp(events.TypeSpectrum, ts, pos, events.Spectrum{
 		MinHz: minHz, MaxHz: maxHz, Scale: "log", Bands: bands, Peaks: peaks,
 	}))
 	bandsBuf := s.bands
 	*s = signalAcc{bands: bandsBuf}
 }
 
-func (a *Analyzer) emitFeature(ts time.Time, novelty float64) {
+func (a *Analyzer) emitFeature(ts time.Time, pos, novelty float64) {
 	f := &a.feat
 	n := float64(f.n)
 	cutoff := ts.Add(-5 * time.Second)
@@ -351,7 +353,7 @@ func (a *Analyzer) emitFeature(ts time.Time, novelty float64) {
 		RecentTransients: len(a.recentTransients),
 		ActiveResonances: a.resonances.Active(),
 	}
-	a.emit(a.stamper.Stamp(events.TypeFeature, ts, events.Feature{
+	a.emit(a.stamper.Stamp(events.TypeFeature, ts, pos, events.Feature{
 		DominantHz:  round(dominant, 1),
 		CentroidHz:  round(in.CentroidHz, 1),
 		BandwidthHz: round(f.bw/n, 1),
