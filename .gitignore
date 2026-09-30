@@ -1,0 +1,14 @@
+.DS_Store
+# Audio captures: third-party recordings, never committed
+samples/
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.aac
+# Build output
+/bin/
+/dist/
+.env
+# Local Claude Code MCP config
+.mcp.json
