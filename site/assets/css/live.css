@@ -3,12 +3,13 @@
 body.live {
   --bg: #07080a;
   --panel-line: rgba(228, 228, 226, .09);
-  --label: #8b8e92;
-  --value: #d9d9d6;
+  --label: #a9acb0;   /* 8.3:1 on --bg */
+  --value: #ecebe7;   /* 16:1 */
+  --halo: 0 0 3px #07080a, 0 0 8px #07080a, 0 0 14px rgba(7, 8, 10, .9);
   --warm: #f0b26e;
   --cool: #9cc8f2;
   background: var(--bg);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
 }
 
@@ -40,6 +41,7 @@ body.live {
   z-index: 1;
   font-family: var(--mono);
   pointer-events: none;
+  text-shadow: var(--halo);
 }
 
 .stage__title { left: clamp(1rem, 2vw, 2rem); }
@@ -54,7 +56,7 @@ body.live {
 
 .stage__sub {
   margin-top: .35rem;
-  font-size: .78rem;
+  font-size: .85rem;
   letter-spacing: .3em;
   text-transform: uppercase;
   color: var(--label);
@@ -62,14 +64,14 @@ body.live {
 
 .stage__meta {
   margin-top: 1.1rem;
-  font-size: .74rem;
+  font-size: .88rem;
   line-height: 1.6;
   color: var(--label);
 }
 
 .stage__readout {
   right: clamp(1rem, 2vw, 2rem);
-  font-size: .74rem;
+  font-size: .9rem;
   line-height: 1.6;
   text-align: right;
   color: var(--label);
@@ -87,7 +89,7 @@ body.live {
   gap: .5ch;
   letter-spacing: .08em;
   text-transform: uppercase;
-  font-size: .68rem;
+  font-size: .78rem;
   color: var(--label);
 }
 .conn::before {
@@ -107,7 +109,7 @@ body.live {
 .listen {
   pointer-events: auto;
   font: inherit;
-  font-size: .68rem;
+  font-size: .8rem;
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--value);
@@ -138,7 +140,7 @@ body.live {
 
 .panel h2 {
   font-family: var(--mono);
-  font-size: .72rem;
+  font-size: .82rem;
   font-weight: 400;
   letter-spacing: .22em;
   color: var(--value);
@@ -150,10 +152,9 @@ body.live {
 }
 
 .phase {
-  font-size: .62rem;
-  letter-spacing: .12em;
+  font-size: .72rem;
+  letter-spacing: .1em;
   color: var(--label);
-  opacity: .7;
   border: 1px solid var(--panel-line);
   padding: 0 .45rem;
 }
@@ -162,13 +163,13 @@ body.live {
   display: grid;
   grid-template-columns: 1fr;
   font-family: var(--mono);
-  font-size: .6rem;
+  font-size: .74rem;
   color: var(--label);
 }
-.plot--yaxis { grid-template-columns: 3.4rem 1fr; }
+.plot--yaxis { grid-template-columns: 4.4rem 1fr; }
 .plot canvas {
   width: 100%;
-  height: 128px;
+  height: 140px;
   display: block;
   background: rgba(255, 255, 255, .015);
   border: 1px solid var(--panel-line);
@@ -194,7 +195,7 @@ body.live {
 .axis--log { position: relative; height: 1.2em; }
 .axis--log li { transform: translateX(-50%); }
 
-.features, .events { font-family: var(--mono); font-size: .74rem; }
+.features, .events { font-family: var(--mono); font-size: .88rem; }
 
 .features div {
   display: grid;
@@ -209,7 +210,7 @@ body.live {
 .events { list-style: none; }
 .events li {
   display: grid;
-  grid-template-columns: 5.5rem 1fr;
+  grid-template-columns: 6.2rem 1fr;
   gap: .8rem;
   padding: .2rem 0;
   color: var(--value);
@@ -222,10 +223,10 @@ body.live {
 
 .interpretation {
   font-family: var(--mono);
-  font-size: .76rem;
-  line-height: 1.8;
+  font-size: .88rem;
+  line-height: 1.75;
   color: var(--label);
-  opacity: .65;
+  font-style: italic;
   max-width: 62ch;
 }
 .interpretation p + p { margin-top: .6rem; }
@@ -235,7 +236,7 @@ body.live {
   padding: 1rem clamp(1rem, 2vw, 2rem) 1.4rem;
   border-top: 1px solid var(--panel-line);
   font-family: var(--mono);
-  font-size: .68rem;
+  font-size: .8rem;
   color: var(--label);
 }
 
