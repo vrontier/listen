@@ -5,6 +5,9 @@ $source = live_source();
   <div class="observatory" data-ws="<?= e(live_ws_url()) ?>" data-tz="<?= e($source['timezone']) ?>"<?= $source['audio'] ? ' data-audio="1"' : '' ?>>
     <section class="stage" aria-label="Live visualization">
       <div id="terrain" class="stage__canvas" aria-hidden="true"></div>
+      <div id="motif-tip" class="motif-tip" role="tooltip" hidden></div>
+      <p class="stage__legend">Dots above the horizon: remembered motifs, placed by frequency ·
+        size = how often · brightness = how recently · ring = texture · point at one for details</p>
 
       <header class="stage__title">
         <h1><?= e($source['name']) ?></h1>

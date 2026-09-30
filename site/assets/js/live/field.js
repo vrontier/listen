@@ -43,6 +43,17 @@
     var reduced = !!opts.reducedMotion;
     var maxParticles = reduced ? 150 : 1400;
 
+    // Constellation dots as drawn in the last frame, for hover lookup.
+    var hits = [];
+    LO.motifAt = function (x, y) {
+      var best = null, bd = 14 * 14;
+      hits.forEach(function (h) {
+        var d = (h.x - x) * (h.x - x) + (h.y - y) * (h.y - y);
+        if (d < bd) { bd = d; best = h; }
+      });
+      return best;
+    };
+
     return new p5(function (p) {
       var ctx, W, H;
       var history = [];
@@ -281,6 +292,7 @@
       // how often they occurred, brightness by how recently. Resonance motifs
       // are dots, texture motifs small rings. A detection or return flares.
       function drawConstellation() {
+        hits.length = 0;
         if (!state.motifs.size) return;
         var now = performance.now();
         var g = geometry(1);
@@ -305,6 +317,12 @@
           } else {
             ctx.fillStyle = 'hsla(' + hue + ',60%,78%,' + a.toFixed(3) + ')';
             ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+          }
+          hits.push({ x: x, y: y, r: r, mo: mo });
+          if (LO.hoverMotif === mo.id) {
+            ctx.strokeStyle = 'hsla(' + hue + ',70%,85%,0.9)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
           }
           var fa = (now - (mo.flare || 0)) / 2500;
           if (fa >= 0 && fa < 1) {
