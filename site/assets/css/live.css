@@ -125,17 +125,30 @@ body.live {
 
 /* ---- Panels ------------------------------------------------------------- */
 
+/* Two independent column groups: the signal plots (with the harmonic map
+   below them) and the observations (with the interpretation below them).
+   Text that grows on one side never pushes the other side down. */
 .panels {
   display: grid;
-  grid-template-columns: 1.35fr 1fr 1fr 1.1fr;
-  gap: 1.4rem 2rem;
+  grid-template-columns: 2.35fr 2.1fr;
+  gap: 2rem;
+  align-items: start;
   padding: 1.2rem clamp(1rem, 2vw, 2rem) 1.5rem;
   border-top: 1px solid var(--panel-line);
 }
 
+.panels__group {
+  display: grid;
+  gap: 1.4rem 2rem;
+  align-items: start;
+  min-width: 0;
+}
+.panels__group--signal { grid-template-columns: 1.35fr 1fr; }
+.panels__group--observations { grid-template-columns: 1fr 1.1fr; }
+
 .panel { min-width: 0; }
-.panel--harmonic { grid-column: 1 / span 2; }
-.panel--interpretation { grid-column: 3 / span 2; border-left: 1px solid var(--panel-line); padding-left: 2rem; }
+.panel--harmonic, .panel--interpretation { grid-column: 1 / -1; }
+.panel--interpretation { border-left: 1px solid var(--panel-line); padding-left: 2rem; }
 .panel--events { border-left: 1px solid var(--panel-line); padding-left: 2rem; }
 
 .panel h2 {
@@ -241,14 +254,12 @@ body.live {
 }
 
 @media (max-width: 1100px) {
-  .panels { grid-template-columns: 1fr 1fr; }
-  .panel--harmonic, .panel--interpretation { grid-column: auto / span 2; }
+  .panels { grid-template-columns: 1fr; }
   .panel--events, .panel--interpretation { border-left: 0; padding-left: 0; }
 }
 
 @media (max-width: 640px) {
   .stage { height: 62vh; }
   .stage__meta { display: none; }
-  .panels { grid-template-columns: 1fr; }
-  .panel--harmonic, .panel--interpretation { grid-column: auto; }
+  .panels__group--signal, .panels__group--observations { grid-template-columns: 1fr; }
 }

@@ -26,6 +26,7 @@ $source = live_source();
     </section>
 
     <section class="panels" aria-label="Analysis">
+      <div class="panels__group panels__group--signal">
       <article class="panel panel--spectrogram">
         <h2>Spectrogram</h2>
         <div class="plot plot--yaxis">
@@ -45,6 +46,19 @@ $source = live_source();
         </div>
       </article>
 
+      <article class="panel panel--harmonic">
+        <h2>Harmonic map <span class="phase">motif memory · phase 2</span></h2>
+        <div class="plot plot--yaxis">
+          <ol class="axis axis--y" aria-hidden="true" id="hm-yaxis"></ol>
+          <canvas id="harmonic-map" width="800" height="150"></canvas>
+          <ol class="axis axis--x" aria-hidden="true">
+            <li>-5 min</li><li>-4</li><li>-3</li><li>-2</li><li>-1</li><li>now</li>
+          </ol>
+        </div>
+      </article>
+      </div>
+
+      <div class="panels__group panels__group--observations">
       <article class="panel panel--features">
         <h2>Detected features</h2>
         <dl class="features">
@@ -64,16 +78,6 @@ $source = live_source();
         <ol class="events" id="events"><li class="events__empty">Listening…</li></ol>
       </article>
 
-      <article class="panel panel--harmonic">
-        <h2>Harmonic map <span class="phase">motif memory · phase 2</span></h2>
-        <div class="plot plot--yaxis">
-          <ol class="axis axis--y" aria-hidden="true" id="hm-yaxis"></ol>
-          <canvas id="harmonic-map" width="800" height="150"></canvas>
-          <ol class="axis axis--x" aria-hidden="true">
-            <li>-5 min</li><li>-4</li><li>-3</li><li>-2</li><li>-1</li><li>now</li>
-          </ol>
-        </div>
-      </article>
 
       <article class="panel panel--interpretation">
         <h2>Live interpretation <span class="phase">language layer · phase 3</span></h2>
@@ -84,6 +88,7 @@ $source = live_source();
              not decide what happened in the sound.</p>
         </div>
       </article>
+      </div>
     </section>
 
     <footer class="credit">
