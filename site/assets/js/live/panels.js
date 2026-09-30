@@ -122,9 +122,11 @@
       if (!r.ending && (!strongest || r.data.strength > strongest.data.strength)) strongest = r;
     });
     $('f-dominant').textContent = f ? fmt.hz(f.dominant_frequency_hz) : '—';
-    $('f-harmonics').textContent = strongest && strongest.data.harmonics.length
+    var harm = strongest && strongest.data.harmonics.length
       ? strongest.data.harmonics.map(function (h) { return fmt.hz(h.hz); }).join(', ')
       : '—';
+    $('f-harmonics').textContent = harm;
+    $('f-harmonics').title = harm;
     $('f-centroid').textContent = fmt.hz(fr.centroid.target);
     $('f-flux').textContent = fmt.num(fr.flux.target);
     $('f-entropy').textContent = fmt.num(fr.entropy.target);
@@ -244,36 +246,48 @@
     el.textContent = text;
   };
 
-  // Events list: transients, resonance starts and ends.
+  // Events list: transients, resonance starts and ends, motif detections
+  // and returns. Each has a short line (fits a narrow column) and the full
+  // sentence on hover.
   Panels.prototype.event = function (env) {
-    var p = env.payload, text, kind;
+    var p = env.payload, text, full, kind;
+    var hz = function (v) { return Math.round(v) + ' Hz'; };
+    var cap = function (s) { return s.charAt(0).toUpperCase() + s.slice(1); };
     if (env.type === 'event.transient') {
       kind = 'transient';
-      text = (p.bandwidth_hz > 1500 ? 'Broadband transient' : 'Transient') + ' (strength ' + p.strength.toFixed(2) + ')';
+      var what = p.bandwidth_hz > 1500 ? 'Broadband transient' : 'Transient';
+      text = what + ' · ' + p.strength.toFixed(2);
+      full = what + ' (strength ' + p.strength.toFixed(2) + ')';
     } else if (env.type === 'event.resonance') {
+      var n = p.harmonics.length;
       if (p.status === 'start') {
         kind = 'resonance';
-        text = 'Resonant structure (' + Math.round(p.fundamental_hz) + ' Hz' + (p.harmonics.length ? ', ' + p.harmonics.length + ' harmonic' + (p.harmonics.length > 1 ? 's' : '') : '') + ')';
+        text = 'Resonance ' + hz(p.fundamental_hz) + (n ? ' · ' + n + ' harm.' : '');
+        full = 'Resonant structure at ' + hz(p.fundamental_hz) + (n ? ' with ' + n + ' harmonic' + (n > 1 ? 's' : '') : '') +
+          (p.motif_id ? ' (' + LO.motifName(p.motif_id) + ')' : '');
       } else if (p.status === 'end') {
         kind = 'end';
-        text = 'Resonance ' + Math.round(p.fundamental_hz) + ' Hz faded after ' + Math.round(p.duration_s) + ' s';
+        text = hz(p.fundamental_hz) + ' faded · ' + Math.round(p.duration_s) + ' s';
+        full = 'Resonance at ' + hz(p.fundamental_hz) + ' faded after ' + Math.round(p.duration_s) + ' s';
       }
     }
     if (env.type === 'motif.detected') {
       kind = 'motif';
-      text = 'New ' + LO.motifName(p.motif_id) + ' · ' + (p.kind === 'texture'
-        ? 'texture around ' + fmt.hz(p.signature.centroid_hz)
-        : fmt.hz(p.signature.fundamental_hz)) + ' (' + p.occurrences + '×)';
+      var at = p.kind === 'texture' ? 'texture ~' + fmt.hz(p.signature.centroid_hz) : fmt.hz(p.signature.fundamental_hz);
+      text = 'New ' + LO.motifName(p.motif_id) + ' · ' + at;
+      full = 'New ' + LO.motifName(p.motif_id) + ': ' + (p.kind === 'texture' ? 'a texture around ' + fmt.hz(p.signature.centroid_hz)
+        : 'a resonance at ' + fmt.hz(p.signature.fundamental_hz)) + ', heard ' + p.occurrences + ' times';
     } else if (env.type === 'motif.returned') {
       kind = 'motif';
-      var name = LO.motifName(p.motif_id);
-      text = name.charAt(0).toUpperCase() + name.slice(1) + ' returned after ' + ago(p.last_seen_s) + ' (' + p.similarity.toFixed(2) + ')';
+      var name = cap(LO.motifName(p.motif_id));
+      text = name + ' back · ' + ago(p.last_seen_s) + ' · ' + p.similarity.toFixed(2);
+      full = name + ' returned after ' + ago(p.last_seen_s) + ' (similarity ' + p.similarity.toFixed(2) + ')';
     }
     if (env.type === 'event.resonance') this.harmonicPoint(env);
     if (!text) return;
     // Short-lived resonances churn; only list those that held for a while.
     if (kind === 'end' && p.duration_s < 20) return;
-    this.events.unshift({ time: new Date(env.timestamp), text: text, kind: kind });
+    this.events.unshift({ time: new Date(env.timestamp), text: text, full: full || text, kind: kind });
     this.events.length = Math.min(this.events.length, 8);
     this.renderEvents();
   };
@@ -289,6 +303,7 @@
       tm.textContent = fmt.localShort(e.time);
       var sp = document.createElement('span');
       sp.textContent = e.text;
+      sp.title = e.full;
       li.appendChild(tm); li.appendChild(sp);
       el.appendChild(li);
     });

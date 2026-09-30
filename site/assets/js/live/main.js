@@ -9,7 +9,19 @@
   var state = new LO.State();
   var panels = new LO.Panels(state);
 
-  LO.field.create(document.getElementById('terrain'), state, { reducedMotion: reduced });
+  var terrainEl = document.getElementById('terrain');
+  var field = LO.field.create(terrainEl, state, { reducedMotion: reduced });
+  if (window.ResizeObserver) {
+    var pending = false;
+    new ResizeObserver(function () {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(function () {
+        pending = false;
+        if (field && field.windowResized) field.windowResized();
+      });
+    }).observe(terrainEl);
+  }
 
   state.onSpectrum(function (p) { panels.spectrum(p); });
   state.onEvent(function (env, replay) { if (!replay) panels.event(env); });

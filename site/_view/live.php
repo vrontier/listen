@@ -39,9 +39,9 @@ $source = live_source();
       </div>
       <canvas id="dial" aria-hidden="true"></canvas>
       <div id="motif-tip" class="motif-tip" role="tooltip" hidden></div>
-      <p class="dial__legend"><span class="dial__title">Memory</span> each mark is a remembered motif at its
-        frequency · taller = heard more often · brighter = more recent · shaded band = texture ·
-        <span class="dial__needle">needle</span> = dominant frequency now · point at a mark for details</p>
+      <p class="dial__legend"><span class="dial__title">Memory</span> marks = remembered motifs by frequency ·
+        taller = more often · brighter = more recent · band = texture ·
+        <span class="dial__needle">needle</span> = dominant now · point at a mark for details</p>
     </section>
 
     <section class="panels" aria-label="Analysis">

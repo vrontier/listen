@@ -392,6 +392,43 @@ body.live {
   color: var(--label);
 }
 
+/* Wide screens: the page fits the window. The stage takes whatever height
+   the dial, panels and credit leave; everything below it has a fixed height
+   (single-line events and features), so the waves don't jump. */
+@media (min-width: 1101px) {
+  .observatory { height: 100vh; height: 100dvh; }
+  .stage { flex: 1 1 auto; height: auto; min-height: 320px; }
+  .dial, .panels, .credit { flex: none; }
+  .credit { margin-top: 0; }
+  .plot canvas { height: 100px; }
+  .panel--harmonic canvas { height: 76px; }
+  .panels { padding-top: .9rem; padding-bottom: 1rem; gap: 1rem 2rem; }
+  .panels__group { gap: 1rem 2rem; }
+}
+/* Short windows: tighter still, so the waves keep their room. */
+@media (min-width: 1101px) and (max-height: 860px) {
+  .stage { min-height: 270px; }
+  .dial__legend { display: none; }
+  .plot canvas { height: 76px; }
+  .panel--harmonic canvas { height: 56px; }
+  .features div, .events li { padding: .1rem 0; }
+  .credit { padding-top: .6rem; padding-bottom: .7rem; }
+}
+
+.features dt {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.events li span, .features dd {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 1100px) {
   .panels { grid-template-columns: 1fr; }
   .panel--events, .panel--interpretation { border-left: 0; padding-left: 0; }
