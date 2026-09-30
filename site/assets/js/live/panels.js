@@ -143,59 +143,96 @@
     if (st.lastTimestamp) $('ro-time').textContent = fmt.local(st.lastTimestamp);
   };
 
-  // Interpretation: the newest text types in on the teleprinter line above
-  // the dial; the panel keeps the history, newest first.
+  // Interpretation: a teleprinter line above the dial. The newest text types
+  // in on top; earlier ones sit below and can be scrolled (wheel, trackpad,
+  // swipe) one at a time.
   var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   Panels.prototype.interpretation = function () {
-    var st = this.state;
+    var st = this.state, self = this;
+    if (!this.tpInit) this.initTeleprinter();
     if (st.narrativeVersion === this.shownNarrative || !st.narratives.length) return;
     this.shownNarrative = st.narrativeVersion;
-    var n = st.narratives[0];
-    var model = (n.model || '').split(' - ')[0];
 
-    var list = $('interpretation');
+    var scroll = $('tp-scroll'), list = $('tp-list');
+    var atTop = scroll.scrollTop < 4;
+    var firstBefore = list.firstElementChild;
+    var heightBefore = list.scrollHeight;
+    var newest = st.narratives[0];
+    var isNew = newest.text !== this.lastTyped && !newest.old;
+
     list.innerHTML = '';
-    st.narratives.forEach(function (it, i) {
+    st.narratives.forEach(function (n) {
       var li = document.createElement('li');
-      if (i === 0) li.className = 'interpretation__now';
       var tm = document.createElement('time');
-      tm.dateTime = it.time.toISOString();
-      tm.textContent = fmt.localShort(it.time);
+      tm.dateTime = n.time.toISOString();
+      tm.textContent = fmt.localShort(n.time);
       var tx = document.createElement('span');
-      tx.textContent = it.text;
+      tx.textContent = n.text;
       li.appendChild(tm); li.appendChild(tx);
       list.appendChild(li);
     });
-    $('interpretation-meta').textContent = model ? 'phrased by ' + model : '';
 
-    $('tp-time').textContent = fmt.localShort(n.time);
-    $('tp-live').textContent = n.text;   // announced once, in full
-    this.teletype(n.text);
+    if (isNew) {
+      this.lastTyped = newest.text;
+      $('tp-live').textContent = newest.text;  // announced once, in full
+      if (atTop || !firstBefore || firstBefore.classList.contains('teleprinter__wait')) {
+        scroll.scrollTop = 0;
+        this.teletype(list.firstElementChild.querySelector('span'), newest.text);
+      } else {
+        // Reading older ones: keep the place, offer the new one.
+        scroll.scrollTop += list.scrollHeight - heightBefore;
+        this.pendingNew = true;
+      }
+    }
+    this.updateMore();
   };
 
-  // Types text onto the teleprinter line: the old line fades, the new one
-  // appears letter by letter (about 40 per second), then the cursor goes.
-  Panels.prototype.teletype = function (text) {
-    var el = $('tp-text');
+  Panels.prototype.initTeleprinter = function () {
+    this.tpInit = true;
+    var self = this, scroll = $('tp-scroll'), more = $('tp-more');
+    scroll.addEventListener('scroll', function () {
+      if (scroll.scrollTop < 4) self.pendingNew = false;
+      self.updateMore();
+    }, { passive: true });
+    more.addEventListener('click', function () {
+      scroll.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+      self.pendingNew = false;
+      self.updateMore();
+    });
+  };
+
+  // "↑ new" while reading older texts, otherwise the position in the list.
+  Panels.prototype.updateMore = function () {
+    var scroll = $('tp-scroll'), list = $('tp-list'), more = $('tp-more');
+    var n = list.children.length;
+    if (this.pendingNew) {
+      more.hidden = false; more.textContent = '↑ new'; more.classList.add('is-new');
+      return;
+    }
+    more.classList.remove('is-new');
+    if (n < 2) { more.hidden = true; return; }
+    var idx = 0, top = scroll.scrollTop;
+    for (var i = 0; i < n; i++) if (list.children[i].offsetTop - list.offsetTop <= top + 2) idx = i;
+    more.hidden = false;
+    more.textContent = idx === 0 ? '↓ ' + (n - 1) + ' earlier' : (idx + 1) + ' / ' + n;
+  };
+
+  // Types text into el (about 40 letters per second); instant with reduced motion.
+  Panels.prototype.teletype = function (el, text) {
     clearInterval(this.typing);
-    if (reducedMotion) { el.textContent = text; el.classList.remove('is-typing'); return; }
-    var self = this;
-    el.classList.add('is-fading');
-    setTimeout(function () {
-      el.classList.remove('is-fading');
-      el.classList.add('is-typing');
-      var i = 0;
-      el.textContent = '';
-      self.typing = setInterval(function () {
-        i = Math.min(text.length, i + 2);
-        el.textContent = text.slice(0, i);
-        if (i >= text.length) {
-          clearInterval(self.typing);
-          setTimeout(function () { el.classList.remove('is-typing'); }, 1500);
-        }
-      }, 50);
-    }, 400);
+    if (reducedMotion) { el.textContent = text; return; }
+    var self = this, i = 0;
+    el.textContent = '';
+    el.classList.add('is-typing');
+    this.typing = setInterval(function () {
+      i = Math.min(text.length, i + 2);
+      el.textContent = text.slice(0, i);
+      if (i >= text.length) {
+        clearInterval(self.typing);
+        setTimeout(function () { el.classList.remove('is-typing'); }, 1500);
+      }
+    }, 50);
   };
 
   Panels.prototype.connection = function (s, stream) {

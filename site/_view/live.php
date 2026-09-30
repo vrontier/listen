@@ -28,8 +28,13 @@ $source = live_source();
     <section class="dial" aria-label="Memory dial">
       <div class="teleprinter">
         <span class="teleprinter__label">Interpretation</span>
-        <span class="teleprinter__time" id="tp-time"></span>
-        <p class="teleprinter__text" id="tp-text" aria-hidden="true">Listening…</p>
+        <div class="teleprinter__scroll" id="tp-scroll" tabindex="0"
+             aria-label="Interpretations, newest first. Scroll for earlier ones.">
+          <ol class="teleprinter__list" id="tp-list">
+            <li class="teleprinter__wait"><span>Listening… the first interpretation appears within about a minute and a half.</span></li>
+          </ol>
+        </div>
+        <button class="teleprinter__more" id="tp-more" type="button" hidden></button>
         <p class="visually-hidden" id="tp-live" aria-live="polite"></p>
       </div>
       <canvas id="dial" aria-hidden="true"></canvas>
@@ -95,14 +100,6 @@ $source = live_source();
       </article>
 
 
-      <article class="panel panel--interpretation">
-        <h2>Interpretation history <span class="phase">phrased from measured observations</span></h2>
-        <ol class="interpretation" id="interpretation">
-          <li class="interpretation__wait">The first interpretation appears within about a minute
-             and a half; after that, whenever something changes.</li>
-        </ol>
-        <p class="interpretation__meta" id="interpretation-meta"></p>
-      </article>
       </div>
     </section>
 
