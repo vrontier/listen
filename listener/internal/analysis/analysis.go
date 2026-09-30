@@ -13,16 +13,16 @@ import (
 	"github.com/vrontier/listen/listener/internal/events"
 )
 
+// DefaultSampleRate suits compressed music-rate streams; sources with
+// content above 11 kHz (e.g. VLF radio, up to 16 kHz) use a higher rate.
+const DefaultSampleRate = 22050
+
 const (
-	SampleRate = 22050
-	fftSize    = 4096 // ≈186 ms window, 5.4 Hz bins
-	hopSize    = 1103 // ≈50 ms, 20 analysis frames/s
-	bandCount  = 48
-	minHz      = 20.0
-	maxHz      = 11000.0
-	peakMinHz  = 40.0 // below this the MP3 source is a roll-off hump, not partials
-	peakMaxHz  = 6000.0
-	maxPeaks   = 12
+	fftSize   = 4096 // ≈186 ms window at 22.05 kHz, 5.4 Hz bins
+	bandCount = 48
+	minHz     = 20.0
+	peakMinHz = 40.0 // below this the MP3 source is a roll-off hump, not partials
+	maxPeaks  = 12
 
 	framesPerSignal  = 2  // 10 Hz
 	framesPerFeature = 10 // 2 Hz
@@ -30,6 +30,11 @@ const (
 
 // Analyzer is not safe for concurrent use; feed it from one goroutine.
 type Analyzer struct {
+	sampleRate int
+	hopSize    int     // 20 analysis frames per second
+	maxHz      float64 // top of bands and shape: just below Nyquist
+	peakMaxHz  float64
+
 	emit    func(events.Message)
 	stamper *events.Stamper
 	onFrame func(latency time.Duration)
@@ -79,32 +84,56 @@ type featureAcc struct {
 	cent, bw, roll, ent, flux, har, energy, level, flat float64
 }
 
-func New(stamper *events.Stamper, emit func(events.Message)) *Analyzer {
+// Options tune the analysis per source. Zero values keep the defaults.
+type Options struct {
+	TransientK   float64       // threshold = median + K·MAD of spectral flux (default 6)
+	TransientGap time.Duration // minimum gap between transients (default 300 ms)
+}
+
+// New returns an analyzer for mono input at sampleRate (0: the default).
+func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opts ...Options) *Analyzer {
+	tc := detect.DefaultTransientConfig()
+	for _, o := range opts {
+		if o.TransientK > 0 {
+			tc.K = o.TransientK
+		}
+		if o.TransientGap > 0 {
+			tc.Refractory = o.TransientGap
+		}
+	}
+	if sampleRate <= 0 {
+		sampleRate = DefaultSampleRate
+	}
+	scale := float64(sampleRate) / DefaultSampleRate
 	a := &Analyzer{
-		emit:     emit,
-		stamper:  stamper,
-		fft:      dsp.NewFFT(fftSize),
-		window:   dsp.Hann(fftSize),
-		ring:     make([]float64, 0, fftSize),
-		scratch:  make([]float64, fftSize),
-		mag:      make([]float64, fftSize/2+1),
-		magDB:    make([]float64, fftSize/2+1),
-		bandDB:   make([]float64, bandCount),
-		prevBand: make([]float64, bandCount),
-		bandNorm: make([]float64, bandCount),
-		binHz:    float64(SampleRate) / fftSize,
+		sampleRate: sampleRate,
+		hopSize:    (sampleRate + 19) / 20, // 1103 at 22.05 kHz: 20 frames/s
+		maxHz:      math.Round(11000 * scale),
+		peakMaxHz:  math.Round(6000 * scale),
+		emit:       emit,
+		stamper:    stamper,
+		fft:        dsp.NewFFT(fftSize),
+		window:     dsp.Hann(fftSize),
+		ring:       make([]float64, 0, fftSize),
+		scratch:    make([]float64, fftSize),
+		mag:        make([]float64, fftSize/2+1),
+		magDB:      make([]float64, fftSize/2+1),
+		bandDB:     make([]float64, bandCount),
+		prevBand:   make([]float64, bandCount),
+		bandNorm:   make([]float64, bandCount),
+		binHz:      float64(sampleRate) / fftSize,
 
 		// Level ranges relax over ~5 min so slow environmental change stays
 		// visible instead of being normalised away.
 		levelRange: detect.NewAutoRange(30, 20*300),
 		bandRange:  detect.NewAutoRange(40, 20*300),
 		novelty:    detect.NewNovelty(bandCount, 20, 20*60),
-		transients: detect.NewTransientDetector(detect.DefaultTransientConfig()),
+		transients: detect.NewTransientDetector(tc),
 	}
-	a.bands = dsp.NewBands(bandCount, minHz, maxHz, a.binHz, len(a.mag))
+	a.bands = dsp.NewBands(bandCount, minHz, a.maxHz, a.binHz, len(a.mag))
 	a.resonances = detect.NewResonanceTracker(detect.DefaultResonanceConfig(a.binHz))
 	a.lo = int(math.Ceil(minHz / a.binHz))
-	a.hi = int(maxHz / a.binHz)
+	a.hi = int(a.maxHz / a.binHz)
 	a.sig.bands = make([]float64, bandCount)
 	a.Anchor(time.Now())
 	return a
@@ -137,7 +166,7 @@ func (a *Analyzer) Replay(start time.Time, duration time.Duration) {
 func (a *Analyzer) Live(on bool) { a.live = on }
 
 func (a *Analyzer) now() time.Time {
-	d := time.Duration(float64(a.samples-a.anchorSample) / SampleRate * float64(time.Second))
+	d := time.Duration(float64(a.samples-a.anchorSample) / float64(a.sampleRate) * float64(time.Second))
 	if a.wrap > 0 {
 		d %= a.wrap
 	}
@@ -151,17 +180,20 @@ func (a *Analyzer) now() time.Time {
 	return t
 }
 
-// Feed consumes mono float samples at SampleRate.
+// SampleRate is the rate Feed expects.
+func (a *Analyzer) SampleRate() int { return a.sampleRate }
+
+// Feed consumes mono float samples at the analyzer's sample rate.
 func (a *Analyzer) Feed(x []float32) {
 	for _, v := range x {
 		a.pending = append(a.pending, float64(v))
 	}
-	for len(a.pending) >= hopSize {
-		a.hop(a.pending[:hopSize])
-		a.pending = a.pending[hopSize:]
+	for len(a.pending) >= a.hopSize {
+		a.hop(a.pending[:a.hopSize])
+		a.pending = a.pending[a.hopSize:]
 	}
 	// Keep the backing array from growing without bound.
-	if cap(a.pending) > 16*hopSize {
+	if cap(a.pending) > 16*a.hopSize {
 		a.pending = append([]float64(nil), a.pending...)
 	}
 }
@@ -180,7 +212,7 @@ func (a *Analyzer) hop(x []float64) {
 	}
 	ts := a.now()
 	// The window is centred half an FFT before its newest sample.
-	pos := float64(a.samples-fftSize/2) / SampleRate
+	pos := float64(a.samples-fftSize/2) / float64(a.sampleRate)
 	a.frame++
 
 	td := dsp.TimeDomain(x)
@@ -218,9 +250,9 @@ func (a *Analyzer) hop(x []float64) {
 	flux := detect.Clamp01(fluxDB / 12)
 	novelty := a.novelty.Update(a.bandNorm)
 
-	peaks := dsp.FindPeaks(a.magDB, a.binHz, peakMinHz, peakMaxHz, 8, maxPeaks)
+	peaks := dsp.FindPeaks(a.magDB, a.binHz, peakMinHz, a.peakMaxHz, 8, maxPeaks)
 	a.lastPeaks = peaks
-	pef := dsp.PeakEnergyFraction(a.mag, a.binHz, int(peakMinHz/a.binHz), int(peakMaxHz/a.binHz), peaks)
+	pef := dsp.PeakEnergyFraction(a.mag, a.binHz, int(peakMinHz/a.binHz), int(a.peakMaxHz/a.binHz), peaks)
 	harmonicity, _ := dsp.Harmonicity(peaks, pef)
 
 	// Transients.
@@ -320,7 +352,7 @@ func (a *Analyzer) emitSignal(ts time.Time, pos, energy float64) {
 		Harmonicity:      round(s.har/n, 3),
 	}))
 	a.emit(a.stamper.Stamp(events.TypeSpectrum, ts, pos, events.Spectrum{
-		MinHz: minHz, MaxHz: maxHz, Scale: "log", Bands: bands, Peaks: peaks,
+		MinHz: minHz, MaxHz: a.maxHz, Scale: "log", Bands: bands, Peaks: peaks,
 	}))
 	bandsBuf := s.bands
 	*s = signalAcc{bands: bandsBuf}

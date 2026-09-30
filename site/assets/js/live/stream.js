@@ -4,13 +4,22 @@
 (function (LO) {
   'use strict';
 
+  // The WebSocket URL comes from ?ws=, the page (data-ws, e.g.
+  // "/my-stream/ws/live") or defaults to /ws/live on this host. The
+  // snapshot, API and audio endpoints sit next to it under the same prefix.
   function endpoints(configured) {
     var q = new URLSearchParams(location.search).get('ws');
-    var ws = q || configured || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/live');
-    var u = new URL(ws, location.href);
-    var api = (u.protocol === 'wss:' ? 'https:' : 'http:') + '//' + u.host + '/api';
-    var audio = u.protocol + '//' + u.host + '/ws/audio';
-    return { ws: u.href, snapshot: api + '/state/current', api: api, audio: audio };
+    var u = new URL(q || configured || '/ws/live', location.href);
+    if (u.protocol === 'http:') u.protocol = 'ws:';
+    if (u.protocol === 'https:') u.protocol = 'wss:';
+    var prefix = u.pathname.replace(/\/ws\/live\/?$/, '');
+    var http = (u.protocol === 'wss:' ? 'https:' : 'http:') + '//' + u.host + prefix;
+    return {
+      ws: u.href,
+      snapshot: http + '/api/state/current',
+      api: http + '/api',
+      audio: u.protocol + '//' + u.host + prefix + '/ws/audio'
+    };
   }
 
   // handlers: onEvent(env), onSnapshot(snap), onConnection(state)

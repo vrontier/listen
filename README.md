@@ -31,9 +31,9 @@ scripts/    local development and deployment helpers
 Requires Go ≥ 1.23, ffmpeg and PHP 8.
 
 ```sh
-scripts/dev.sh                     # loop the newest capture in samples/
-scripts/dev.sh https://…/live      # or analyse a live stream
-# → http://127.0.0.1:8000/live?ws=ws://127.0.0.1:8080/ws/live
+scripts/dev.sh                     # every source in sources.json, plus the site
+scripts/dev.sh my-stream      # or only some
+# → http://127.0.0.1:8000/
 
 cd listener && go test ./...
 bin/listener -in capture.mp3 -dump > events.jsonl   # offline, as fast as possible
@@ -49,8 +49,14 @@ Dependencies are pinned and kept in the repository: `github.com/coder/websocket`
 vendored in `site/assets/vendor/p5/` with checksums in `VERSION`. Audio captures
 in `samples/` are never committed.
 
-The source shown on `/live` is named in `site/_config/source.php` (not committed;
-see `source.example.php`). Without it the page uses neutral defaults.
+Streams are configured in `site/_config/sources.json` (not committed; see
+`sources.example.json`). Each entry is one source: its page at `/<slug>` (name,
+place, time zone, credit, whether audio may be played, whether it is listed on the
+landing page) and its listener (port, input URL or file, extra flags such as
+`-sample-rate 32000`). The landing page (`/`) explains the project and lists the
+listed sources; unlisted ones are reachable by URL only and marked `noindex`.
+`/contact` sends a form to an address set in `site/_config/mail.php` (not
+committed; see `mail.example.php`).
 
 Acoustic memory (phase 2, §12–§16): with `-memory-dir` the listener recognises
 recurring structures. *Resonance motifs* are recurring partials, matched on
@@ -77,8 +83,8 @@ evidence is retried once, then dropped. Modes: `observational` (default), `minim
 Optional in-sync audio: with `-audio` the listener relays the audio it analyses
 on `/ws/audio`, as fragmented MP4 (AAC and Opus). Every event carries
 `position_s` on the same timeline, so the page shows each event when its sound
-is heard. The site offers playback only if `'audio' => true` is set in its local
-source config. Both switches are off by default.
+is heard. A source offers playback when `"audio": true` is set in its entry in
+`sources.json`; it is off by default.
 
 ## Principle
 

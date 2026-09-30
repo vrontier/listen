@@ -1,0 +1,58 @@
+{
+  "_comment": "Copy to sources.json (gitignored) and describe your own sources there. One entry per stream: its page at /<slug> and its listener. listed=false keeps a source off the landing page (reachable by URL, noindex). listener.input is a URL or a file on the server; local_input overrides it for scripts/dev.sh. Ports must be unique. listener.mode (continuous | on-demand) and listener.idle_after (e.g. 30s, 2m) override the node's listening default. Every running copy opens its own connection to a stream's server, so add someone else's stream only with the operator's agreement.",
+  "default": "example-stream",
+  "sources": [
+    {
+      "slug": "example-stream",
+      "listed": true,
+      "name": "Example Stream",
+      "subtitle": "Live listening",
+      "meta": [
+        "Place, country",
+        "What can be heard",
+        "Computational interpretation"
+      ],
+      "timezone": "UTC",
+      "summary": "One or two sentences about the place and what the stream lets you hear.",
+      "credit": {
+        "text": "Who runs the stream",
+        "url": "https://example.org/",
+        "note": "how the stream reaches the observatory"
+      },
+      "audio": false,
+      "listener": {
+        "port": 8101,
+        "input": "https://stream.example.org/live.mp3",
+        "args": []
+      }
+    },
+    {
+      "slug": "example-archive",
+      "listed": true,
+      "name": "Example Archive",
+      "subtitle": "Archive listening",
+      "meta": [
+        "Place",
+        "A recording, looped",
+        "Computational interpretation"
+      ],
+      "timezone": "UTC",
+      "summary": "A recording you hold the rights to, played in a loop.",
+      "credit": {
+        "text": "Who made the recording",
+        "url": "https://example.org/",
+        "note": "licence of the recording"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8102,
+        "input": "/var/lib/listen/samples/example.flac",
+        "local_input": "samples/example.flac",
+        "args": [
+          "-loop"
+        ],
+        "mode": "continuous"
+      }
+    }
+  ]
+}

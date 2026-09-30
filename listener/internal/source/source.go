@@ -85,10 +85,12 @@ func (c Config) args() []string {
 			a = append(a, "-stream_loop", "-1")
 		}
 	}
+	// No explicit -map: ffmpeg picks the best audio stream for each output.
+	// Some Ogg streams carry an undecodable first stream that 0:a:0 would pick.
 	a = append(a, "-i", c.Input,
-		"-map", "0:a:0", "-ac", "1", "-ar", strconv.Itoa(c.SampleRate), "-f", "f32le", "pipe:1")
+		"-vn", "-sn", "-dn", "-ac", "1", "-ar", strconv.Itoa(c.SampleRate), "-f", "f32le", "pipe:1")
 	for i, o := range c.Outputs {
-		a = append(a, "-map", "0:a:0")
+		a = append(a, "-vn", "-sn", "-dn")
 		a = append(a, o.Args...)
 		a = append(a, "pipe:"+strconv.Itoa(3+i)) // ExtraFiles start at fd 3
 	}

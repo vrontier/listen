@@ -1,8 +1,8 @@
 <?php
 /** @var array $page */
-$source = live_source();
+$source = $page['source'];
 ?>
-  <div class="observatory" data-ws="<?= e(live_ws_url()) ?>" data-tz="<?= e($source['timezone']) ?>"<?= $source['audio'] ? ' data-audio="1"' : '' ?>>
+  <div class="observatory" data-ws="<?= e(live_ws_url($source)) ?>" data-source="<?= e($source['slug']) ?>" data-tz="<?= e($source['timezone']) ?>"<?= $source['audio'] ? ' data-audio="1"' : '' ?>>
     <section class="stage" aria-label="Live visualization">
       <div id="terrain" class="stage__canvas" aria-hidden="true"></div>
 
