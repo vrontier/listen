@@ -14,6 +14,7 @@ installs the files below. It is idempotent.
 | PHP-FPM pool | `/etc/php/8.3/fpm/pool.d/listen.conf`, socket `/run/php/php8.3-fpm-listen.sock` | `php-fpm/listen.conf` |
 | nginx vhost | `/etc/nginx/sites-available/listen.home.arpa` | `nginx/listen.home.arpa.conf` |
 | TLS | `/etc/ssl/home-arpa/listen.{key,csr,crt}` | — |
+| Narrator credentials | `/etc/listen/llm.env` (root, 0600): `LLM_API_KEY`, `NARRATOR_URL`, `NARRATOR_MODEL`; optional, narrator off without it | — |
 
 The listener listens on `127.0.0.1:8095` (8080 belongs to llama-server). nginx
 proxies `/ws/live` and `/api/state/current` to it; everything else goes to the

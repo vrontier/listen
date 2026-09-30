@@ -244,6 +244,15 @@ body.live {
   max-width: 62ch;
 }
 .interpretation p + p { margin-top: .6rem; }
+.interpretation__now { color: var(--value); font-style: normal; font-size: 1rem; line-height: 1.7; }
+.interpretation__before { opacity: .7; }
+.interpretation__wait { opacity: .8; }
+.interpretation__meta {
+  margin-top: .6rem;
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--label);
+}
 
 .credit {
   margin-top: auto;

@@ -28,6 +28,7 @@ import (
 	"github.com/vrontier/listen/listener/internal/events"
 	"github.com/vrontier/listen/listener/internal/hub"
 	"github.com/vrontier/listen/listener/internal/memory"
+	"github.com/vrontier/listen/listener/internal/narrate"
 	"github.com/vrontier/listen/listener/internal/relay"
 	"github.com/vrontier/listen/listener/internal/source"
 )
@@ -48,9 +49,15 @@ func main() {
 			"in a subdirectory per source and input; empty: no memory")
 		motifReturn = flag.Duration("motif-return", 3*time.Minute, "absence after which a known motif counts as returned")
 		historyDays = flag.Int("history-days", 30, "days of history files to keep")
-		ffmpeg      = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
-		ffprobe     = flag.String("ffprobe", "ffprobe", "ffprobe binary")
-		start       = flag.String("start", "", "recording time of a file's first sample (RFC 3339); "+
+		narratorURL = flag.String("narrator-url", os.Getenv("NARRATOR_URL"),
+			"OpenAI-compatible API base URL for the interpretation (e.g. https://ai.example.org/v1); empty: off [env NARRATOR_URL]")
+		narratorModel = flag.String("narrator-model", os.Getenv("NARRATOR_MODEL"), "model name at -narrator-url [env NARRATOR_MODEL]")
+		narratorKey   = flag.String("narrator-key-env", "LLM_API_KEY", "environment variable holding the API key")
+		narrateEvery  = flag.Duration("narrate-every", 90*time.Second, "at most one interpretation per interval (only while someone watches)")
+		narrateMode   = flag.String("narrate-mode", "observational", "observational | minimal | poetic")
+		ffmpeg        = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
+		ffprobe       = flag.String("ffprobe", "ffprobe", "ffprobe binary")
+		start         = flag.String("start", "", "recording time of a file's first sample (RFC 3339); "+
 			"default: parsed from a YYYYMMDDTHHMMSSZ stamp in the file name")
 	)
 	flag.Parse()
@@ -112,7 +119,20 @@ func main() {
 	}
 
 	h := hub.New(splitList(*origins))
-	a := analysis.New(stamper, through(h.Broadcast))
+	broadcast := h.Broadcast
+	if *narratorURL != "" {
+		nar := narrate.New(narrate.Config{
+			BaseURL: *narratorURL, Model: *narratorModel, APIKey: os.Getenv(*narratorKey),
+			Every: *narrateEvery, Mode: *narrateMode,
+		}, stamper, through(h.Broadcast), h.Listeners)
+		broadcast = func(m events.Message) {
+			h.Broadcast(m)
+			nar.Observe(m)
+		}
+		go nar.Run(ctx)
+		log.Printf("narrator on: %s (%s, %s, every %s while watched)", *narratorURL, *narratorModel, *narrateMode, *narrateEvery)
+	}
+	a := analysis.New(stamper, through(broadcast))
 
 	a.Live(!rec.known && (isURL || *realtime))
 	st := &status{input: describe(*in), started: time.Now(), stream: source.Connecting}

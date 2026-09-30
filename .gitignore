@@ -16,3 +16,5 @@ samples/
 .playwright-mcp/
 # Source details stay local until the source agrees to publication
 site/_config/source.php
+# LLM credentials (LLM_API_KEY), never committed
+.llm

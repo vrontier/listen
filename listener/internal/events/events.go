@@ -24,6 +24,9 @@ const (
 	TypeMotifDetected = "motif.detected"
 	TypeMotifReturned = "motif.returned"
 	TypeMemorySummary = "memory.summary"
+
+	// Phase 3: interpretation (§17).
+	TypeNarrative = "narrative.update"
 )
 
 // Envelope is the common outer structure of every realtime message (§4).
@@ -242,4 +245,13 @@ type MemorySummary struct {
 	MeanEntropy              float64    `json:"mean_entropy"`
 	MeanHarmonicity          float64    `json:"mean_harmonicity"`
 	DominantFrequencyRangeHz [2]float64 `json:"dominant_frequency_range_hz"`
+}
+
+// Narrative is the narrative.update payload (§17). Evidence lists the ids
+// (resonances, motifs) the text was written from.
+type Narrative struct {
+	Mode     string   `json:"mode"`
+	Text     string   `json:"text"`
+	Evidence []string `json:"evidence"`
+	Model    string   `json:"model"`
 }
