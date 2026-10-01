@@ -280,7 +280,6 @@ body.live {
   font-size: .84rem;
   line-height: 1.6;
   color: var(--label);
-  max-width: 70ch;
 }
 .interpretation li {
   display: grid;
