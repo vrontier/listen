@@ -14,6 +14,7 @@ step() { printf '\n== %s\n' "$*"; }
 
 step "packages"
 command -v ffmpeg >/dev/null || { apt-get update -q && apt-get install -y -q ffmpeg; }
+php -m | grep -qx mbstring || { apt-get install -y -q php8.3-mbstring && systemctl reload php8.3-fpm; }
 command -v rsync >/dev/null || apt-get install -y -q rsync
 ffmpeg -version | head -1
 
@@ -42,6 +43,12 @@ if compgen -G "$stage/samples/*" >/dev/null; then
   install -o listen -g listen -m 0640 "$stage"/samples/* /var/lib/listen/samples/
 fi
 ls -la /var/lib/listen/samples
+# Files no source uses any more stay on disk; list them so they can be removed.
+for f in /var/lib/listen/samples/*; do
+  [ -e "$f" ] || continue
+  grep -qF -- "$f" "$stage"/sources/*.env 2>/dev/null ||
+    echo "note: $f is not used by any source (rm it if it is no longer needed)"
+done
 
 step "narrator credentials (/etc/listen/llm.env)"
 if [[ -f /etc/listen/llm.env ]]; then

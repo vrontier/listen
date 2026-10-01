@@ -14,10 +14,11 @@ samples/
 .mcp.json
 # Playwright MCP session artefacts
 .playwright-mcp/
-# Source details stay local until the source agrees to publication
-site/_config/sources.json
+# Contact form credentials (generated from .email), never committed
 site/_config/mail.php
 # LLM credentials (LLM_API_KEY), never committed
 .llm
 # SMTP credentials for the contact form, never committed
 .email
+# The source catalogue is local configuration (see sources.example.json), never committed
+site/_config/sources.json

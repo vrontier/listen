@@ -8,7 +8,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 cfg=site/_config/sources.json
-[[ -f $cfg ]] || { echo "$cfg is missing (see sources.example.json)" >&2; exit 1; }
+[[ -f $cfg ]] || { echo "$cfg is missing" >&2; exit 1; }
+php -r 'exit(extension_loaded("mbstring") ? 0 : 1);' ||
+  echo "note: PHP without mbstring; the site works, but servers install php8.3-mbstring (see README)" >&2
 
 # LLM credentials for the narrator (LLM_API_KEY, NARRATOR_URL, NARRATOR_MODEL), kept out of git.
 if [[ -f .llm ]]; then set -a; . ./.llm; set +a; fi

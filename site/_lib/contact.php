@@ -43,6 +43,14 @@ function contact_token_ok(array $cfg, string $token): bool
     return $age >= 4 && $age <= 7200;
 }
 
+// Length in characters. PCRE is always built in, so this needs no mbstring;
+// -1 for input that is not valid UTF-8.
+function contact_len(string $s): int
+{
+    $n = preg_match_all('/./su', $s);
+    return $n === false ? -1 : $n;
+}
+
 /** @return array{state: string, errors: array<string,string>, values: array<string,string>, token: string} */
 function contact_handle(): array
 {
@@ -51,10 +59,24 @@ function contact_handle(): array
     if ($cfg === null || ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
         return $out;
     }
+    // Whatever goes wrong while handling a submission (a missing extension,
+    // an unexpected field), the visitor gets the form back with a notice,
+    // never a 500.
+    try {
+        return contact_submit($cfg, $out);
+    } catch (Throwable $e) {
+        error_log('contact: ' . get_class($e) . ': ' . $e->getMessage());
+        $out['errors']['form'] = 'The message could not be sent just now. Please try again later, or write to ' . $cfg['to'] . '.';
+        return $out;
+    }
+}
 
+function contact_submit(array $cfg, array $out): array
+{
     $v = [];
     foreach (['name', 'email', 'message'] as $k) {
-        $v[$k] = trim(str_replace("\r", '', (string) ($_POST[$k] ?? '')));
+        $raw = $_POST[$k] ?? '';
+        $v[$k] = is_string($raw) ? trim(str_replace("\r", '', $raw)) : '';
     }
     $v['copy'] = ($_POST['copy'] ?? '') === '1' ? '1' : '';
     $out['values'] = $v;
@@ -64,20 +86,23 @@ function contact_handle(): array
         $out['state'] = 'sent';
         return $out;
     }
-    if (!contact_token_ok($cfg, (string) ($_POST['token'] ?? ''))) {
+    $token = $_POST['token'] ?? '';
+    if (!is_string($token) || !contact_token_ok($cfg, $token)) {
         $out['errors']['form'] = 'The form expired or was sent too quickly. Please try again.';
     }
     if ($v['name'] === '') {
         $out['errors']['name'] = 'Please give your name.';
-    } elseif (mb_strlen($v['name']) > 120 || str_contains($v['name'], "\n")) {
+    } elseif (contact_len($v['name']) < 0 || contact_len($v['name']) > 120 || str_contains($v['name'], "\n")) {
         $out['errors']['name'] = 'Please give your name on one line (up to 120 characters).';
     }
-    if (!filter_var($v['email'], FILTER_VALIDATE_EMAIL) || mb_strlen($v['email']) > 200) {
+    if (!filter_var($v['email'], FILTER_VALIDATE_EMAIL) || strlen($v['email']) > 200) {
         $out['errors']['email'] = 'Please give a valid email address, so we can reply.';
     }
     if ($v['message'] === '') {
         $out['errors']['message'] = 'Please write a message.';
-    } elseif (mb_strlen($v['message']) > 5000) {
+    } elseif (contact_len($v['message']) < 0) {
+        $out['errors']['message'] = 'The message contains characters that could not be read. Please retype it.';
+    } elseif (contact_len($v['message']) > 5000) {
         $out['errors']['message'] = 'Please keep the message under 5000 characters.';
     }
     if ($out['errors']) {

@@ -40,18 +40,18 @@ scripts/    local development and deployment helpers
 
 ### Requirements
 
-- Go ≥ 1.23 (listener), ffmpeg (audio decoding), PHP 8 (site), jq (scripts)
+- Go ≥ 1.23 (listener), ffmpeg (audio decoding), PHP 8 with mbstring (site; on Debian/Ubuntu `php8.3-mbstring`), jq (scripts)
 - for a server: Linux with systemd, NGINX and PHP-FPM 8.3
 
 ### Configuration
 
-Three files hold local settings and secrets; none of them is committed.
+The source catalogue is committed; credentials are not.
 
 | File | Purpose |
 |---|---|
-| `site/_config/sources.json` | The streams. Copy `sources.example.json`. Each entry is one source: its page (name, place, time zone, summary, credit, whether audio may be played, whether it is listed on the landing page) and its listener (port, input URL or file, extra flags such as `-sample-rate 32000`). Unlisted sources are reachable by URL only and marked `noindex`. |
-| `.email` | SMTP account for the contact form (`EMAIL_ADDRESS`, `EMAIL_NAME`, `EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`, `SMTP_PORT`). `scripts/mail-config.sh` turns it into `site/_config/mail.php` (see `mail.example.php`); without it the form shows the address instead. |
-| `.llm` | Optional interpretation layer: `LLM_API_KEY`, `NARRATOR_URL` (any OpenAI-compatible endpoint), `NARRATOR_MODEL`. Without it the interpretation stays off. |
+| `site/_config/sources.json` | The streams (local, not committed; copy `sources.example.json`). Each entry is one source: its page (name, place, time zone, summary, credit, whether audio may be played, whether it is listed on the landing page) and its listener (port, input URL or file, extra flags such as `-sample-rate 32000`). Unlisted sources are reachable by URL only and marked `noindex`. `rights` records the basis for analysing and relaying each source's audio. |
+| `.email` (not committed) | SMTP account for the contact form (`EMAIL_ADDRESS`, `EMAIL_NAME`, `EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`, `SMTP_PORT`). `scripts/mail-config.sh` turns it into `site/_config/mail.php` (see `mail.example.php`); without it the form shows the address instead. |
+| `.llm` (not committed) | Optional interpretation layer: `LLM_API_KEY`, `NARRATOR_URL` (any OpenAI-compatible endpoint), `NARRATOR_MODEL`. Without it the interpretation stays off. |
 
 ### Run locally
 
@@ -67,8 +67,9 @@ bin/listener -in capture.mp3 -dump > events.jsonl   # offline, as fast as possib
 ### Deploy to a server
 
 Each source runs as its own listener instance (`listen-listener@<slug>`, systemd,
-bound to 127.0.0.1). NGINX routes `/<slug>/ws/…` and `/<slug>/api/…` to it, and
-everything else to the PHP front controller. The listener is cross-compiled to a
+bound to 127.0.0.1). NGINX routes `/<slug>/ws/…` and `/<slug>/api/state/current` to it,
+and everything else to the PHP front controller. The other API paths (motifs, history)
+stay on 127.0.0.1. The listener is cross-compiled to a
 static linux/amd64 binary, so the server needs no Go. `scripts/gen-sources.sh`
 generates the per-source systemd settings and NGINX routes from `sources.json`.
 
