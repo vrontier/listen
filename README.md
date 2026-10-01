@@ -21,7 +21,7 @@ The site's landing page explains each source and how to read the visualization.
 | Stream | Kind | What you hear |
 |---|---|---|
 | [VLF Natural Radio](https://listen.vrontier.org/vlf-heidelberg) | live | Very low frequency radio from a receiver near Heidelberg: lightning (sferics), whistlers, the magnetosphere |
-| [Amsterdam · Hydrophile 1](https://listen.vrontier.org/amsterdam-hydrophile-1) and [5](https://listen.vrontier.org/amsterdam-hydrophile-5) | live | Hydrophones under Amsterdam's water, streamed by sound artist Lia Mazzari for radio.earth |
+| [Amsterdam · Hydrophile 1](https://listen.vrontier.org/amsterdam-hydrophile-1) and [5](https://listen.vrontier.org/amsterdam-hydrophile-5) | live | Hydrophones under Amsterdam's water, streamed by sound artist Lia Mazzari with a [Soundcamp streambox](https://soundtent.org/streambox/) |
 | [Svalbard · Bayelva](https://listen.vrontier.org/svalbard-bayelva) | live | Arctic permafrost observatory near Ny-Ålesund: wind, meltwater, weather (Common Grounds, radio.earth) |
 | [Brno · Park Lužánky](https://listen.vrontier.org/brno-luzanky) | live | Bird choruses and city sound in Brno's oldest park (radio.earth) |
 | [Kozmice · Bird Meadows](https://listen.vrontier.org/kozmice-meadows) | live | Floodplain meadows of the Opava River, solar-powered station (radio.earth) |
