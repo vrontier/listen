@@ -25,7 +25,7 @@ fi
 
 rm -rf "$stage" && mkdir -p "$stage/samples"
 echo "generating per-source files from $cfg"
-scripts/gen-sources.sh "$stage/gen" $'\n    limit_conn perip 20;'
+scripts/gen-sources.sh "$stage/gen" $'\n    limit_conn perip 20;\n    limit_req zone=general burst=20 nodelay;'
 mv "$stage/gen/sources" "$stage/gen/listen-sources.conf" "$stage/gen/slugs" "$stage/" && rmdir "$stage/gen"
 
 # Archive sources read files from $samples on the server; ship those we have.
