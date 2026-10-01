@@ -1,8 +1,10 @@
 # Deployment: listen.home.arpa (taurus)
 
 Updates: `scripts/deploy-taurus.sh`. It builds a static linux/amd64 listener,
-syncs `site/` (including the local, uncommitted `site/_config/source.php`) and
-installs the files below. It is idempotent.
+syncs `site/` (including the local, uncommitted `site/_config/sources.json` and
+`mail.php`) and installs the files below. It is idempotent. Production
+(listen.vrontier.org) has no sudo for the deploy account; see
+[`ionos/INFOS_listen_vrontier.md`](ionos/INFOS_listen_vrontier.md) and `scripts/deploy-ionos.sh`.
 
 | Piece | Where on taurus | Source |
 |---|---|---|
@@ -15,12 +17,13 @@ installs the files below. It is idempotent.
 | PHP-FPM pool | `/etc/php/8.3/fpm/pool.d/listen.conf`, socket `/run/php/php8.3-fpm-listen.sock` | `php-fpm/listen.conf` |
 | nginx vhost | `/etc/nginx/sites-available/listen.home.arpa` | `nginx/listen.home.arpa.conf` |
 | TLS | `/etc/ssl/home-arpa/listen.{key,csr,crt}` | — |
-| Contact form | `site/_config/mail.php` (generated from `.email` by `scripts/mail-config.sh`, deployed with the site, 0644 in a directory nginx never serves); rate limit in `/var/lib/listen-web` (www-data, 0700) | `.email` (gitignored) |
+| Contact form | `site/_config/mail.php` (generated from `.email` by `scripts/mail-config.sh`, deployed with the site, root:www-data 0640 in a directory nginx never serves); rate limit in `/var/lib/listen-web` (www-data, 0700) | `.email` (gitignored) |
 | Narrator credentials | `/etc/listen/llm.env` (root, 0600): `LLM_API_KEY`, `NARRATOR_URL`, `NARRATOR_MODEL`; optional, narrator off without it | — |
 
-The listener listens on `127.0.0.1:8095` (8080 belongs to llama-server). nginx
-proxies `/ws/live` and `/api/state/current` to it; everything else goes to the
-PHP front controller in its own FPM pool (`open_basedir` limited to the site).
+Each listener instance listens on its port from `sources.json` on 127.0.0.1
+(8095 and up; 8080 belongs to llama-server). nginx proxies `/<slug>/ws/…` and
+`/<slug>/api/…` to it; everything else goes to the PHP front controller in its
+own FPM pool (`open_basedir` limited to the site and `/var/lib/listen-web`).
 Access is limited to the home LAN and WireGuard.
 
 ## One-time host setup (done 2026-09-30)

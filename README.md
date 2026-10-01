@@ -10,6 +10,23 @@ The live visualization is generated in the browser and evolves with the signal. 
 
 A language model can add a slower narrative layer, turning structured observations into concise textual descriptions. It does not decide what happened in the sound; it gives language to events detected by the analytical system.
 
+**Live at <https://listen.vrontier.org>.**
+
+## Streams
+
+The observatory listens to several sources at once. Each has its own page at `/<slug>`
+with the visualization, the interpretation and (where the source allows it) the audio.
+The site's landing page explains each source and how to read the visualization.
+
+| Stream | Kind | What you hear |
+|---|---|---|
+| [VLF Natural Radio](https://listen.vrontier.org/vlf-heidelberg) | live | Very low frequency radio from a receiver near Heidelberg: lightning (sferics), whistlers, the magnetosphere |
+| [Amsterdam · Hydrophile 1](https://listen.vrontier.org/amsterdam-hydrophile-1) and [5](https://listen.vrontier.org/amsterdam-hydrophile-5) | live | Hydrophones under Amsterdam's water, streamed by sound artist Lia Mazzari for radio.earth |
+| [Mars · InSight](https://listen.vrontier.org/mars-insight) | archive loop | NASA InSight seismometer: Martian wind, marsquakes, the lander itself |
+| [Jupiter · Juno](https://listen.vrontier.org/jupiter-juno) | archive loop | NASA Juno Waves: radio and plasma waves around Jupiter, Ganymede and Europa |
+
+Credits and licences for each source are on its page. Audio is never stored in this repository.
+
 ## Status
 
 Early development. See [`docs/`](docs/) for the concept and the
@@ -18,17 +35,32 @@ Early development. See [`docs/`](docs/) for the concept and the
 ## Layout
 
 ```text
-docs/       concept, event model, visual study, audio sources
-listener/   Go daemon: ffmpeg ingestion, DSP, event detection, WebSocket API
-site/       website for listen.vrontier.org (vanilla PHP front controller, served by NGINX + PHP-FPM)
-            /live is the p5.js visualization (site/assets/js/live/)
-deploy/     nginx, PHP-FPM and systemd files for listen.home.arpa (see deploy/README.md)
+docs/       concept, event model, visual study
+listener/   Go daemon: ffmpeg ingestion, DSP, event detection, memory, narrator, WebSocket API
+site/       website (vanilla PHP front controller, served by NGINX + PHP-FPM):
+            landing page, contact form, one live page per source (p5.js, site/assets/js/)
+deploy/     nginx, PHP-FPM and systemd files for staging and production
 scripts/    local development and deployment helpers
 ```
 
-## Development
+## Installation
 
-Requires Go ≥ 1.23, ffmpeg and PHP 8.
+### Requirements
+
+- Go ≥ 1.23 (listener), ffmpeg (audio decoding), PHP 8 (site), jq (scripts)
+- for a server: Linux with systemd, NGINX and PHP-FPM 8.3
+
+### Configuration
+
+Three files hold local settings and secrets; none of them is committed.
+
+| File | Purpose |
+|---|---|
+| `site/_config/sources.json` | The streams. Copy `sources.example.json`. Each entry is one source: its page (name, place, time zone, summary, credit, whether audio may be played, whether it is listed on the landing page) and its listener (port, input URL or file, extra flags such as `-sample-rate 32000`). Unlisted sources are reachable by URL only and marked `noindex`. |
+| `.email` | SMTP account for the contact form (`EMAIL_ADDRESS`, `EMAIL_NAME`, `EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`, `SMTP_PORT`). `scripts/mail-config.sh` turns it into `site/_config/mail.php` (see `mail.example.php`); without it the form shows the address instead. |
+| `.llm` | Optional interpretation layer: `LLM_API_KEY`, `NARRATOR_URL` (any OpenAI-compatible endpoint), `NARRATOR_MODEL`. Without it the interpretation stays off. |
+
+### Run locally
 
 ```sh
 scripts/dev.sh                     # every source in sources.json, plus the site
@@ -39,24 +71,31 @@ cd listener && go test ./...
 bin/listener -in capture.mp3 -dump > events.jsonl   # offline, as fast as possible
 ```
 
+### Deploy to a server
+
+Each source runs as its own listener instance (`listen-listener@<slug>`, systemd,
+bound to 127.0.0.1). NGINX routes `/<slug>/ws/…` and `/<slug>/api/…` to it, and
+everything else to the PHP front controller. The listener is cross-compiled to a
+static linux/amd64 binary, so the server needs no Go. `scripts/gen-sources.sh`
+generates the per-source systemd settings and NGINX routes from `sources.json`.
+
+- **With sudo** (staging): `scripts/deploy-taurus.sh` builds, uploads and installs
+  everything in one go. Host setup and file locations: [`deploy/README.md`](deploy/README.md).
+- **Without root** (production): `scripts/deploy-ionos.sh` builds and stages
+  everything in the deploy account's home, and an admin runs the idempotent
+  [`deploy/ionos/install.sh`](deploy/ionos/install.sh) there as root (what it changes:
+  [`deploy/ionos/INFOS_listen_vrontier.md`](deploy/ionos/INFOS_listen_vrontier.md)).
+  Site-only changes need no root: `scripts/deploy-ionos.sh --site-only`.
+
+Both scripts are idempotent. A source removed from `sources.json` is stopped on
+the next full deploy.
+
+## How it works
+
 The listener implements the MVP of the [event model](docs/sonic_division_live_visualization_event_model.md)
 (§27): `signal.frame` and `signal.spectrum` at 10 Hz, `feature.state` at 2 Hz,
 `event.transient`, `event.resonance` and `system.status`, over `GET /ws/live`, with
 the reconnect snapshot at `GET /api/state/current`.
-
-Dependencies are pinned and kept in the repository: `github.com/coder/websocket`
-(pure Go, no transitive dependencies) is vendored in `listener/vendor/`, and p5.js is
-vendored in `site/assets/vendor/p5/` with checksums in `VERSION`. Audio captures
-in `samples/` are never committed.
-
-Streams are configured in `site/_config/sources.json` (not committed; see
-`sources.example.json`). Each entry is one source: its page at `/<slug>` (name,
-place, time zone, credit, whether audio may be played, whether it is listed on the
-landing page) and its listener (port, input URL or file, extra flags such as
-`-sample-rate 32000`). The landing page (`/`) explains the project and lists the
-listed sources; unlisted ones are reachable by URL only and marked `noindex`.
-`/contact` sends a form to an address set in `site/_config/mail.php` (not
-committed; see `mail.example.php`).
 
 Acoustic memory (phase 2, §12–§16): with `-memory-dir` the listener recognises
 recurring structures. *Resonance motifs* are recurring partials, matched on
@@ -73,11 +112,11 @@ Interpretation (phase 3, §17): with `-narrator-url` and `-narrator-model` (or t
 `NARRATOR_URL` / `NARRATOR_MODEL` environment variables) and an API key in
 `LLM_API_KEY`, the listener phrases what it measured through any OpenAI-compatible
 chat endpoint. It emits `narrative.update` at most every `-narrate-every` (90 s), and
-only while someone has `/live` open and something has changed. Go builds the evidence
+only while someone has the source's page open and something has changed. Go builds the evidence
 (leading resonances, returns, new motifs, transients, state changes, the last hour)
 and the model only phrases it. Text naming a frequency or motif that isn't in the
 evidence is retried once, then dropped. Modes: `observational` (default), `minimal`,
-`poetic`. For local development put `LLM_API_KEY=...` in `.llm` (gitignored);
+`poetic`. For local development the settings go in `.llm` (see Configuration);
 `scripts/dev.sh` loads it.
 
 Optional in-sync audio: with `-audio` the listener relays the audio it analyses
@@ -85,6 +124,11 @@ on `/ws/audio`, as fragmented MP4 (AAC and Opus). Every event carries
 `position_s` on the same timeline, so the page shows each event when its sound
 is heard. A source offers playback when `"audio": true` is set in its entry in
 `sources.json`; it is off by default.
+
+Dependencies are pinned and kept in the repository: `github.com/coder/websocket`
+(pure Go, no transitive dependencies) is vendored in `listener/vendor/`, and p5.js is
+vendored in `site/assets/vendor/p5/` with checksums in `VERSION`. Audio captures
+in `samples/` are never committed.
 
 ## Principle
 
