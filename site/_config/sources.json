@@ -49,7 +49,7 @@
       "audio": true,
       "listener": {
         "port": 8096,
-        "input": "https://dk7fc.info/live-stream.php?stream=vlf15",
+        "input": "https://dk7fc.info/live-stream.php?stream=vlf41",
         "args": [
           "-sample-rate",
           "32000",
@@ -59,7 +59,7 @@
           "5s"
         ]
       },
-      "rights": "dk7fc.info. No licence stated. Live listening is offered publicly; permission for the analysis and the in-browser audio relay was requested on 2026-10-01 and is pending."
+      "rights": "Stefan Schäfer (dk7fc.info) agreed to the use on 2026-10-01."
     },
     {
       "slug": "mars-insight",

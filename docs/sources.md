@@ -91,11 +91,18 @@ Observations on this capture, useful for tuning the DSP defaults:
 | Property | Value |
 |---|---|
 | Page | https://dk7fc.info/vlfstreams.html (operator: Stefan Schäfer, DK7FC) |
-| URL | `https://dk7fc.info/live-stream.php?stream=vlf15` (VLF receiver near Heidelberg, Germany) |
+| URL | `https://dk7fc.info/live-stream.php?stream=vlf41` (E-field receiver at 49.44 N, 8.69 E near Heidelberg) |
 | Format | Ogg Vorbis, 32 kHz (VLF up to 16 kHz); analysed at `-sample-rate 32000 -transient-k 10 -transient-gap 5s` |
 
-The stream page states no licence or terms. Credit on the page: *VLF receiver Heidelberg, Stefan
-Schäfer*, with a link to the stream page. Permission was requested on 2026-10-01.
+Credit on the page: *VLF receiver Heidelberg, Stefan Schäfer*, with a link to the stream page.
+Stefan Schäfer agreed to the use on 2026-10-01.
+
+**Correction (2026-10-01):** from 2026-09-30 until 2026-10-01 the source read `stream=vlf15`. That is
+not Heidelberg: it is Renato Romero's receiver in Cumiana, Italy (44.96 N, 7.42 E, vlf.it), which
+dk7fc.info also relays (along with vlf39, Heathcote, Australia, and vlf44, Pennsylvania, USA). Everything
+shown as "Heidelberg" in that time, and the local capture `samples/vlf-cumiana-20260930T161052Z.ogg` (renamed from vlf-heidelberg-…),
+is Cumiana. The Heidelberg receiver itself (vlf41) has been down since about 2026-10-01: the 3.3 V
+regulator of its Raspberry Pi 2B, in service since 2015, failed. Stefan expects to replace it within a week.
 
 ## Mars · InSight (archive, source `mars-insight`)
 
