@@ -1,8 +1,8 @@
 # Deployment: listen.home.arpa (taurus)
 
 Updates: `scripts/deploy-taurus.sh`. It builds a static linux/amd64 listener,
-syncs `site/` (including the local, uncommitted `site/_config/sources.json` and
-`mail.php`) and installs the files below. It is idempotent. Production
+syncs `site/` (including `site/_config/sources.json` and the uncommitted,
+generated `mail.php`) and installs the files below. It is idempotent. Production
 (listen.vrontier.org) has no sudo for the deploy account; see
 [`ionos/INFOS_listen_vrontier.md`](ionos/INFOS_listen_vrontier.md) and `scripts/deploy-ionos.sh`.
 
@@ -11,7 +11,7 @@ syncs `site/` (including the local, uncommitted `site/_config/sources.json` and
 | Listener binary | `/usr/local/bin/listen-listener` | `listener/` |
 | systemd template | `/etc/systemd/system/listen-listener@.service`, one instance per source | `systemd/listen-listener@.service` |
 | Per-source arguments | `/etc/listen/sources/<slug>.env` (generated: port, input, flags) | `site/_config/sources.json` |
-| Per-source routes | `/etc/nginx/snippets/listen-sources.conf` (generated: `/<slug>/ws/…`, `/<slug>/api/…`) | `site/_config/sources.json` |
+| Per-source routes | `/etc/nginx/snippets/listen-sources.conf` (generated: `/<slug>/ws/…`, `/<slug>/api/state/current`) | `site/_config/sources.json` |
 | Listener state | `/var/lib/listen` (user `listen`, 0700; captures in `samples/`, memory in `memory/<source>/<input>/`) | — |
 | Site | `/var/www/listen.home.arpa` | `site/` |
 | PHP-FPM pool | `/etc/php/8.3/fpm/pool.d/listen.conf`, socket `/run/php/php8.3-fpm-listen.sock` | `php-fpm/listen.conf` |
@@ -22,7 +22,7 @@ syncs `site/` (including the local, uncommitted `site/_config/sources.json` and
 
 Each listener instance listens on its port from `sources.json` on 127.0.0.1
 (8095 and up; 8080 belongs to llama-server). nginx proxies `/<slug>/ws/…` and
-`/<slug>/api/…` to it; everything else goes to the PHP front controller in its
+`/<slug>/api/state/current` to it; everything else goes to the PHP front controller in its
 own FPM pool (`open_basedir` limited to the site and `/var/lib/listen-web`).
 Access is limited to the home LAN and WireGuard.
 

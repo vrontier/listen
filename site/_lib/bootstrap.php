@@ -23,7 +23,7 @@ const PAGES = [
 // ---- sources ---------------------------------------------------------------
 
 // The streams the observatory listens to, from _config/sources.json
-// (gitignored; see sources.example.json). Without it there are no streams.
+// (committed; credentials live elsewhere). Without it there are no streams.
 function sources_config(): array
 {
     static $cfg = null;

@@ -43,6 +43,7 @@ if [ -f /var/www/listen.home.arpa/_config/mail.php ]; then
   chown root:www-data /var/www/listen.home.arpa/_config/mail.php
   chmod 0640 /var/www/listen.home.arpa/_config/mail.php
 fi
+php -m | grep -qx mbstring || apt-get install -y -q php8.3-mbstring
 install -m 0755 $stage/listen-listener-linux-amd64 /usr/local/bin/listen-listener
 install -m 0644 "$stage/listen-listener@.service" "/etc/systemd/system/listen-listener@.service"
 

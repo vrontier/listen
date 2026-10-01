@@ -1,0 +1,261 @@
+{
+  "_comment": "The source catalogue (committed). One entry per stream: its page at /<slug> and its listener. listed=false keeps a source off the landing page (reachable by URL, noindex). listener.input is a URL or a file on the server; local_input overrides it for scripts/dev.sh. Ports must be unique. rights records the basis for analysing and relaying the audio (audio=true).",
+  "default": "vlf-heidelberg",
+  "sources": [
+    {
+      "slug": "sonic-division",
+      "listed": true,
+      "name": "Sonic Division",
+      "subtitle": "Live listening",
+      "meta": [
+        "Owens Dry Lake (Payahuunadu), California",
+        "Silos on the dry lake bed",
+        "Wind, environment, in-situ performances",
+        "Computational interpretation"
+      ],
+      "timezone": "America/Los_Angeles",
+      "summary": "Satellite Radio from the Silos at Owens Dry Lake. Metabolic Studio's Sonic Division transmits a live feed of the sounds produced by the Silos and the environment around the dry lake bed in Payahuunadu (the Owens Valley); on occasion you will hear in-situ performances from within the Silos.",
+      "credit": {
+        "text": "Metabolic Studio — Sonic Division",
+        "url": "https://metabolicstudio.org/Sonic-Division",
+        "note": "Satellite Radio from the Silos at Owens Dry Lake (Payahuunadu)"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8095,
+        "input": "https://metabolicstudio.streamguys1.com/live",
+        "args": []
+      },
+      "rights": "Metabolic Studio. No licence stated. Live listening is offered publicly; permission for the analysis and the in-browser audio relay was requested on 2026-10-01 and is pending."
+    },
+    {
+      "slug": "vlf-heidelberg",
+      "listed": true,
+      "name": "VLF Natural Radio",
+      "subtitle": "Live listening",
+      "meta": [
+        "Heidelberg, Germany",
+        "Very low frequency radio, up to 16 kHz",
+        "Lightning, whistlers, the magnetosphere",
+        "Computational interpretation"
+      ],
+      "timezone": "Europe/Berlin",
+      "summary": "Earth's own radio. A receiver near Heidelberg turns very low frequency radio waves into sound: the crackle of lightning strikes thousands of kilometres away (sferics), falling tones that travel along the magnetic field (whistlers), and the steady hum of the power grid.",
+      "credit": {
+        "text": "VLF receiver Heidelberg, Stefan Schäfer",
+        "url": "https://dk7fc.info/vlfstreams.html",
+        "note": "stream via dk7fc.info"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8096,
+        "input": "https://dk7fc.info/live-stream.php?stream=vlf15",
+        "args": [
+          "-sample-rate",
+          "32000",
+          "-transient-k",
+          "10",
+          "-transient-gap",
+          "5s"
+        ]
+      },
+      "rights": "dk7fc.info. No licence stated. Live listening is offered publicly; permission for the analysis and the in-browser audio relay was requested on 2026-10-01 and is pending."
+    },
+    {
+      "slug": "mars-insight",
+      "listed": true,
+      "name": "Mars · InSight",
+      "subtitle": "Archive listening",
+      "meta": [
+        "Elysium Planitia, Mars",
+        "Seismometer: wind, marsquakes, the lander itself",
+        "Archive recordings 2019, looped",
+        "Computational interpretation"
+      ],
+      "timezone": "UTC",
+      "summary": "Sound from the surface of Mars, heard through a seismometer. NASA's InSight lander felt the Martian wind, two marsquakes and the ticking of its own parts cooling at night; these recordings, sped up or raised in pitch to become audible, play here in a 21-minute loop.",
+      "credit": {
+        "text": "NASA/JPL-Caltech/CNES/IPGP, InSight SEIS",
+        "url": "https://www.nasa.gov/sounds-from-beyond/",
+        "note": "archive recordings from NASA's Sounds from Beyond"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8097,
+        "input": "/var/lib/listen/samples/mars-insight-seis.flac",
+        "local_input": "samples/mars-insight-seis.flac",
+        "args": [
+          "-loop",
+          "-transient-k",
+          "12",
+          "-transient-gap",
+          "6s"
+        ]
+      },
+      "rights": "NASA media usage guidelines: free to use with credit (NASA/JPL-Caltech/CNES/IPGP), no implied endorsement. Clips listed in docs/sources.md."
+    },
+    {
+      "slug": "jupiter-juno",
+      "listed": true,
+      "name": "Jupiter · Juno",
+      "subtitle": "Archive listening",
+      "meta": [
+        "Jupiter and its moons Ganymede and Europa",
+        "Radio and plasma waves, shifted into hearing range",
+        "Archive recordings 2016–2022, looped",
+        "Computational interpretation"
+      ],
+      "timezone": "UTC",
+      "summary": "Jupiter's radio voice. The Waves instrument on NASA's Juno spacecraft records radio and plasma waves around the planet; shifted into the range of hearing they become rising tones, whoops and crackle. A 4-minute loop from the flybys of Ganymede and Europa and from Jupiter itself.",
+      "credit": {
+        "text": "NASA/JPL-Caltech/SwRI/University of Iowa, Juno Waves",
+        "url": "https://space.physics.uiowa.edu/plasma-wave/juno/audio/",
+        "note": "archive recordings; University of Iowa clips licensed CC BY 3.0"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8098,
+        "input": "/var/lib/listen/samples/jupiter-juno-waves.flac",
+        "local_input": "samples/jupiter-juno-waves.flac",
+        "args": [
+          "-loop",
+          "-transient-k",
+          "12",
+          "-transient-gap",
+          "6s"
+        ]
+      },
+      "rights": "NASA media usage guidelines (Ganymede flyby clip) and University of Iowa clips under CC BY 3.0 (NASA/JPL-Caltech/SwRI/University of Iowa). Clips listed in docs/sources.md."
+    },
+    {
+      "slug": "amsterdam-hydrophile-1",
+      "listed": true,
+      "name": "Amsterdam · Hydrophile 1",
+      "subtitle": "Live listening",
+      "meta": [
+        "Amsterdam, Netherlands",
+        "52° 22′ 3.4″ N, 4° 54′ 14.9″ E",
+        "Hydrophone: sound under the water",
+        "Computational interpretation"
+      ],
+      "timezone": "Europe/Amsterdam",
+      "summary": "Under the surface of Amsterdam's water. A hydrophone streams live what the city's water carries: boats and engines, currents, and the life below the waterline. Streamed by sound artist Lia Mazzari with a streambox, one of the small open-microphone transmitters of Soundcamp and Acoustic Commons that share live environmental sound through the Locus Sonus stream server.",
+      "credit": {
+        "text": "Lia Mazzari — Soundcamp streambox",
+        "url": "https://soundtent.org/streambox/",
+        "note": "live stream via Locus Sonus (locus.creacast.com)"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8099,
+        "input": "https://locus.creacast.com:9443/amsterdam_hydrophile_1.mp3",
+        "args": []
+      },
+      "rights": "Lia Mazzari / Soundcamp. No licence stated. Live listening is offered publicly; permission for the analysis and the in-browser audio relay was requested on 2026-10-01 and is pending."
+    },
+    {
+      "slug": "amsterdam-hydrophile-5",
+      "listed": true,
+      "name": "Amsterdam · Hydrophile 5",
+      "subtitle": "Live listening",
+      "meta": [
+        "Amsterdam, Netherlands",
+        "52° 20′ 51.7″ N, 4° 54′ 45.8″ E",
+        "Hydrophone: sound under the water",
+        "Computational interpretation"
+      ],
+      "timezone": "Europe/Amsterdam",
+      "summary": "Under the surface of Amsterdam's water. A hydrophone streams live what the city's water carries: boats and engines, currents, and the life below the waterline. Streamed by sound artist Lia Mazzari with a streambox, one of the small open-microphone transmitters of Soundcamp and Acoustic Commons that share live environmental sound through the Locus Sonus stream server.",
+      "credit": {
+        "text": "Lia Mazzari — Soundcamp streambox",
+        "url": "https://soundtent.org/streambox/",
+        "note": "live stream via Locus Sonus (locus.creacast.com)"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8100,
+        "input": "https://locus.creacast.com:9443/amsterdam_hydrophile_5.mp3",
+        "args": []
+      },
+      "rights": "Lia Mazzari / Soundcamp. No licence stated. Live listening is offered publicly; permission for the analysis and the in-browser audio relay was requested on 2026-10-01 and is pending."
+    },
+    {
+      "slug": "svalbard-bayelva",
+      "listed": true,
+      "name": "Svalbard · Bayelva",
+      "subtitle": "Live listening",
+      "meta": [
+        "Ny-Ålesund, Svalbard",
+        "Bayelva permafrost observatory (AWI)",
+        "Arctic wind, water and weather",
+        "Computational interpretation"
+      ],
+      "timezone": "Arctic/Longyearbyen",
+      "summary": "A permanent microphone at the Bayelva long-term observation site near Ny-Ålesund, where the Alfred Wegener Institute has monitored the climate and the frozen ground since 1998. Since July 2025 it lets the Arctic be heard as it changes: wind, meltwater, weather and the rare passing visitor. Part of Common Grounds, a collaboration between sonic practice and climate science.",
+      "credit": {
+        "text": "Common Grounds (Julia Boike, AWI; Kerstin Ergenzinger; Bnaya Halperin-Kaddari) — radio.earth",
+        "url": "https://radio.earth/bayelva/",
+        "note": "live stream via radio.aporee.org"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8101,
+        "input": "https://radio.aporee.org:8443/bayelva",
+        "args": []
+      },
+      "rights": "radio.earth / Common Grounds. No licence stated. Live listening is offered publicly; permission for the analysis and the in-browser audio relay was requested on 2026-10-01 and is pending."
+    },
+    {
+      "slug": "brno-luzanky",
+      "listed": true,
+      "name": "Brno · Park Lužánky",
+      "subtitle": "Live listening",
+      "meta": [
+        "Brno, Czech Republic",
+        "The city's oldest public park",
+        "Bird choruses and the city",
+        "Computational interpretation"
+      ],
+      "timezone": "Europe/Prague",
+      "summary": "A microphone in Lužánky, the largest park in Brno and the oldest public park in the Czech Republic. Restored meadows, a brook and old trees drew 72 species of birds in a 2016 count, so dawn and dusk choruses overlap with footsteps, voices and the hum of the city. Listening continuously since spring 2021.",
+      "credit": {
+        "text": "Tomáš Šenkyrík, Vit Kalvoda, Udo Noll — radio.earth",
+        "url": "https://radio.earth/brno/",
+        "note": "live stream via locus.creacast.com"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8102,
+        "input": "https://locus.creacast.com:9443/brno_luzanky.mp3",
+        "args": []
+      },
+      "rights": "radio.earth. No licence stated. Live listening is offered publicly; permission for the analysis and the in-browser audio relay was requested on 2026-10-01 and is pending."
+    },
+    {
+      "slug": "kozmice-meadows",
+      "listed": true,
+      "name": "Kozmice · Bird Meadows",
+      "subtitle": "Live listening",
+      "meta": [
+        "Opava region, Czech Republic",
+        "49° 54′ 16.6″ N, 18° 8′ 7.1″ E",
+        "Floodplain meadows of the Opava River",
+        "Computational interpretation"
+      ],
+      "timezone": "Europe/Prague",
+      "summary": "A solar-powered listening station in the Kozmice meadows, one of the last floodplain areas of the Opava River. The long-term project listens to how the soundscape of the river and its living floodplain changes: birds, insects, wind and water, through the seasons.",
+      "credit": {
+        "text": "Kozmické ptačí louky (Magdaléna Manderlová, Michal Kindernay), station by Udo Noll — radio.earth",
+        "url": "https://radio.earth/kozmic/",
+        "note": "live stream via locus.creacast.com"
+      },
+      "audio": true,
+      "listener": {
+        "port": 8103,
+        "input": "https://locus.creacast.com:9443/kozmic.mp3",
+        "args": []
+      },
+      "rights": "radio.earth. No licence stated. Live listening is offered publicly; permission for the analysis and the in-browser audio relay was requested on 2026-10-01 and is pending."
+    }
+  ]
+}

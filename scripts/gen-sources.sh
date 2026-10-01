@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Generates the per-source deploy files from site/_config/sources.json:
 #   <out>/sources/<slug>.env    LISTEN_ARGS for listen-listener@<slug>
-#   <out>/listen-sources.conf   nginx routes /<slug>/ws/… and /<slug>/api/…
+#   <out>/listen-sources.conf   nginx routes /<slug>/ws/… and /<slug>/api/state/current
+#                               (the only API path the browser uses; motifs and
+#                               history stay on 127.0.0.1, reachable by SSH tunnel)
 #   <out>/slugs                 the slugs, space separated
 # Used by scripts/deploy-taurus.sh and scripts/deploy-ionos.sh.
 #   scripts/gen-sources.sh <out> [extra nginx directives for every route]
@@ -13,7 +15,7 @@ extra="${2:-}"
 cfg=site/_config/sources.json
 
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
-[[ -f $cfg ]] || { echo "$cfg is missing (see sources.example.json)" >&2; exit 1; }
+[[ -f $cfg ]] || { echo "$cfg is missing" >&2; exit 1; }
 
 jq -e '
   (.sources | length > 0)
@@ -45,7 +47,7 @@ location ^~ /\(.slug)/ws/ {\($extra)
     proxy_read_timeout 1h;
     proxy_send_timeout 1h;
 }
-location ^~ /\(.slug)/api/ {\($extra)
+location = /\(.slug)/api/state/current {\($extra)
     limit_except GET HEAD { deny all; }
     include snippets/proxy-params.conf;
     rewrite ^/\(.slug)(/api/.*)$ $1 break;

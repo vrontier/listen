@@ -200,7 +200,7 @@ func main() {
 
 	srv := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
-		log.Printf("listening on http://%s (ws: /ws/live, snapshot: /api/state/current), input %s", *addr, describe(*in))
+		log.Printf("listening on http://%s (ws: /ws/live, snapshot: /api/state/current), input %s", *addr, *in)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)
 		}
@@ -336,10 +336,11 @@ func (s *status) payload(listeners int) events.Status {
 	}
 }
 
-// describe hides local paths from clients: files are reported by base name.
+// describe is what clients see of the input: "live" for a stream (the
+// upstream URL stays internal) and "file:<base name>" for a replay.
 func describe(in string) string {
 	if source.IsURL(in) {
-		return in
+		return "live"
 	}
 	if i := strings.LastIndexAny(in, `/\`); i >= 0 {
 		return "file:" + in[i+1:]
