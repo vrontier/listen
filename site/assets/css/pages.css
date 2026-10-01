@@ -71,8 +71,8 @@ body.page {
   line-height: 1.1;
 }
 .page__lede { margin-top: 1rem; font-size: 1.2rem; color: var(--label); }
-.page__intro { margin-top: 1.6rem; max-width: 68ch; color: var(--value); line-height: 1.7; }
-.page__muted { max-width: 68ch; color: var(--label); line-height: 1.7; }
+.page__intro { margin-top: 1.6rem; color: var(--value); line-height: 1.7; }
+.page__muted { color: var(--label); line-height: 1.7; }
 
 .page__section { padding-top: 3rem; }
 .page__section h2 {
