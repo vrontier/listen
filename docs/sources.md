@@ -104,6 +104,23 @@ shown as "Heidelberg" in that time, and the local capture `samples/vlf-cumiana-2
 is Cumiana. The Heidelberg receiver itself (vlf41) has been down since about 2026-10-01: the 3.3 V
 regulator of its Raspberry Pi 2B, in service since 2015, failed. Stefan expects to replace it within a week.
 
+## VLF Natural Radio, Cumiana (live, source `vlf-cumiana`; added 2026-10-01)
+
+| Property | Value |
+|---|---|
+| Receiver | Renato Romero, Cumiana near Turin, Italy (44.96 N, 7.42 E); http://www.vlf.it/ |
+| URL | `https://dk7fc.info/live-stream.php?stream=vlf15` (relayed by dk7fc.info) |
+| Format | Ogg Vorbis, 32 kHz mono; probed 2026-10-01: mean −46 dB, peaks −5 dB |
+
+The analysis settings (`-sample-rate 32000 -transient-k 10 -transient-gap 5s`) were tuned on this
+stream on 2026-09-30, when it was mistaken for Heidelberg (see the correction above).
+Rights: relayed by dk7fc.info with its operator's agreement. No licence stated; permission from Renato
+Romero was requested on 2026-10-01.
+
+Other receivers on the same relay, not used yet: `vlf44`, Spring Brook Township, Pennsylvania, USA
+(Jonathan Rizzo; up on 2026-10-01), and `vlf39`, Heathcote, Victoria, Australia (Leon Mow Radio
+Observatory, asv.org.au; down, 503, on 2026-10-01).
+
 ## Mars · InSight (archive, source `mars-insight`)
 
 Loop `samples/mars-insight-seis.flac` (1268.7 s; on taurus in /var/lib/listen/samples/), built on
