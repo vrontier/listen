@@ -117,9 +117,15 @@ stream on 2026-09-30, when it was mistaken for Heidelberg (see the correction ab
 Rights: relayed by dk7fc.info with its operator's agreement. No licence stated; permission from Renato
 Romero was requested on 2026-10-01.
 
-Other receivers on the same relay, not used yet: `vlf44`, Spring Brook Township, Pennsylvania, USA
-(Jonathan Rizzo; up on 2026-10-01), and `vlf39`, Heathcote, Victoria, Australia (Leon Mow Radio
-Observatory, asv.org.au; down, 503, on 2026-10-01).
+## VLF Natural Radio, Pennsylvania and Heathcote (live; added 2026-10-01)
+
+| Source | Port | Stream (via dk7fc.info) | Receiver | Probed 2026-10-01 |
+|---|---|---|---|---|
+| `vlf-pennsylvania` | 8105 | `live-stream.php?stream=vlf44` | Jonathan Rizzo, Spring Brook Township, PA, USA (41.33 N, 75.60 W) | up; mean −41 dB, peaks −0.5 dB |
+| `vlf-heathcote` | 8106 | `live-stream.php?stream=vlf39` | Leon Mow Radio Observatory (Astronomical Society of Victoria, https://asv.org.au/Leon-mow-Dark-Sky-Site), Heathcote, Victoria, Australia (36.80 S, 144.67 E) | down (503); the listener retries until it is back |
+
+Same analysis settings as the other VLF sources. Rights: relayed by dk7fc.info with its operator's
+agreement. No licence stated; permission from each receiver's operator was requested on 2026-10-01.
 
 ## Mars · InSight (archive, source `mars-insight`)
 

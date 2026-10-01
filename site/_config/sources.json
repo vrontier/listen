@@ -95,6 +95,72 @@
       }
     },
     {
+      "slug": "vlf-pennsylvania",
+      "listed": true,
+      "name": "VLF Natural Radio · Pennsylvania",
+      "subtitle": "Live listening",
+      "meta": [
+        "Spring Brook Township, Pennsylvania, USA",
+        "Very low frequency radio, up to 16 kHz",
+        "Lightning, whistlers, the magnetosphere",
+        "Computational interpretation"
+      ],
+      "timezone": "America/New_York",
+      "summary": "Earth's own radio from north-eastern Pennsylvania. Jonathan Rizzo's receiver near Scranton turns very low frequency radio waves into sound: the crackle of distant lightning (sferics), falling tones that travel along the magnetic field (whistlers), and the hum of the power grid.",
+      "credit": {
+        "text": "VLF receiver Spring Brook Township, Jonathan Rizzo",
+        "url": "https://dk7fc.info/vlfstreams.html",
+        "note": "stream via dk7fc.info"
+      },
+      "audio": true,
+      "rights": "Jonathan Rizzo. No licence stated; relayed by dk7fc.info, whose operator agreed on 2026-10-01. Permission from the receiver's operator requested 2026-10-01, pending.",
+      "listener": {
+        "port": 8105,
+        "input": "https://dk7fc.info/live-stream.php?stream=vlf44",
+        "args": [
+          "-sample-rate",
+          "32000",
+          "-transient-k",
+          "10",
+          "-transient-gap",
+          "5s"
+        ]
+      }
+    },
+    {
+      "slug": "vlf-heathcote",
+      "listed": true,
+      "name": "VLF Natural Radio · Heathcote",
+      "subtitle": "Live listening",
+      "meta": [
+        "Heathcote, Victoria, Australia",
+        "Very low frequency radio, up to 16 kHz",
+        "Lightning, whistlers, the magnetosphere",
+        "Computational interpretation"
+      ],
+      "timezone": "Australia/Melbourne",
+      "summary": "Earth's own radio from the southern hemisphere. The receiver at the Leon Mow Radio Observatory, a dark-sky site of the Astronomical Society of Victoria near Heathcote, turns very low frequency radio waves into sound: the crackle of distant lightning (sferics), whistlers along the magnetic field, and the hum of the power grid.",
+      "credit": {
+        "text": "VLF receiver Heathcote, Leon Mow Radio Observatory (Astronomical Society of Victoria)",
+        "url": "https://asv.org.au/Leon-mow-Dark-Sky-Site",
+        "note": "stream via dk7fc.info"
+      },
+      "audio": true,
+      "rights": "Leon Mow Radio Observatory (asv.org.au). No licence stated; relayed by dk7fc.info, whose operator agreed on 2026-10-01. Permission from the receiver's operator requested 2026-10-01, pending.",
+      "listener": {
+        "port": 8106,
+        "input": "https://dk7fc.info/live-stream.php?stream=vlf39",
+        "args": [
+          "-sample-rate",
+          "32000",
+          "-transient-k",
+          "10",
+          "-transient-gap",
+          "5s"
+        ]
+      }
+    },
+    {
       "slug": "mars-insight",
       "listed": true,
       "name": "Mars · InSight",

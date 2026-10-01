@@ -21,7 +21,7 @@ The site's landing page explains each source and how to read the visualization.
 | Stream | Kind | What you hear |
 |---|---|---|
 | [Sonic Division](https://listen.vrontier.org/sonic-division) | live | Satellite Radio from the Silos at Owens Dry Lake (Payahuunadu), California, by [Metabolic Studio](https://metabolicstudio.org/Sonic-Division) |
-| VLF Natural Radio · [Heidelberg](https://listen.vrontier.org/vlf-heidelberg) and [Cumiana](https://listen.vrontier.org/vlf-cumiana) | live | Very low frequency radio from receivers near Heidelberg (Stefan Schäfer) and Turin (Renato Romero): lightning (sferics), whistlers, the magnetosphere |
+| VLF Natural Radio · [Heidelberg](https://listen.vrontier.org/vlf-heidelberg), [Cumiana](https://listen.vrontier.org/vlf-cumiana), [Pennsylvania](https://listen.vrontier.org/vlf-pennsylvania) and [Heathcote](https://listen.vrontier.org/vlf-heathcote) | live | Very low frequency radio from receivers in Germany, Italy, the USA and Australia, relayed by dk7fc.info: lightning (sferics), whistlers, the magnetosphere |
 | [Amsterdam · Hydrophile 1](https://listen.vrontier.org/amsterdam-hydrophile-1) and [5](https://listen.vrontier.org/amsterdam-hydrophile-5) | live | Hydrophones under Amsterdam's water, streamed by sound artist Lia Mazzari with a [Soundcamp streambox](https://soundtent.org/streambox/) |
 | [Svalbard · Bayelva](https://listen.vrontier.org/svalbard-bayelva) | live | Arctic permafrost observatory near Ny-Ålesund: wind, meltwater, weather (Common Grounds, radio.earth) |
 | [Brno · Park Lužánky](https://listen.vrontier.org/brno-luzanky) | live | Bird choruses and city sound in Brno's oldest park (radio.earth) |
