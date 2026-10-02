@@ -55,9 +55,13 @@ $source = $page['source'];
       </div>
       <canvas id="dial" aria-hidden="true"></canvas>
       <div id="motif-tip" class="motif-tip" role="tooltip" hidden></div>
-      <p class="dial__legend"><span class="dial__title">Memory</span> marks = remembered motifs by frequency ·
-        taller = more often · brighter = more recent · band = texture ·
-        <span class="dial__needle">needle</span> = dominant now · point at a mark for details</p>
+      <div class="dial__foot">
+        <p class="dial__legend"><span class="dial__title">Memory</span> marks = remembered motifs by frequency ·
+          taller = more often · brighter = more recent · band = texture ·
+          <span class="dial__needle">needle</span> = dominant now · point at a mark for details</p>
+        <button class="dial__export" id="motif-export" type="button"
+                title="Download the remembered motifs of this source as a CSV file">⤓ Export CSV</button>
+      </div>
     </section>
 
     <section class="panels" aria-label="Analysis">
