@@ -1,5 +1,6 @@
 // Landing page: live status on each stream card, from the stream's snapshot,
-// and how many people are watching (live page open) and listening (audio on).
+// and how many stream listeners there are (live page open), and how many of
+// them with sound on.
 (function () {
   'use strict';
 
@@ -8,7 +9,7 @@
 
   function audience(watching, listening) {
     if (!watching) return '';
-    return watching + ' watching' + (listening ? ' · ' + listening + ' listening' : '');
+    return watching + (watching === 1 ? ' listener' : ' listeners') + (listening ? ' · ' + listening + ' with sound' : '');
   }
 
   // Resolves to {up, watching, listening} for the total line.
@@ -54,10 +55,10 @@
       if (!now) return;
       now.hidden = false;
       now.textContent = watching
-        ? 'Right now: ' + watching + (watching === 1 ? ' person' : ' people') + ' watching' +
-          (listening ? ', ' + listening + ' of them listening' : '') +
-          ', across ' + busy + (busy === 1 ? ' stream' : ' streams') + ' · ' + live + ' of ' + rs.length + ' streams live'
-        : live + ' of ' + rs.length + ' streams live · nobody watching right now; be the first';
+        ? 'Right now: ' + watching + (watching === 1 ? ' stream listener' : ' stream listeners') +
+          (listening ? ' (' + listening + ' with sound)' : '') +
+          ' across ' + busy + (busy === 1 ? ' stream' : ' streams') + ' · ' + live + ' of ' + rs.length + ' streams live'
+        : live + ' of ' + rs.length + ' streams live · no stream listeners right now; be the first';
     });
   }
   refresh();
