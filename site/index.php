@@ -8,7 +8,17 @@ declare(strict_types=1);
 
 require __DIR__ . '/_lib/bootstrap.php';
 
-$route = route(request_path());
+$path = request_path();
+
+// For search engines: the pages and the listed sources (unlisted ones are
+// noindex and stay out). robots.txt points here.
+if ($path === '/sitemap.xml') {
+    header('Content-Type: application/xml; charset=UTF-8');
+    echo sitemap_xml();
+    exit;
+}
+
+$route = route($path);
 
 if ($route === null) {
     http_response_code(404);

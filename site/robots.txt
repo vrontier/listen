@@ -1,0 +1,11 @@
+# listen.vrontier.org — Listening Observatory
+# Public art project; pages and assets are fine to index.
+# Live-data endpoints (/<slug>/api/, /<slug>/ws/) carry nothing to index.
+
+User-agent: *
+Allow: /
+Disallow: /*/api/
+Disallow: /*/ws/
+Disallow: /_
+
+Sitemap: https://listen.vrontier.org/sitemap.xml
