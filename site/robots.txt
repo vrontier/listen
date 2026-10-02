@@ -1,6 +1,7 @@
 # listen.vrontier.org — Listening Observatory
 # Public art project; pages and assets are fine to index.
 # Live-data endpoints (/<slug>/api/, /<slug>/ws/) carry nothing to index.
+# AI crawlers (GPTBot, CCBot, Google-Extended, …) are welcome too (decided 2026-10-02).
 
 User-agent: *
 Allow: /
