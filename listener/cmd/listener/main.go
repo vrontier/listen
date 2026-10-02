@@ -154,6 +154,7 @@ func main() {
 		rl.Routes(mux)
 		outputs = rl.Outputs()
 		st.audio = rl.Names()
+		st.audioListeners = rl.Listeners
 		log.Printf("audio relay on: /ws/audio?codec=%s", strings.Join(st.audio, "|"))
 	}
 	if rec.known {
@@ -298,6 +299,8 @@ type status struct {
 	reconnects int
 	audio      []string
 	sampleRate int
+
+	audioListeners func() int // nil without the audio relay
 }
 
 func (s *status) setStream(v string) (prev string) {
@@ -317,6 +320,10 @@ func (s *status) setLatency(d time.Duration) {
 }
 
 func (s *status) payload(listeners int) events.Status {
+	audioListeners := 0
+	if s.audioListeners != nil {
+		audioListeners = s.audioListeners()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	analysisState := "running"
@@ -329,13 +336,14 @@ func (s *status) payload(listeners int) events.Status {
 	}
 	return events.Status{
 		Stream: s.stream, Analysis: analysisState,
-		LatencyMs:  float64(lat.Milliseconds()),
-		Listeners:  listeners,
-		Input:      s.input,
-		SampleRate: s.sampleRate,
-		UptimeS:    float64(int(time.Since(s.started).Seconds())),
-		Reconnects: s.reconnects,
-		Audio:      s.audio,
+		LatencyMs:      float64(lat.Milliseconds()),
+		Listeners:      listeners,
+		AudioListeners: audioListeners,
+		Input:          s.input,
+		SampleRate:     s.sampleRate,
+		UptimeS:        float64(int(time.Since(s.started).Seconds())),
+		Reconnects:     s.reconnects,
+		Audio:          s.audio,
 	}
 }
 
