@@ -35,7 +35,7 @@
       "subtitle": "Live listening",
       "meta": [
         "Heidelberg, Germany",
-        "Very low frequency radio, up to 16 kHz",
+        "Very low frequency radio, analysed at 0.8–12 kHz",
         "Lightning, whistlers, the magnetosphere",
         "Computational interpretation"
       ],
@@ -56,7 +56,13 @@
           "-transient-k",
           "10",
           "-transient-gap",
-          "5s"
+          "5s",
+          "-min-hz",
+          "800",
+          "-max-hz",
+          "12000",
+          "-mains",
+          "50"
         ]
       },
       "rights": "Stefan Schäfer (dk7fc.info) agreed to the use on 2026-10-01."
@@ -68,7 +74,7 @@
       "subtitle": "Live listening",
       "meta": [
         "Cumiana, Italy (near Turin)",
-        "Very low frequency radio, up to 16 kHz",
+        "Very low frequency radio, analysed at 0.8–12 kHz",
         "Lightning, whistlers, the magnetosphere",
         "Computational interpretation"
       ],
@@ -90,7 +96,13 @@
           "-transient-k",
           "10",
           "-transient-gap",
-          "5s"
+          "5s",
+          "-min-hz",
+          "800",
+          "-max-hz",
+          "12000",
+          "-mains",
+          "50"
         ]
       }
     },
@@ -101,7 +113,7 @@
       "subtitle": "Live listening",
       "meta": [
         "Spring Brook Township, Pennsylvania, USA",
-        "Very low frequency radio, up to 16 kHz",
+        "Very low frequency radio, analysed at 0.8–12 kHz",
         "Lightning, whistlers, the magnetosphere",
         "Computational interpretation"
       ],
@@ -123,7 +135,13 @@
           "-transient-k",
           "10",
           "-transient-gap",
-          "5s"
+          "5s",
+          "-min-hz",
+          "800",
+          "-max-hz",
+          "12000",
+          "-mains",
+          "60"
         ]
       }
     },
@@ -134,7 +152,7 @@
       "subtitle": "Live listening",
       "meta": [
         "Heathcote, Victoria, Australia",
-        "Very low frequency radio, up to 16 kHz",
+        "Very low frequency radio, analysed at 0.8–12 kHz",
         "Lightning, whistlers, the magnetosphere",
         "Computational interpretation"
       ],
@@ -156,7 +174,13 @@
           "-transient-k",
           "10",
           "-transient-gap",
-          "5s"
+          "5s",
+          "-min-hz",
+          "800",
+          "-max-hz",
+          "12000",
+          "-mains",
+          "50"
         ]
       }
     },

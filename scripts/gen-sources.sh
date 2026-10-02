@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Generates the per-source deploy files from site/_config/sources.json:
 #   <out>/sources/<slug>.env    LISTEN_ARGS for listen-listener@<slug>
-#   <out>/listen-sources.conf   nginx routes /<slug>/ws/… and /<slug>/api/state/current
-#                               (the only API path the browser uses; motifs and
-#                               history stay on 127.0.0.1, reachable by SSH tunnel)
+#   <out>/listen-sources.conf   nginx routes /<slug>/ws/… and the three API paths the
+#                               browser uses: api/state/current, api/motifs and
+#                               api/history/events?type=narrative.update. The rest
+#                               (motif details, feature history) stays on 127.0.0.1.
 #   <out>/slugs                 the slugs, space separated
 # Used by scripts/deploy-taurus.sh and scripts/deploy-ionos.sh.
 #   scripts/gen-sources.sh <out> [extra nginx directives for every route]
@@ -49,6 +50,19 @@ location ^~ /\(.slug)/ws/ {\($extra)
 }
 location = /\(.slug)/api/state/current {\($extra)
     limit_except GET HEAD { deny all; }
+    include snippets/proxy-params.conf;
+    rewrite ^/\(.slug)(/api/.*)$ $1 break;
+    proxy_pass http://127.0.0.1:\(.listener.port);
+}
+location = /\(.slug)/api/motifs {\($extra)
+    limit_except GET HEAD { deny all; }
+    include snippets/proxy-params.conf;
+    rewrite ^/\(.slug)(/api/.*)$ $1 break;
+    proxy_pass http://127.0.0.1:\(.listener.port);
+}
+location = /\(.slug)/api/history/events {\($extra)
+    limit_except GET HEAD { deny all; }
+    if ($arg_type != \"narrative.update\") { return 404; }
     include snippets/proxy-params.conf;
     rewrite ^/\(.slug)(/api/.*)$ $1 break;
     proxy_pass http://127.0.0.1:\(.listener.port);

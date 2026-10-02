@@ -56,6 +56,9 @@ func main() {
 		narrateEvery  = flag.Duration("narrate-every", 90*time.Second, "at most one interpretation per interval (only while someone watches)")
 		narrateMode   = flag.String("narrate-mode", "observational", "observational | minimal | poetic")
 		transientK    = flag.Float64("transient-k", 6, "transient threshold in MADs above the median flux; raise for constantly crackling sources")
+		minHz         = flag.Float64("min-hz", 0, "bottom of the analysed range (bands, peaks); 0: 20 Hz. VLF radio: 800")
+		maxHz         = flag.Float64("max-hz", 0, "top of the analysed range; 0: just below Nyquist. VLF radio: 12000")
+		mainsHz       = flag.Float64("mains", 0, "mains frequency (50 or 60) whose harmonics are ignored as hum; 0: off")
 		transientGap  = flag.Duration("transient-gap", 300*time.Millisecond, "minimum gap between transients")
 		sampleRate    = flag.Int("sample-rate", analysis.DefaultSampleRate, "analysis sample rate; raise for sources with content above 11 kHz (e.g. 32000 for VLF radio)")
 		ffmpeg        = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
@@ -95,7 +98,7 @@ func main() {
 	if *memDir != "" {
 		var err error
 		mem, err = memory.New(memory.Config{
-			Dir:         filepath.Join(*memDir, safeName(*src), inputKey(*in)),
+			Dir:         filepath.Join(*memDir, safeName(*src), inputKey(*in)+focusKey(*minHz, *maxHz, *mainsHz)),
 			ReturnAfter: *motifReturn,
 			HistoryDays: *historyDays,
 		}, stamper)
@@ -117,7 +120,7 @@ func main() {
 	}
 
 	if *dump {
-		runDump(ctx, *in, *sampleRate, analysis.Options{TransientK: *transientK, TransientGap: *transientGap}, stamper, through, *loop, *realtime, *ffmpeg, rec)
+		runDump(ctx, *in, *sampleRate, analysis.Options{TransientK: *transientK, TransientGap: *transientGap, MinHz: *minHz, MaxHz: *maxHz, MainsHz: *mainsHz}, stamper, through, *loop, *realtime, *ffmpeg, rec)
 		return
 	}
 
@@ -135,7 +138,7 @@ func main() {
 		go nar.Run(ctx)
 		log.Printf("narrator on: %s (%s, %s, every %s while watched)", *narratorURL, *narratorModel, *narrateMode, *narrateEvery)
 	}
-	a := analysis.New(*sampleRate, stamper, through(broadcast), analysis.Options{TransientK: *transientK, TransientGap: *transientGap})
+	a := analysis.New(*sampleRate, stamper, through(broadcast), analysis.Options{TransientK: *transientK, TransientGap: *transientGap, MinHz: *minHz, MaxHz: *maxHz, MainsHz: *mainsHz})
 
 	a.Live(!rec.known && (isURL || *realtime))
 	st := &status{input: describe(*in), started: time.Now(), stream: source.Connecting, sampleRate: *sampleRate}
@@ -350,6 +353,15 @@ func describe(in string) string {
 
 // inputKey names the memory of one input, so switching between a replay and
 // the live stream starts (or resumes) a separate memory.
+// focusKey keeps the memory of a narrowed analysis (-min-hz, -max-hz,
+// -mains) apart: motifs heard in another range, or made of hum, don't carry over.
+func focusKey(minHz, maxHz, mainsHz float64) string {
+	if minHz <= 0 && maxHz <= 0 && mainsHz <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("_focus-%g-%g-m%g", minHz, maxHz, mainsHz)
+}
+
 func inputKey(in string) string {
 	if source.IsURL(in) {
 		if u, err := url.Parse(in); err == nil {
