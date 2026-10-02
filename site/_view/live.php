@@ -48,6 +48,8 @@ $source = $page['source'];
             <li class="teleprinter__wait"><span>Listening… the first interpretation appears within about a minute and a half.</span></li>
           </ol>
         </div>
+        <canvas class="jog" id="tp-jog" tabindex="0" role="scrollbar" aria-controls="tp-scroll"
+                aria-orientation="vertical" aria-label="Interpretation history wheel" hidden></canvas>
         <button class="teleprinter__more" id="tp-more" type="button" hidden></button>
         <p class="visually-hidden" id="tp-live" aria-live="polite"></p>
       </div>
