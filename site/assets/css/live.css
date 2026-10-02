@@ -230,6 +230,24 @@ body.live {
   color: var(--value);
 }
 .dial__needle { color: #f07854; }
+.dial__foot { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.dial__export {
+  flex: none;
+  margin-top: .2rem;
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--label);
+  background: rgba(7, 8, 10, .6);
+  border: 1px solid rgba(240, 120, 84, .45);
+  border-radius: 3px;
+  padding: .2rem .55rem;
+  cursor: pointer;
+}
+.dial__export:hover, .dial__export:focus-visible { color: var(--value); border-color: #f07854; outline: none; }
+.dial__export:disabled { opacity: .45; cursor: default; }
+.dial__foot .dial__legend { min-width: 0; }
 
 .motif-tip {
   position: absolute;

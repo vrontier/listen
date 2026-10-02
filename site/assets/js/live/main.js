@@ -128,6 +128,46 @@
     });
   }
 
+  // Motif export: the remembered motifs of this source as CSV, fetched fresh
+  // when the button is pressed. Sorted by frequency.
+  var exportBtn = document.getElementById('motif-export');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function () {
+      exportBtn.disabled = true;
+      fetch(endpoints.api + '/motifs', { cache: 'no-store' })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (data) { download(motifCSV(data.motifs || [])); })
+        .catch(function () { exportBtn.textContent = 'Export failed'; setTimeout(function () { exportBtn.textContent = '⤓ Export CSV'; }, 3000); })
+        .then(function () { exportBtn.disabled = false; });
+    });
+  }
+  function motifCSV(list) {
+    var cols = ['source', 'motif_id', 'name', 'kind', 'frequency_hz', 'occurrences', 'presence_s', 'confidence',
+                'harmonicity', 'entropy', 'stability', 'active', 'created', 'last_seen'];
+    var esc = function (v) {
+      v = v == null ? '' : String(v);
+      return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    };
+    var rows = list.map(function (m) {
+      var sig = m.signature || {}, vis = m.visual || {};
+      var hz = sig.fundamental_hz || sig.centroid_hz || vis.frequency_anchor || '';
+      return { hz: +hz || 0, cells: [root.dataset.source, m.motif_id, LO.motifName(m.motif_id), m.kind, hz, m.occurrences,
+        m.presence_s, m.confidence, sig.harmonicity, sig.entropy, vis.stability, m.active, m.created, m.last_seen] };
+    }).sort(function (a, b) { return a.hz - b.hz; });
+    return '\ufeff' + [cols].concat(rows.map(function (r) { return r.cells; }))
+      .map(function (r) { return r.map(esc).join(','); }).join('\r\n') + '\r\n';
+  }
+  function download(csv) {
+    var d = new Date(), pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var name = root.dataset.source + '-motifs-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+      '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.csv';
+    var url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
   // Read-only diagnostics for the console: audio/visual sync.
   LO.live = {
     playhead: function () { return player ? player.playhead() : null; },
