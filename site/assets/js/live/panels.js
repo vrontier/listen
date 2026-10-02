@@ -29,6 +29,27 @@
 
   function logPos(hz, lo, hi) { return Math.log(hz / lo) / Math.log(hi / lo); }
 
+  // Frequency ticks for lo..hi: 1-3 per decade, or 1-2-5 when that gives
+  // fewer than four (a narrow range such as VLF's 0.8–12 kHz).
+  function freqTicks(lo, hi) {
+    function pick(steps) {
+      var out = [];
+      for (var dec = 10; dec <= 100000; dec *= 10) {
+        steps.forEach(function (k) {
+          var f = dec * k;
+          if (f >= lo * 1.08 && f <= hi * 0.92) out.push(f);
+        });
+      }
+      return out;
+    }
+    var t = pick([1, 3]);
+    return t.length >= 4 ? t : pick([1, 2, 5]);
+  }
+  function hzLabel(f, unit) {
+    var s = f >= 1000 ? (f / 1000) + (unit ? ' kHz' : 'k') : String(f) + (unit ? ' Hz' : '');
+    return s;
+  }
+
   function axisY(el, ticks, lo, hi) {
     el.innerHTML = '';
     ticks.forEach(function (t) {
@@ -60,20 +81,31 @@
     this.hm = $('harmonic-map');
     this.hmx = this.hm.getContext('2d');
     this.hmPoints = [];        // {t: ms, hz, s, h: bool}
-    this.hmRange = [40, 5000];
+    this.hmRange = [40, 5000];  // follows a narrowed analysis range (axes())
     this.eventsEl = $('events');
     this.events = [];
     this.axesFor = null;
 
-    axisY($('hm-yaxis'), [[40, '40 Hz'], [160, '160 Hz'], [640, '640 Hz'], [2560, '2.5 kHz']], this.hmRange[0], this.hmRange[1]);
+    this.hmTicks = [40, 160, 640, 2560];
+    axisY($('hm-yaxis'), this.hmTicks.map(function (f) { return [f, hzLabel(f, true)]; }), this.hmRange[0], this.hmRange[1]);
   }
 
   Panels.prototype.axes = function (meta) {
     var key = meta.min_hz + ':' + meta.max_hz;
     if (this.axesFor === key) return;
     this.axesFor = key;
-    axisY($('sg-yaxis'), [[40, '40 Hz'], [150, '150 Hz'], [600, '600 Hz'], [2400, '2.4 kHz'], [9000, '9 kHz']], meta.min_hz, meta.max_hz);
-    axisX($('sp-xaxis'), [[30, '30'], [100, '100'], [300, '300'], [1000, '1k'], [3000, '3k'], [9000, '9k Hz']], meta.min_hz, meta.max_hz);
+    var ticks = freqTicks(meta.min_hz, meta.max_hz);
+    axisY($('sg-yaxis'), ticks.map(function (f) { return [f, hzLabel(f, true)]; }), meta.min_hz, meta.max_hz);
+    axisX($('sp-xaxis'), ticks.map(function (f, i) {
+      return [f, hzLabel(f, false) + (i === ticks.length - 1 ? ' Hz' : '')];
+    }), meta.min_hz, meta.max_hz);
+    // The harmonic map shows fundamentals: 40 Hz–5 kHz by default, the
+    // whole range when the source narrows it (e.g. VLF radio).
+    if (meta.min_hz > 40) {
+      this.hmRange = [meta.min_hz, meta.max_hz];
+      this.hmTicks = ticks;
+      axisY($('hm-yaxis'), ticks.map(function (f) { return [f, hzLabel(f, true)]; }), meta.min_hz, meta.max_hz);
+    }
   };
 
   // signal.spectrum, 10 Hz: one spectrogram column per message (600 px = 60 s).
@@ -329,7 +361,7 @@
     x.clearRect(0, 0, w, h);
     x.strokeStyle = 'rgba(228,228,226,0.07)';
     x.lineWidth = 1;
-    [40, 160, 640, 2560].forEach(function (hz) {
+    this.hmTicks.forEach(function (hz) {
       var y = h - logPos(hz, lo, hi) * h;
       x.beginPath(); x.moveTo(0, y); x.lineTo(w, y); x.stroke();
     });

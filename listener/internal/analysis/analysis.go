@@ -22,7 +22,11 @@ const (
 	bandCount = 48
 	minHz     = 20.0
 	peakMinHz = 40.0 // below this the MP3 source is a roll-off hump, not partials
-	maxPeaks  = 12
+
+	// mainsTolerance is how close (in FFT bins) a peak may sit to a mains
+	// harmonic and still count as hum.
+	mainsTolerance = 1.5
+	maxPeaks       = 12
 
 	framesPerSignal  = 2  // 10 Hz
 	framesPerFeature = 10 // 2 Hz
@@ -32,8 +36,11 @@ const (
 type Analyzer struct {
 	sampleRate int
 	hopSize    int     // 20 analysis frames per second
+	minHz      float64 // bottom of bands and shape (default 20 Hz)
 	maxHz      float64 // top of bands and shape: just below Nyquist
+	peakMinHz  float64
 	peakMaxHz  float64
+	mainsHz    float64 // 50 or 60: peaks on its harmonics are hum; 0: off
 
 	emit    func(events.Message)
 	stamper *events.Stamper
@@ -88,17 +95,36 @@ type featureAcc struct {
 type Options struct {
 	TransientK   float64       // threshold = median + K·MAD of spectral flux (default 6)
 	TransientGap time.Duration // minimum gap between transients (default 300 ms)
+
+	// MinHz and MaxHz narrow the analysed range: bands, spectral shape and
+	// peaks. For VLF radio, 800 Hz–12 kHz puts the bands on tweeks,
+	// whistlers and chorus instead of mains harmonics. Zero: 20 Hz to just
+	// below Nyquist.
+	MinHz, MaxHz float64
+	// MainsHz (50 or 60) drops spectral peaks on mains harmonics, so hum
+	// never becomes a resonance or a motif. Zero: off.
+	MainsHz float64
 }
 
 // New returns an analyzer for mono input at sampleRate (0: the default).
 func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opts ...Options) *Analyzer {
 	tc := detect.DefaultTransientConfig()
+	var opt Options
 	for _, o := range opts {
 		if o.TransientK > 0 {
 			tc.K = o.TransientK
 		}
 		if o.TransientGap > 0 {
 			tc.Refractory = o.TransientGap
+		}
+		if o.MinHz > 0 {
+			opt.MinHz = o.MinHz
+		}
+		if o.MaxHz > 0 {
+			opt.MaxHz = o.MaxHz
+		}
+		if o.MainsHz > 0 {
+			opt.MainsHz = o.MainsHz
 		}
 	}
 	if sampleRate <= 0 {
@@ -108,8 +134,11 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 	a := &Analyzer{
 		sampleRate: sampleRate,
 		hopSize:    (sampleRate + 19) / 20, // 1103 at 22.05 kHz: 20 frames/s
+		minHz:      minHz,
 		maxHz:      math.Round(11000 * scale),
+		peakMinHz:  peakMinHz,
 		peakMaxHz:  math.Round(6000 * scale),
+		mainsHz:    opt.MainsHz,
 		emit:       emit,
 		stamper:    stamper,
 		fft:        dsp.NewFFT(fftSize),
@@ -130,9 +159,18 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 		novelty:    detect.NewNovelty(bandCount, 20, 20*60),
 		transients: detect.NewTransientDetector(tc),
 	}
-	a.bands = dsp.NewBands(bandCount, minHz, a.maxHz, a.binHz, len(a.mag))
+	// A focus range replaces the defaults for bands, shape and peaks alike.
+	if opt.MaxHz > 0 && opt.MaxHz < a.maxHz {
+		a.maxHz = opt.MaxHz
+		a.peakMaxHz = opt.MaxHz
+	}
+	if opt.MinHz > 0 && opt.MinHz < a.maxHz/2 {
+		a.minHz = opt.MinHz
+		a.peakMinHz = math.Max(peakMinHz, opt.MinHz)
+	}
+	a.bands = dsp.NewBands(bandCount, a.minHz, a.maxHz, a.binHz, len(a.mag))
 	a.resonances = detect.NewResonanceTracker(detect.DefaultResonanceConfig(a.binHz))
-	a.lo = int(math.Ceil(minHz / a.binHz))
+	a.lo = int(math.Ceil(a.minHz / a.binHz))
 	a.hi = int(a.maxHz / a.binHz)
 	a.sig.bands = make([]float64, bandCount)
 	a.Anchor(time.Now())
@@ -250,9 +288,9 @@ func (a *Analyzer) hop(x []float64) {
 	flux := detect.Clamp01(fluxDB / 12)
 	novelty := a.novelty.Update(a.bandNorm)
 
-	peaks := dsp.FindPeaks(a.magDB, a.binHz, peakMinHz, a.peakMaxHz, 8, maxPeaks)
+	peaks := a.dropMains(dsp.FindPeaks(a.magDB, a.binHz, a.peakMinHz, a.peakMaxHz, 8, maxPeaks))
 	a.lastPeaks = peaks
-	pef := dsp.PeakEnergyFraction(a.mag, a.binHz, int(peakMinHz/a.binHz), int(a.peakMaxHz/a.binHz), peaks)
+	pef := dsp.PeakEnergyFraction(a.mag, a.binHz, int(a.peakMinHz/a.binHz), int(a.peakMaxHz/a.binHz), peaks)
 	harmonicity, _ := dsp.Harmonicity(peaks, pef)
 
 	// Transients.
@@ -352,7 +390,7 @@ func (a *Analyzer) emitSignal(ts time.Time, pos, energy float64) {
 		Harmonicity:      round(s.har/n, 3),
 	}))
 	a.emit(a.stamper.Stamp(events.TypeSpectrum, ts, pos, events.Spectrum{
-		MinHz: minHz, MaxHz: a.maxHz, Scale: "log", Bands: bands, Peaks: peaks,
+		MinHz: a.minHz, MaxHz: a.maxHz, Scale: "log", Bands: bands, Peaks: peaks,
 	}))
 	bandsBuf := s.bands
 	*s = signalAcc{bands: bandsBuf}
@@ -406,4 +444,22 @@ func round(x float64, places int) float64 {
 	}
 	p := math.Pow(10, float64(places))
 	return math.Round(x*p) / p
+}
+
+// dropMains removes peaks that sit on a harmonic of the mains frequency
+// (within mainsTolerance bins), so steady hum lines never become resonances.
+func (a *Analyzer) dropMains(peaks []dsp.SpectralPeak) []dsp.SpectralPeak {
+	if a.mainsHz <= 0 {
+		return peaks
+	}
+	tol := mainsTolerance * a.binHz
+	kept := peaks[:0]
+	for _, p := range peaks {
+		k := math.Round(p.Hz / a.mainsHz)
+		if k >= 1 && math.Abs(p.Hz-k*a.mainsHz) <= tol {
+			continue
+		}
+		kept = append(kept, p)
+	}
+	return kept
 }
