@@ -29,8 +29,43 @@
     this.url = url;           // ws(s)://…/ws/audio
     this.active = false;
     this.started = false;
+    this.gain = 1;            // linear; set by the volume knob
     this.onchange = function () {};
   }
+
+  // Volume: element -> gain -> limiter -> speakers. The gain goes above 1
+  // (quiet streams need boost), so a limiter keeps loud transients such as
+  // lightning sferics from clipping. Without Web Audio the element's own
+  // volume (at most 1) is the fallback.
+  var ctx = null;
+  Player.prototype.route = function (el) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    this.gainNode = null;
+    if (!AC) { el.volume = Math.min(1, this.gain); return; }
+    try {
+      ctx = ctx || new AC();
+      if (ctx.state === 'suspended') ctx.resume();
+      var src = ctx.createMediaElementSource(el);
+      var g = ctx.createGain();
+      var lim = ctx.createDynamicsCompressor();
+      lim.threshold.value = -6;
+      lim.knee.value = 4;
+      lim.ratio.value = 20;
+      lim.attack.value = 0.002;
+      lim.release.value = 0.2;
+      g.gain.value = this.gain;
+      src.connect(g); g.connect(lim); lim.connect(ctx.destination);
+      this.gainNode = g;
+    } catch (e) {
+      el.volume = Math.min(1, this.gain);
+    }
+  };
+
+  Player.prototype.setGain = function (lin) {
+    this.gain = lin;
+    if (this.gainNode) this.gainNode.gain.setTargetAtTime(lin, ctx.currentTime, 0.03);
+    else if (this.el) this.el.volume = Math.min(1, lin);
+  };
 
   Player.prototype.supported = function (offered) { return !!pickCodec(offered || []); };
 
@@ -62,6 +97,7 @@
       self.sb.addEventListener('updateend', function () { self.afterAppend(); self.pump(); });
       self.connect();
     });
+    this.route(el);
     var p = el.play();
     if (p && p.catch) p.catch(function () { /* resumes once data is buffered */ });
     this.timer = setInterval(function () { self.maintain(); }, 1000);
