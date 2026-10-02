@@ -424,6 +424,7 @@ body.live {
   touch-action: none;
 }
 .jog[hidden] { display: none; }
+.jog.is-idle { opacity: .35; cursor: default; }
 .jog:focus-visible { outline: 1px solid rgba(240, 120, 84, .6); outline-offset: 2px; border-radius: 4px; }
 .teleprinter__list { list-style: none; }
 .teleprinter__list li {
