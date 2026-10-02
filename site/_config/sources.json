@@ -35,7 +35,7 @@
       "subtitle": "Live listening",
       "meta": [
         "Heidelberg, Germany",
-        "Very low frequency radio, analysed at 0.8–12 kHz",
+        "Very low frequency radio, analysed at 0.8–16 kHz",
         "Lightning, whistlers, the magnetosphere",
         "Computational interpretation"
       ],
@@ -59,8 +59,6 @@
           "5s",
           "-min-hz",
           "800",
-          "-max-hz",
-          "12000",
           "-mains",
           "50"
         ]
@@ -74,7 +72,7 @@
       "subtitle": "Live listening",
       "meta": [
         "Cumiana, Italy (near Turin)",
-        "Very low frequency radio, analysed at 0.8–12 kHz",
+        "Very low frequency radio, analysed at 0.8–16 kHz",
         "Lightning, whistlers, the magnetosphere",
         "Computational interpretation"
       ],
@@ -99,8 +97,6 @@
           "5s",
           "-min-hz",
           "800",
-          "-max-hz",
-          "12000",
           "-mains",
           "50"
         ]
@@ -113,7 +109,7 @@
       "subtitle": "Live listening",
       "meta": [
         "Spring Brook Township, Pennsylvania, USA",
-        "Very low frequency radio, analysed at 0.8–12 kHz",
+        "Very low frequency radio, analysed at 0.8–16 kHz",
         "Lightning, whistlers, the magnetosphere",
         "Computational interpretation"
       ],
@@ -138,8 +134,6 @@
           "5s",
           "-min-hz",
           "800",
-          "-max-hz",
-          "12000",
           "-mains",
           "60"
         ]
@@ -152,7 +146,7 @@
       "subtitle": "Live listening",
       "meta": [
         "Heathcote, Victoria, Australia",
-        "Very low frequency radio, analysed at 0.8–12 kHz",
+        "Very low frequency radio, analysed at 0.8–16 kHz",
         "Lightning, whistlers, the magnetosphere",
         "Computational interpretation"
       ],
@@ -177,8 +171,6 @@
           "5s",
           "-min-hz",
           "800",
-          "-max-hz",
-          "12000",
           "-mains",
           "50"
         ]

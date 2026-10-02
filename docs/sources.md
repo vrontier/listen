@@ -130,6 +130,24 @@ planned VLF network (at least 25 receivers) and suggested focusing the analysis 
 Pc1 pulsations at 1–6 Hz, tweeks at 1–2 kHz (higher-order modes around 3.4 kHz), and whistlers and dawn chorus at 1–9 kHz,
 rather than mains harmonics. Heathcote: permission requested on 2026-10-01, pending.
 
+## VLF analysis range (measured 2026-10-02)
+
+The four VLF sources run with `-min-hz 800 -mains 50|60` and no upper limit, so the analysis covers
+800 Hz to just below 16 kHz, the stream's Nyquist limit at 32 kHz. Measured on 3 minutes each of Cumiana
+and Pennsylvania (`samples/vlf-*-20261002T185630Z-3min.ogg`):
+
+- **Transmitter lines:** no steady ones above 9 kHz. The only intermittent line above 9 kHz is a weak
+  one at 9.65 kHz in Cumiana, present 13–17 % of the time.
+- **Sferic energy above 12 kHz:** 2.9 % (Cumiana) and 7.8 % (Pennsylvania).
+- **Sferic contrast:** sferics stand 22–25 dB above the background in both 12–14 kHz and
+  14–16 kHz, as clearly as lower down.
+
+An earlier 12 kHz cap was a guess, made against expected navigation transmitters such as Alpha at
+11.9–14.9 kHz. These recordings don't show any, so the cap was removed.
+
+Below 800 Hz the streams are dominated by mains harmonics. Below about 10 Hz (Pc1 pulsations,
+1–6 Hz) they carry essentially nothing: −81 dB, the noise floor. That band needs a magnetometer feed.
+
 ## Mars · InSight (archive, source `mars-insight`)
 
 Loop `samples/mars-insight-seis.flac` (1268.7 s; on taurus in /var/lib/listen/samples/), built on
