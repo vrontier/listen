@@ -123,6 +123,7 @@ body.live {
 }
 .strip[hidden] { display: none; }
 .strip__status {
+  align-self: center;  /* centred under the strip */
   font-size: .72rem;
   letter-spacing: .1em;
   text-transform: uppercase;
