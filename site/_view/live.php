@@ -20,7 +20,21 @@ $source = $page['source'];
         <div><dt>Novelty</dt><dd id="ro-novelty">—</dd></div>
         <div class="readout__conn"><dd><span id="conn" class="conn" data-state="connecting">connecting</span></dd></div>
 <?php if ($source['audio']): ?>
-        <div class="readout__listen"><dd><button id="listen" class="listen" type="button" aria-pressed="false" hidden>listen</button></dd></div>
+        <div class="readout__listen"><dd>
+          <div class="strip" id="strip" hidden>
+            <button id="listen" class="switch" type="button" role="switch" aria-checked="false">
+              <span class="switch__led" aria-hidden="true"></span>
+              <span class="switch__body" aria-hidden="true"><span class="switch__lever"></span></span>
+              <span class="switch__label">Sound</span>
+            </button>
+            <div class="knob" id="volume" role="slider" tabindex="0" aria-label="Volume"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="63" aria-valuetext="0 dB">
+              <span class="knob__label" aria-hidden="true">Volume</span>
+              <span class="knob__value" aria-hidden="true">0 dB</span>
+            </div>
+          </div>
+          <span class="strip__status" id="listen-status" aria-live="polite"></span>
+        </dd></div>
 <?php endif; ?>
       </dl>
     </section>

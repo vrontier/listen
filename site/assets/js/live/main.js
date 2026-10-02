@@ -91,21 +91,36 @@
     }
   });
 
-  // Listen button: rendered only when the site allows audio (data-audio),
-  // shown only when the listener relays a codec this browser can play.
+  // Sound switch and volume knob: rendered only when the site allows audio
+  // (data-audio), shown only when the listener relays a codec this browser
+  // can play. The knob's setting is kept per browser.
   var button = document.getElementById('listen');
+  var strip = document.getElementById('strip');
+  var statusEl = document.getElementById('listen-status');
+  var KEY = 'lo.volume';
+  var saved = null;
+  try { saved = parseFloat(localStorage.getItem(KEY)); } catch (e) { /* storage off */ }
+  var knob = LO.knob.create(document.getElementById('volume') || document.createElement('div'), {
+    value: isFinite(saved) ? saved : LO.knob.UNITY,
+    onchange: function (gain, p) {
+      if (player) player.setGain(gain);
+      try { localStorage.setItem(KEY, String(p)); } catch (e) { /* storage off */ }
+    }
+  });
   function offered() { return (state.stream && state.stream.audio) || []; }
   function updateListen() {
     if (!button) return;
     if (!player) {
       player = new LO.AudioPlayer(endpoints.audio);
       player.onchange = updateListen;
+      player.setGain(knob.gain());
     }
-    button.hidden = !player.supported(offered());
-    if (button.hidden && player.active) player.stop();
+    strip.hidden = !player.supported(offered());
+    if (strip.hidden && player.active) player.stop();
     var on = player.active;
-    button.setAttribute('aria-pressed', on ? 'true' : 'false');
-    button.textContent = !on ? 'listen' : player.started ? 'listening · ' + player.codec.name : 'buffering';
+    button.setAttribute('aria-checked', on ? 'true' : 'false');
+    button.dataset.state = !on ? 'off' : player.started ? 'on' : 'buffering';
+    statusEl.textContent = !on ? '' : player.started ? 'listening · ' + player.codec.name : 'buffering…';
   }
   if (button && root.dataset.audio) {
     button.addEventListener('click', function () {

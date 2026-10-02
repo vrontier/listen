@@ -77,9 +77,9 @@ body.live {
   color: var(--label);
 }
 
-.stage__readout div { display: flex; justify-content: flex-end; gap: .5ch; }
+.stage__readout > div { display: flex; justify-content: flex-end; gap: .5ch; }
 .stage__readout dt::after { content: ':'; }
-.stage__readout dd { color: var(--value); font-variant-numeric: tabular-nums; }
+.stage__readout > div > dd { color: var(--value); font-variant-numeric: tabular-nums; }
 .readout__time dd { color: var(--label); }
 .readout__conn { margin-top: .5rem; }
 
@@ -105,23 +105,107 @@ body.live {
 .conn[data-state="buffering"] { color: var(--warm); }
 .conn[data-state="offline"] { color: #e0786e; }
 
-.readout__listen { margin-top: .6rem; }
-.listen {
+.readout__listen { margin-top: .7rem; }
+.readout__listen dd { display: flex; flex-direction: column; align-items: flex-end; gap: .3rem; }
+
+/* Sound switch and volume knob: a small channel strip. */
+.strip {
   pointer-events: auto;
-  font: inherit;
-  font-size: .8rem;
-  letter-spacing: .12em;
+  display: flex;
+  align-items: center;
+  gap: .9rem;
+  padding: .45rem .7rem .4rem .6rem;
+  background: linear-gradient(180deg, rgba(28, 29, 32, .82), rgba(12, 13, 15, .82));
+  border: 1px solid rgba(228, 228, 226, .14);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 6px 18px rgba(0, 0, 0, .45);
+  text-shadow: none;
+}
+.strip[hidden] { display: none; }
+.strip__status {
+  font-size: .72rem;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--value);
-  background: rgba(7, 8, 10, .6);
-  border: 1px solid rgba(228, 228, 226, .25);
-  padding: .3rem .7rem;
+  color: var(--label);
+  min-height: 1em;
+}
+
+.switch {
+  display: grid;
+  justify-items: center;
+  gap: .3rem;
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--label);
   cursor: pointer;
 }
-.listen:hover, .listen:focus-visible { border-color: var(--warm); color: var(--warm); outline: none; }
-.listen[aria-pressed="true"] { border-color: var(--warm); color: var(--warm); }
-.listen::before { content: '▶ '; }
-.listen[aria-pressed="true"]::before { content: '■ '; }
+.switch:focus-visible { outline: 1px solid var(--warm); outline-offset: 4px; border-radius: 3px; }
+.switch__led {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #2a2b2e;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, .6);
+  transition: background .2s, box-shadow .2s;
+}
+.switch[data-state="buffering"] .switch__led { background: var(--warm); box-shadow: 0 0 6px var(--warm); animation: led-blink 1s steps(2) infinite; }
+.switch[data-state="on"] .switch__led { background: #8fd3a8; box-shadow: 0 0 8px #8fd3a8; }
+@keyframes led-blink { 50% { opacity: .35; } }
+.switch__body {
+  position: relative;
+  width: 18px; height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #0b0c0e, #1b1c1f);
+  border: 1px solid rgba(228, 228, 226, .18);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .7);
+}
+.switch__lever {
+  position: absolute; left: 2px; right: 2px; bottom: 2px;
+  height: 13px;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #d9d8d4, #8e8f93);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+  transition: bottom .15s ease;
+}
+.switch[aria-checked="true"] .switch__lever { bottom: 13px; }
+.switch__label, .knob__label {
+  font-size: .62rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.switch:hover .switch__label, .switch[aria-checked="true"] .switch__label { color: var(--value); }
+
+.knob {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: 64px;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  color: var(--label);
+}
+.knob:focus-visible { outline: 1px solid var(--warm); outline-offset: 2px; border-radius: 6px; }
+.knob svg { display: block; width: 58px; height: 58px; overflow: visible; }
+.knob__tick { stroke: rgba(228, 228, 226, .28); stroke-width: .8; }
+.knob__tick--major { stroke: rgba(228, 228, 226, .6); stroke-width: 1.1; }
+.knob__unity { fill: var(--warm); }
+.knob__arc { fill: none; stroke: var(--warm); stroke-width: 1.6; stroke-linecap: round; opacity: .75; }
+.knob__skirt {
+  fill: #141518;
+  stroke: rgba(228, 228, 226, .22);
+  stroke-width: 1;
+  stroke-dasharray: 1.2 1.6;  /* the ridged rim */
+}
+.knob__cap { fill: #2a2c30; stroke: rgba(0, 0, 0, .6); stroke-width: 1; }
+.knob__pointer { stroke: var(--value); stroke-width: 2.2; stroke-linecap: round; }
+.knob:hover .knob__pointer, .knob:focus-visible .knob__pointer { stroke: var(--warm); }
+.knob__label { margin-top: -.1rem; }
+.knob__value {
+  font-size: .68rem;
+  color: var(--value);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---- Memory dial: motifs as stations on a tuning scale ---------------- */
 
