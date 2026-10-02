@@ -20,3 +20,5 @@ site/_config/mail.php
 .llm
 # SMTP credentials for the contact form, never committed
 .email
+# Correspondence with stream providers and visitors (names, email addresses), never committed
+feedback/
