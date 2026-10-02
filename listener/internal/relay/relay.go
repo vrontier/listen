@@ -158,6 +158,13 @@ func encode(h Header, payload []byte) *segment {
 	return &segment{hdr: h, data: b}
 }
 
+// Listeners is the number of browsers currently receiving audio.
+func (r *Relay) Listeners() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.listeners
+}
+
 // Routes registers GET /ws/audio?codec=aac|opus.
 func (r *Relay) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ws/audio", r.serve)

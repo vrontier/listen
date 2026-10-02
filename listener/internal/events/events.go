@@ -183,14 +183,15 @@ type Resonance struct {
 
 // Status is the system.status payload (§18).
 type Status struct {
-	Stream     string  `json:"stream"`
-	Analysis   string  `json:"analysis"`
-	LatencyMs  float64 `json:"latency_ms"`
-	Listeners  int     `json:"listeners"`
-	Input      string  `json:"input"`
-	SampleRate int     `json:"sample_rate"`
-	UptimeS    float64 `json:"uptime_s"`
-	Reconnects int     `json:"reconnects"`
+	Stream         string  `json:"stream"`
+	Analysis       string  `json:"analysis"`
+	LatencyMs      float64 `json:"latency_ms"`
+	Listeners      int     `json:"listeners"`       // live pages connected (/ws/live)
+	AudioListeners int     `json:"audio_listeners"` // of those, receiving audio (/ws/audio)
+	Input          string  `json:"input"`
+	SampleRate     int     `json:"sample_rate"`
+	UptimeS        float64 `json:"uptime_s"`
+	Reconnects     int     `json:"reconnects"`
 	// Audio lists the codecs relayed on /ws/audio; empty when the relay
 	// is off.
 	Audio []string `json:"audio,omitempty"`

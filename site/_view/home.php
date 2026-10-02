@@ -17,10 +17,11 @@
 <?php if (!$streams): ?>
       <p class="page__muted">No streams are configured yet.</p>
 <?php else: ?>
+      <p class="streams__now" id="streams-now" aria-live="polite" hidden></p>
       <div class="streams">
 <?php foreach ($streams as $s): ?>
         <a class="stream" href="/<?= e($s['slug']) ?>" data-api="<?= e(live_api_base($s)) ?>">
-          <span class="stream__status" data-state="connecting"><span class="stream__dot"></span><span class="stream__text">checking…</span></span>
+          <span class="stream__status" data-state="connecting"><span class="stream__dot"></span><span class="stream__text">checking…</span><span class="stream__audience"></span></span>
           <span class="stream__name"><?= e($s['name']) ?></span>
           <span class="stream__meta"><?= e(implode(' · ', array_slice($s['meta'], 0, 2))) ?></span>
           <span class="stream__summary"><?= e($s['summary']) ?></span>

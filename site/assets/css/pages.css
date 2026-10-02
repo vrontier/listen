@@ -130,6 +130,15 @@ body.page {
   color: var(--label);
 }
 .stream__dot { width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+.stream__audience:not(:empty) { color: var(--value); }
+.stream__audience:not(:empty)::before { content: '·'; margin: 0 .6ch; color: var(--label); }
+.streams__now {
+  margin: -.6rem 0 1.1rem;
+  font-family: var(--mono);
+  font-size: .8rem;
+  letter-spacing: .04em;
+  color: var(--label);
+}
 .stream__status[data-state="connected"] { color: #8fd3a8; }
 .stream__status[data-state="offline"] { color: #e0786e; }
 
