@@ -225,6 +225,10 @@
   Panels.prototype.initTeleprinter = function () {
     this.tpInit = true;
     var self = this, scroll = $('tp-scroll'), more = $('tp-more');
+    // The jog wheel replaces the scrollbar (see jog.js).
+    this.jog = LO.jog.create($('tp-jog'), scroll, $('tp-list'), function (i) {
+      if (i === 0) self.pendingNew = false;
+    });
     scroll.addEventListener('scroll', function () {
       if (scroll.scrollTop < 4) self.pendingNew = false;
       self.updateMore();
@@ -245,9 +249,15 @@
       return;
     }
     more.classList.remove('is-new');
-    if (n < 2) { more.hidden = true; return; }
+    var jog = $('tp-jog');
+    if (n < 2) { more.hidden = true; jog.hidden = true; return; }
     var idx = 0, top = scroll.scrollTop;
     for (var i = 0; i < n; i++) if (list.children[i].offsetTop - list.offsetTop <= top + 2) idx = i;
+    if (jog.hidden) { jog.hidden = false; this.jog.redraw(); }
+    jog.setAttribute('aria-valuemin', '1');
+    jog.setAttribute('aria-valuemax', String(n));
+    jog.setAttribute('aria-valuenow', String(idx + 1));
+    jog.setAttribute('aria-valuetext', idx === 0 ? 'newest of ' + n : (idx + 1) + ' of ' + n);
     more.hidden = false;
     more.textContent = idx === 0 ? '↓ ' + (n - 1) + ' earlier' : (idx + 1) + ' / ' + n;
   };

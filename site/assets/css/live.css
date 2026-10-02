@@ -216,7 +216,7 @@ body.live {
   border-top: 1px solid var(--panel-line);
   background: linear-gradient(180deg, rgba(240, 178, 110, .025), rgba(7, 8, 10, 0));
 }
-.dial canvas { display: block; width: 100%; height: 88px; cursor: default; }
+.dial > canvas { display: block; width: 100%; height: 88px; cursor: default; }
 .dial__legend {
   margin-top: .2rem;
   font-family: var(--mono);
@@ -410,12 +410,21 @@ body.live {
   overflow-y: auto;
   overscroll-behavior: contain; /* the page doesn't scroll at the ends */
   scroll-snap-type: y mandatory;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(228, 228, 226, .2) transparent;
+  scrollbar-width: none;        /* the jog wheel replaces the scrollbar */
   font-size: .95rem;
   line-height: 1.5;
 }
 .teleprinter__scroll:focus-visible { outline: 1px solid rgba(240, 120, 84, .6); outline-offset: 2px; }
+.teleprinter__scroll::-webkit-scrollbar { display: none; }
+.jog {
+  flex: none;
+  width: 18px;
+  height: 2.9em;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.jog[hidden] { display: none; }
+.jog:focus-visible { outline: 1px solid rgba(240, 120, 84, .6); outline-offset: 2px; border-radius: 4px; }
 .teleprinter__list { list-style: none; }
 .teleprinter__list li {
   display: flex;
