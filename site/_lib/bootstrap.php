@@ -95,6 +95,20 @@ function live_api_base(array $source): string
 // ---- routing ---------------------------------------------------------------
 
 /** Resolves a path to a page, a redirect ['redirect' => url], or null (404). */
+function sitemap_xml(): string
+{
+    $paths = array_keys(PAGES);
+    foreach (listed_sources() as $src) {
+        $paths[] = '/' . $src['slug'];
+    }
+    $out = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+        . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+    foreach ($paths as $p) {
+        $out .= '  <url><loc>' . htmlspecialchars('https://' . SITE_HOST . $p, ENT_XML1) . '</loc></url>' . "\n";
+    }
+    return $out . "</urlset>\n";
+}
+
 function route(string $path): ?array
 {
     if (isset(PAGES[$path])) {
