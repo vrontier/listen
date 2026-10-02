@@ -121,11 +121,14 @@ Romero was requested on 2026-10-01.
 
 | Source | Port | Stream (via dk7fc.info) | Receiver | Probed 2026-10-01 |
 |---|---|---|---|---|
-| `vlf-pennsylvania` | 8105 | `live-stream.php?stream=vlf44` | Jonathan Rizzo, Spring Brook Township, PA, USA (41.33 N, 75.60 W) | up; mean −41 dB, peaks −0.5 dB |
+| `vlf-pennsylvania` | 8105 | `live-stream.php?stream=vlf44` | Jonathan Rizzo (KC3EEY), W2NAF/KC3EEY VLF Observatory (HamSCI, https://hamsci.org/node/819), Spring Brook Township, PA, USA (41.33 N, 75.60 W) | up; mean −41 dB, peaks −0.5 dB |
 | `vlf-heathcote` | 8106 | `live-stream.php?stream=vlf39` | Leon Mow Radio Observatory (Astronomical Society of Victoria, https://asv.org.au/Leon-mow-Dark-Sky-Site), Heathcote, Victoria, Australia (36.80 S, 144.67 E) | down (503); the listener retries until it is back |
 
 Same analysis settings as the other VLF sources. Rights: relayed by dk7fc.info with its operator's
-agreement. No licence stated; permission from each receiver's operator was requested on 2026-10-01.
+agreement. Pennsylvania: Jonathan Rizzo agreed on 2026-10-02. He offered more streams from HamSCI's
+planned VLF network (at least 25 receivers) and suggested focusing the analysis on the natural-signal bands:
+Pc1 pulsations at 1–6 Hz, tweeks at 1–2 kHz (higher-order modes around 3.4 kHz), and whistlers and dawn chorus at 1–9 kHz,
+rather than mains harmonics. Heathcote: permission requested on 2026-10-01, pending.
 
 ## Mars · InSight (archive, source `mars-insight`)
 

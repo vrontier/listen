@@ -108,12 +108,12 @@
       "timezone": "America/New_York",
       "summary": "Earth's own radio from north-eastern Pennsylvania. Jonathan Rizzo's receiver near Scranton turns very low frequency radio waves into sound: the crackle of distant lightning (sferics), falling tones that travel along the magnetic field (whistlers), and the hum of the power grid.",
       "credit": {
-        "text": "VLF receiver Spring Brook Township, Jonathan Rizzo",
-        "url": "https://dk7fc.info/vlfstreams.html",
+        "text": "W2NAF/KC3EEY VLF Observatory, Jonathan Rizzo (HamSCI)",
+        "url": "https://hamsci.org/node/819",
         "note": "stream via dk7fc.info"
       },
       "audio": true,
-      "rights": "Jonathan Rizzo. No licence stated; relayed by dk7fc.info, whose operator agreed on 2026-10-01. Permission from the receiver's operator requested 2026-10-01, pending.",
+      "rights": "Jonathan Rizzo (KC3EEY, HamSCI) agreed on 2026-10-02 and offered further streams as HamSCI deploys more VLF receivers; relayed by dk7fc.info, whose operator agreed on 2026-10-01.",
       "listener": {
         "port": 8105,
         "input": "https://dk7fc.info/live-stream.php?stream=vlf44",
