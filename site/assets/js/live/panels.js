@@ -184,7 +184,7 @@
 
   Panels.prototype.interpretation = function () {
     var st = this.state, self = this;
-    if (!this.tpInit) this.initTeleprinter();
+    if (!this.tpInit) { this.initTeleprinter(); this.updateMore(); }
     if (st.narrativeVersion === this.shownNarrative || !st.narratives.length) return;
     this.shownNarrative = st.narrativeVersion;
 
@@ -249,11 +249,18 @@
       return;
     }
     more.classList.remove('is-new');
+    // The wheel is always there; with a single text it rests, dimmed.
     var jog = $('tp-jog');
-    if (n < 2) { more.hidden = true; jog.hidden = true; return; }
+    var idle = n < 2;
+    if (jog.hidden || jog.classList.contains('is-idle') !== idle) {
+      jog.hidden = false;
+      jog.classList.toggle('is-idle', idle);
+      jog.setAttribute('aria-disabled', idle ? 'true' : 'false');
+      this.jog.redraw();
+    }
+    if (idle) { more.hidden = true; return; }
     var idx = 0, top = scroll.scrollTop;
     for (var i = 0; i < n; i++) if (list.children[i].offsetTop - list.offsetTop <= top + 2) idx = i;
-    if (jog.hidden) { jog.hidden = false; this.jog.redraw(); }
     jog.setAttribute('aria-valuemin', '1');
     jog.setAttribute('aria-valuemax', String(n));
     jog.setAttribute('aria-valuenow', String(idx + 1));

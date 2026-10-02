@@ -41,7 +41,10 @@
       scroller.scrollTo({ top: li.offsetTop - list.offsetTop, behavior: 'smooth' });
       if (onstep) onstep(i);
     }
-    function step(d) { go((target != null ? target : index()) + d); }
+    function step(d) {
+      if (canvas.getAttribute('aria-disabled') === 'true') return;  // resting: one text only
+      go((target != null ? target : index()) + d);
+    }
 
     function draw() {
       raf = 0;

@@ -13,7 +13,7 @@
   function create(canvas, state) {
     var ctx = canvas.getContext('2d');
     var W = 0, H = 0, dpr = 1;
-    var needleHz = null;
+    var needleLog = null, needleVel = 0;  // log Hz and its velocity
     var marks = [];     // drawn marks, for hover lookup
     var hover = null;
     var mono = getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace';
@@ -129,19 +129,62 @@
         }
       });
 
-      // Needle: glides to the current dominant frequency.
+      // Needle: a pointer on a cord-driven carriage, as on a 1920s radio. It
+      // swings to the current dominant frequency on a damped spring (a little
+      // overshoot), in log-frequency space.
       var f = state.features && state.features.dominant_frequency_hz;
       if (f > 0) {
-        needleHz = needleHz == null ? f : Math.exp(Math.log(needleHz) + (Math.log(f) - Math.log(needleHz)) * 0.08);
-        var nx = xOf(needleHz);
-        ctx.strokeStyle = 'rgba(232,104,72,0.25)';
-        ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.moveTo(nx, 4); ctx.lineTo(nx, H - 4); ctx.stroke();
-        ctx.strokeStyle = 'rgba(240,120,84,0.95)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(nx, 4); ctx.lineTo(nx, H - 4); ctx.stroke();
+        var target = Math.log(Math.max(LO_HZ, Math.min(HI_HZ, f)));
+        if (needleLog == null) { needleLog = target; needleVel = 0; }
+        needleVel = (needleVel + (target - needleLog) * 0.018) * 0.86;
+        needleLog += needleVel;
+        drawNeedle(xOf(Math.exp(needleLog)), base);
       }
       requestAnimationFrame(draw);
+    }
+
+    function drawNeedle(nx, base) {
+      var top = 3, tip = base + 3;
+      // Lamp glow behind the dial glass.
+      var glow = ctx.createRadialGradient(nx, base - 14, 0, nx, base - 14, 34);
+      glow.addColorStop(0, 'rgba(255,170,90,0.16)');
+      glow.addColorStop(1, 'rgba(255,170,90,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(nx - 34, 0, 68, H);
+      // Brass rail the carriage runs on.
+      ctx.strokeStyle = 'rgba(196,160,98,0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(PAD - 6, top + 3); ctx.lineTo(W - PAD + 6, top + 3); ctx.stroke();
+      // Shadow on the glass, slightly offset.
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.beginPath();
+      ctx.moveTo(nx - 1.9 + 1.8, top + 6); ctx.lineTo(nx + 1.9 + 1.8, top + 6); ctx.lineTo(nx + 1.8, tip + 1.5);
+      ctx.closePath(); ctx.fill();
+      // Tapered pointer: broad under the carriage, fine at the tip.
+      var red = ctx.createLinearGradient(nx - 2, 0, nx + 2, 0);
+      red.addColorStop(0, '#8e2414');
+      red.addColorStop(0.5, '#e0563a');
+      red.addColorStop(1, '#8e2414');
+      ctx.fillStyle = red;
+      ctx.beginPath();
+      ctx.moveTo(nx - 2, top + 6); ctx.lineTo(nx + 2, top + 6); ctx.lineTo(nx + 0.3, tip); ctx.lineTo(nx - 0.3, tip);
+      ctx.closePath(); ctx.fill();
+      // Carriage: a small brass block with a highlight and a dark edge.
+      var bx = nx - 6, by = top, bw = 12, bh = 7;
+      var brass = ctx.createLinearGradient(0, by, 0, by + bh);
+      brass.addColorStop(0, '#f1d9a0');
+      brass.addColorStop(0.45, '#c09452');
+      brass.addColorStop(1, '#6e4f22');
+      ctx.fillStyle = brass;
+      ctx.beginPath();
+      ctx.moveTo(bx + 1.5, by); ctx.arcTo(bx + bw, by, bx + bw, by + bh, 1.5); ctx.arcTo(bx + bw, by + bh, bx, by + bh, 1.5);
+      ctx.arcTo(bx, by + bh, bx, by, 1.5); ctx.arcTo(bx, by, bx + bw, by, 1.5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(40,28,10,0.8)';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+      // A rivet where the pointer is fixed.
+      ctx.fillStyle = '#3a2a12';
+      ctx.beginPath(); ctx.arc(nx, by + bh / 2, 1.1, 0, Math.PI * 2); ctx.fill();
     }
 
     // Nearest mark to a point, for hover and tap.
