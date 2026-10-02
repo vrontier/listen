@@ -125,10 +125,9 @@ Romero was requested on 2026-10-01.
 | `vlf-heathcote` | 8106 | `live-stream.php?stream=vlf39` | Leon Mow Radio Observatory (Astronomical Society of Victoria, https://asv.org.au/Leon-mow-Dark-Sky-Site), Heathcote, Victoria, Australia (36.80 S, 144.67 E) | down (503); the listener retries until it is back |
 
 Same analysis settings as the other VLF sources. Rights: relayed by dk7fc.info with its operator's
-agreement. Pennsylvania: Jonathan Rizzo agreed on 2026-10-02. He offered more streams from HamSCI's
-planned VLF network (at least 25 receivers) and suggested focusing the analysis on the natural-signal bands:
-Pc1 pulsations at 1–6 Hz, tweeks at 1–2 kHz (higher-order modes around 3.4 kHz), and whistlers and dawn chorus at 1–9 kHz,
-rather than mains harmonics. Heathcote: permission requested on 2026-10-01, pending.
+agreement. Pennsylvania: Jonathan Rizzo agreed on 2026-10-02 and suggested focusing the analysis on the
+natural-signal bands: Pc1 pulsations at 1–6 Hz, tweeks at 1–2 kHz (higher-order modes around 3.4 kHz),
+and whistlers and dawn chorus at 1–9 kHz, rather than mains harmonics. Heathcote: permission requested on 2026-10-01, pending.
 
 ## VLF analysis range (measured 2026-10-02)
 

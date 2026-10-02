@@ -67,7 +67,7 @@ browser ──► NGINX ──► PHP site (pages, accounts, registration)     �
 | URL | `http`/`https` only. ffmpeg runs with `-protocol_whitelist http,https,tcp,tls`, so no `file:` and no other protocols. |
 | Server-side request forgery | The URL's address must not be loopback, private, link-local or this server's own address; the check is repeated on every redirect and reconnect. Without this, a registered "stream" could reach internal services such as the LLM endpoint or the local llama-server. |
 | Content | An `audio/*` content type, decodable by ffmpeg, at most 512 kbit/s. |
-| Per user | 3 streams (raisable per account, e.g. for HamSCI). |
+| Per user | 3 streams (raisable per account, e.g. for an organisation with many receivers). |
 | Overall | 40 running sources at first. Each costs about 5 % of a core and 25–30 MB; the cap keeps the web stack and llama-server safe. |
 | Texts | Length limits; links only in the credit field; reviewed before listing. |
 | Abuse | A "report this stream" link on every page goes to the contact address, and an admin can suspend a source or account. |
@@ -80,12 +80,11 @@ browser ──► NGINX ──► PHP site (pages, accounts, registration)     �
   privacy notice (and an Impressum, as a German operator) covering accounts, the email login and
   logs.
 
-## Network feeds (for providers such as HamSCI)
+## Network feeds (for organisations with many receivers)
 
 An organisation account can register a feed: a JSON list of its streams in the registration
 format. The hub polls it, adds new streams as pending (or listed directly, for trusted
-organisations) and pauses streams that drop out of the feed. That fits HamSCI's plan of 25 or more
-VLF receivers better than registering each one by hand.
+organisations) and pauses streams that drop out of the feed.
 
 ## Phases
 
@@ -93,7 +92,7 @@ VLF receivers better than registering each one by hand.
 |---|---|---|
 | 0 | listen-hub and the catalogue; curated sources migrate. One last root step installs the hub and the generic NGINX rule. | None; new sources no longer need root. |
 | 1 | Accounts, registration, probe, review, limits, privacy notice | Public sign-up |
-| 2 | Organisation feeds | HamSCI and others feed their networks |
+| 2 | Organisation feeds | Organisations feed their receiver networks |
 | 3 | Analysis presets and settings in the owner's page | Owners tune their stream |
 
 Phase 0 is worth doing on its own: it ends the root step for every new source.

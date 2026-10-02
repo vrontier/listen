@@ -121,7 +121,7 @@
         "note": "stream via dk7fc.info"
       },
       "audio": true,
-      "rights": "Jonathan Rizzo (KC3EEY, HamSCI) agreed on 2026-10-02 and offered further streams as HamSCI deploys more VLF receivers; relayed by dk7fc.info, whose operator agreed on 2026-10-01.",
+      "rights": "Jonathan Rizzo (KC3EEY, HamSCI) agreed on 2026-10-02; relayed by dk7fc.info, whose operator agreed on 2026-10-01.",
       "listener": {
         "port": 8105,
         "input": "https://dk7fc.info/live-stream.php?stream=vlf44",
