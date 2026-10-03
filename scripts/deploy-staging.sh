@@ -24,8 +24,7 @@ slugs=$(cat "$gen/slugs")
 echo "node default: ${LISTEN_MODE:-on-demand} (idle after ${IDLE_AFTER:-30s}); per source:"
 column -t "$gen/modes" | sed 's/^/  /'
 
-echo "building listener (linux/amd64, static)"
-(cd listener && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -trimpath -o ../bin/listen-listener-linux-amd64 ./cmd/listener)
+scripts/build-listener.sh bin/listen-listener-linux-amd64
 
 ssh "$host" "rm -rf $stage && mkdir -p $stage/sources"
 scp -q bin/listen-listener-linux-amd64 "deploy/systemd/listen-listener@.service" \

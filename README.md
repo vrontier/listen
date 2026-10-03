@@ -95,7 +95,7 @@ listeners and speaks MCP over stdio, typically through SSH:
 
 Tools: `service_status`, `list_sources`, `get_extract` (records the *next* n seconds of
 analysis data from a source: features, events, frames, spectrum, never audio),
-`get_motifs` and `get_narratives`. It reads `sources.json` and queries the listeners
+`get_motifs` and `get_narratives` (full reference and client setup: [`docs/mcp.md`](docs/mcp.md)). It reads `sources.json` and queries the listeners
 on 127.0.0.1. Its live connections use `?role=tool`, so they count as tools rather
 than listeners, but they still wake an on-demand source. It needs no root: build it
 with `GOOS=linux GOARCH=amd64 go build ./cmd/listen-mcp` and copy it to `~/bin`.

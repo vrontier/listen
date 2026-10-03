@@ -34,8 +34,7 @@ for f in $(jq -r --arg d "$samples/" '.sources[].listener.input | select(startsw
   cp "samples/$f" "$stage/samples/"
 done
 
-echo "building listener (linux/amd64, static)"
-(cd listener && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -trimpath -o "../$stage/listen-listener" ./cmd/listener)
+scripts/build-listener.sh "$stage/listen-listener"
 
 # Contact form: mail.php (gitignored) from .email (gitignored).
 scripts/mail-config.sh /var/lib/listen-web
