@@ -35,6 +35,10 @@ type Config struct {
 	SampleRate int
 	Realtime   bool // pace file input at playback speed (ignored for URLs)
 	Loop       bool // repeat file input forever (ignored for URLs)
+	// MaxBackoff caps the wait between reconnects to a URL that keeps
+	// failing; it doubles from 1 s up to here, and resets once data flows.
+	// Zero: 30 s.
+	MaxBackoff time.Duration
 	FFmpeg     string
 
 	OnSamples func([]float32)
@@ -138,7 +142,7 @@ func Run(ctx context.Context, c Config) error {
 			return nil
 		case <-time.After(backoff):
 		}
-		backoff = min(backoff*2, 30*time.Second)
+		backoff = min(backoff*2, c.maxBackoff())
 	}
 }
 
@@ -259,4 +263,11 @@ func (c Config) once(ctx context.Context, state func(string), base int64) (int64
 			return total, rerr
 		}
 	}
+}
+
+func (c Config) maxBackoff() time.Duration {
+	if c.MaxBackoff > 0 {
+		return c.MaxBackoff
+	}
+	return 30 * time.Second
 }

@@ -61,6 +61,7 @@ func main() {
 		mainsHz       = flag.Float64("mains", 0, "mains frequency (50 or 60) whose harmonics are ignored as hum; 0: off")
 		onDemand      = flag.Bool("on-demand", false, "connect to the input only while a live page is open (staging); default: listen continuously")
 		idleAfter     = flag.Duration("idle-after", 30*time.Second, "with -on-demand: disconnect this long after the last live page closed")
+		retryMax      = flag.Duration("retry-max", 5*time.Minute, "longest wait between reconnects to a source that keeps failing (doubles from 1 s)")
 		transientGap  = flag.Duration("transient-gap", 300*time.Millisecond, "minimum gap between transients")
 		sampleRate    = flag.Int("sample-rate", analysis.DefaultSampleRate, "analysis sample rate; raise for sources with content above 11 kHz (e.g. 32000 for VLF radio)")
 		ffmpeg        = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
@@ -190,8 +191,9 @@ func main() {
 	go func() {
 		srcDone <- run(ctx, source.Config{
 			Input: *in, SampleRate: *sampleRate, Realtime: *realtime, Loop: *loop, FFmpeg: *ffmpeg,
-			OnSamples: a.Feed,
-			Outputs:   outputs,
+			MaxBackoff: *retryMax,
+			OnSamples:  a.Feed,
+			Outputs:    outputs,
 			OnState: func(s string) {
 				switch {
 				case s != source.Connected:
