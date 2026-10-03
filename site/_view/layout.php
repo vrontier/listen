@@ -19,6 +19,14 @@ $path        = request_path();
   <meta property="og:description" content="<?= e($description) ?>">
   <meta property="og:url" content="https://<?= e(SITE_HOST) ?><?= e($path) ?>">
 <?php endif; ?>
+  <!-- Link previews; without og:image some crawlers request /null. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="<?= e(SITE_NAME) ?>">
+  <meta property="og:image" content="https://<?= e(SITE_HOST) ?>/assets/og-card.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The live spectrum landscape of a VLF radio stream, with resonances and their frequencies">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#07080a">
   <link rel="icon" href="<?= e(asset('favicon.svg')) ?>" type="image/svg+xml">
   <link rel="stylesheet" href="<?= e(asset('css/site.css')) ?>">
