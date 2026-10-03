@@ -26,6 +26,13 @@ Each listener instance listens on its port from `sources.json` on 127.0.0.1
 own FPM pool (`open_basedir` limited to the site and `/var/lib/listen-web`).
 Access is limited to the home LAN and WireGuard.
 
+Staging listens **on demand**: each listener connects to its source only while a
+live page is open and disconnects 30 s after the last one closed (`-on-demand
+-idle-after 30s`, added by `scripts/deploy-taurus.sh`). Production listens
+continuously, so the memory covers every hour, and each provider sees only one
+connection from us. To compare: `LISTEN_MODE=continuous scripts/deploy-taurus.sh`;
+to change the close time: `IDLE_AFTER=2m scripts/deploy-taurus.sh`.
+
 ## One-time host setup (done 2026-09-30)
 
 ```sh

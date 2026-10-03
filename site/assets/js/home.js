@@ -21,18 +21,19 @@
       .then(function (s) {
         var sys = s.system && s.system.payload, f = s.features && s.features.payload;
         var up = sys && sys.stream === 'connected';
-        var parts = [up ? (sys.input && sys.input.indexOf('file:') === 0 ? 'replay' : 'live') : (sys ? sys.stream : 'offline')];
+        var idle = sys && sys.stream === 'idle';  // on-demand node: connects when the page opens
+        var parts = [up ? (sys.input && sys.input.indexOf('file:') === 0 ? 'replay' : 'live') : idle ? 'idle · opens when you visit' : (sys ? sys.stream : 'offline')];
         if (up && f) {
           parts.push(words(f.state));
           if (f.dominant_frequency_hz) parts.push(hz(f.dominant_frequency_hz));
         }
         var motifs = (s.active_motifs || []).length;
         if (up && motifs) parts.push(motifs + ' motif' + (motifs > 1 ? 's' : '') + ' sounding');
-        status.dataset.state = up ? 'connected' : 'offline';
+        status.dataset.state = up ? 'connected' : idle ? 'idle' : 'offline';
         text.textContent = parts.join(' · ');
         var watching = (sys && sys.listeners) || 0, listening = (sys && sys.audio_listeners) || 0;
         aud.textContent = audience(watching, listening);
-        return { up: up, watching: watching, listening: listening };
+        return { up: up, idle: idle, watching: watching, listening: listening };
       })
       .catch(function () {
         status.dataset.state = 'offline';
@@ -46,19 +47,21 @@
   var now = document.getElementById('streams-now');
   function refresh() {
     Promise.all(cards.map(check)).then(function (rs) {
-      var live = 0, watching = 0, listening = 0, busy = 0;
+      var live = 0, idle = 0, watching = 0, listening = 0, busy = 0;
       rs.forEach(function (r) {
         if (r.up) live++;
+        if (r.idle) idle++;
         watching += r.watching; listening += r.listening;
         if (r.watching) busy++;
       });
       if (!now) return;
       now.hidden = false;
+      var avail = live + ' of ' + rs.length + ' streams live' + (idle ? ' · ' + idle + ' on demand' : '');
       now.textContent = watching
         ? 'Right now: ' + watching + (watching === 1 ? ' stream listener' : ' stream listeners') +
           (listening ? ' (' + listening + ' with sound)' : '') +
-          ' across ' + busy + (busy === 1 ? ' stream' : ' streams') + ' · ' + live + ' of ' + rs.length + ' streams live'
-        : live + ' of ' + rs.length + ' streams live · no stream listeners right now; be the first';
+          ' across ' + busy + (busy === 1 ? ' stream' : ' streams') + ' · ' + avail
+        : avail + ' · no stream listeners right now; be the first';
     });
   }
   refresh();

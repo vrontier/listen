@@ -27,6 +27,7 @@ const (
 	Buffering    = "buffering"
 	Reconnecting = "reconnecting"
 	Offline      = "offline"
+	Idle         = "idle" // on demand: no viewer, so no connection to the source
 )
 
 type Config struct {

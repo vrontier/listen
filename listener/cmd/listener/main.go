@@ -59,6 +59,8 @@ func main() {
 		minHz         = flag.Float64("min-hz", 0, "bottom of the analysed range (bands, peaks); 0: 20 Hz. VLF radio: 800")
 		maxHz         = flag.Float64("max-hz", 0, "top of the analysed range; 0: just below Nyquist. VLF radio: 12000")
 		mainsHz       = flag.Float64("mains", 0, "mains frequency (50 or 60) whose harmonics are ignored as hum; 0: off")
+		onDemand      = flag.Bool("on-demand", false, "connect to the input only while a live page is open (staging); default: listen continuously")
+		idleAfter     = flag.Duration("idle-after", 30*time.Second, "with -on-demand: disconnect this long after the last live page closed")
 		transientGap  = flag.Duration("transient-gap", 300*time.Millisecond, "minimum gap between transients")
 		sampleRate    = flag.Int("sample-rate", analysis.DefaultSampleRate, "analysis sample rate; raise for sources with content above 11 kHz (e.g. 32000 for VLF radio)")
 		ffmpeg        = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
@@ -178,8 +180,15 @@ func main() {
 	}()
 
 	srcDone := make(chan error, 1)
+	run := func(ctx context.Context, cfg source.Config) error { return source.Run(ctx, cfg) }
+	if *onDemand {
+		run = func(ctx context.Context, cfg source.Config) error {
+			return runOnDemand(ctx, cfg, h.Listeners, *idleAfter)
+		}
+		log.Printf("on demand: connecting only while a live page is open (idle after %s)", *idleAfter)
+	}
 	go func() {
-		srcDone <- source.Run(ctx, source.Config{
+		srcDone <- run(ctx, source.Config{
 			Input: *in, SampleRate: *sampleRate, Realtime: *realtime, Loop: *loop, FFmpeg: *ffmpeg,
 			OnSamples: a.Feed,
 			Outputs:   outputs,
@@ -222,6 +231,61 @@ func main() {
 	shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdown)
+}
+
+// runOnDemand runs the source only while live pages are open: it connects
+// when the first viewer arrives and disconnects idleAfter after the last one
+// left. Between runs the stream state is source.Idle. Memory and analysis
+// carry on across runs; the clock is re-anchored on every connect.
+func runOnDemand(ctx context.Context, cfg source.Config, viewers func() int, idleAfter time.Duration) error {
+	idle := func() {
+		if cfg.OnState != nil {
+			cfg.OnState(source.Idle)
+		}
+	}
+	tick := time.NewTicker(500 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		idle()
+		for viewers() == 0 {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-tick.C:
+			}
+		}
+		log.Printf("on demand: viewer connected, opening the input")
+		runCtx, cancel := context.WithCancel(ctx)
+		done := make(chan error, 1)
+		go func() { done <- source.Run(runCtx, cfg) }()
+		var empty time.Time
+	watch:
+		for {
+			select {
+			case <-ctx.Done():
+				cancel()
+				<-done
+				return nil
+			case err := <-done:
+				cancel()
+				if err != nil || !source.IsURL(cfg.Input) && !cfg.Loop {
+					return err // a file that ended stays ended
+				}
+				break watch
+			case <-tick.C:
+				if viewers() > 0 {
+					empty = time.Time{}
+				} else if empty.IsZero() {
+					empty = time.Now()
+				} else if time.Since(empty) >= idleAfter {
+					log.Printf("on demand: no viewer for %s, closing the input", idleAfter)
+					cancel()
+					<-done
+					break watch
+				}
+			}
+		}
+	}
 }
 
 func runDump(ctx context.Context, in string, sampleRate int, opts analysis.Options, stamper *events.Stamper, through func(func(events.Message)) func(events.Message),
