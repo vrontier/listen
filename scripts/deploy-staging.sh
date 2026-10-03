@@ -14,22 +14,15 @@ cfg=site/_config/sources.json
 gen=bin/deploy-gen
 
 echo "generating per-source files from $cfg"
-scripts/gen-sources.sh "$gen"
+NODE_MODE="${LISTEN_MODE:-on-demand}" NODE_IDLE_AFTER="${IDLE_AFTER:-30s}" scripts/gen-sources.sh "$gen"
 slugs=$(cat "$gen/slugs")
 
-# Staging listens on demand: a source connects only while a live page is open
-# and closes IDLE_AFTER after the last one, so providers don't see a second
-# permanent connection next to production. LISTEN_MODE=continuous to compare.
-mode="${LISTEN_MODE:-on-demand}"
-idle_after="${IDLE_AFTER:-30s}"
-if [[ $mode == on-demand ]]; then
-  for f in "$gen"/sources/*.env; do
-    sed -i.bak "s|^LISTEN_ARGS=\"\(.*\)\"$|LISTEN_ARGS=\"\1 -on-demand -idle-after $idle_after\"|" "$f" && rm -f "$f.bak"
-  done
-  echo "listen mode: on demand (idle after $idle_after)"
-else
-  echo "listen mode: continuous"
-fi
+# Staging listens on demand by default: a source connects only while a live
+# page is open and closes IDLE_AFTER after the last one, so providers don't see
+# a second permanent connection next to production. LISTEN_MODE=continuous to
+# compare; a source's own "mode" in sources.json overrides both.
+echo "node default: ${LISTEN_MODE:-on-demand} (idle after ${IDLE_AFTER:-30s}); per source:"
+column -t "$gen/modes" | sed 's/^/  /'
 
 echo "building listener (linux/amd64, static)"
 (cd listener && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -trimpath -o ../bin/listen-listener-linux-amd64 ./cmd/listener)

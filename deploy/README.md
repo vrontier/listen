@@ -33,6 +33,12 @@ continuously, so the memory covers every hour, and each provider sees only one
 connection from us. To compare: `LISTEN_MODE=continuous scripts/deploy-staging.sh`;
 to change the close time: `IDLE_AFTER=2m scripts/deploy-staging.sh`.
 
+A source can override the node default on every node with `"mode"` (`continuous` or
+`on-demand`) and `"idle_after"` in its `listener` entry in `sources.json`. Archive
+loops, which load no provider, can run `continuous` everywhere, so staging
+always has live analysis and a growing memory for them. Each deploy prints the
+resulting mode per source.
+
 ## One-time host setup (max: done 2026-10-03; taurus before, 2026-09-30)
 
 ```sh

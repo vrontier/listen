@@ -49,7 +49,7 @@ The source catalogue is committed; credentials are not.
 
 | File | Purpose |
 |---|---|
-| `site/_config/sources.json` | The streams (local, not committed; copy `sources.example.json`). Each entry is one source: its page (name, place, time zone, summary, credit, whether audio may be played, whether it is listed on the landing page) and its listener (port, input URL or file, extra flags such as `-sample-rate 32000`). Unlisted sources are reachable by URL only and marked `noindex`. `rights` records the basis for analysing and relaying each source's audio. |
+| `site/_config/sources.json` | The streams (local, not committed; copy `sources.example.json`). Each entry is one source: its page (name, place, time zone, summary, credit, whether audio may be played, whether it is listed on the landing page) and its listener (port, input URL or file, extra flags such as `-sample-rate 32000`, and optionally `mode`: `continuous` or `on-demand`, overriding the node's default). Unlisted sources are reachable by URL only and marked `noindex`. `rights` records the basis for analysing and relaying each source's audio. |
 | `.email` (not committed) | SMTP account for the contact form (`EMAIL_ADDRESS`, `EMAIL_NAME`, `EMAIL_USER`, `EMAIL_PASSWORD`, `SMTP_SERVER`, `SMTP_PORT`). `scripts/mail-config.sh` turns it into `site/_config/mail.php` (see `mail.example.php`); without it the form shows the address instead. |
 | `.llm` (not committed) | Optional interpretation layer: `LLM_API_KEY`, `NARRATOR_URL` (any OpenAI-compatible endpoint), `NARRATOR_MODEL`. Without it the interpretation stays off. |
 
