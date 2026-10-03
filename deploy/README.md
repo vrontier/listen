@@ -1,12 +1,12 @@
-# Deployment: listen.home.arpa (taurus)
+# Deployment: listen.home.arpa (staging on max)
 
-Updates: `scripts/deploy-taurus.sh`. It builds a static linux/amd64 listener,
+Updates: `scripts/deploy-staging.sh`. It builds a static linux/amd64 listener,
 syncs `site/` (including the local `site/_config/sources.json` and the uncommitted,
 generated `mail.php`) and installs the files below. It is idempotent. Production
 (listen.vrontier.org) has no sudo for the deploy account; see
 [`ionos/INFOS_listen_vrontier.md`](ionos/INFOS_listen_vrontier.md) and `scripts/deploy-ionos.sh`.
 
-| Piece | Where on taurus | Source |
+| Piece | Where on the staging host | Source |
 |---|---|---|
 | Listener binary | `/usr/local/bin/listen-listener` | `listener/` |
 | systemd template | `/etc/systemd/system/listen-listener@.service`, one instance per source | `systemd/listen-listener@.service` |
@@ -28,26 +28,28 @@ Access is limited to the home LAN and WireGuard.
 
 Staging listens **on demand**: each listener connects to its source only while a
 live page is open and disconnects 30 s after the last one closed (`-on-demand
--idle-after 30s`, added by `scripts/deploy-taurus.sh`). Production listens
+-idle-after 30s`, added by `scripts/deploy-staging.sh`). Production listens
 continuously, so the memory covers every hour, and each provider sees only one
-connection from us. To compare: `LISTEN_MODE=continuous scripts/deploy-taurus.sh`;
-to change the close time: `IDLE_AFTER=2m scripts/deploy-taurus.sh`.
+connection from us. To compare: `LISTEN_MODE=continuous scripts/deploy-staging.sh`;
+to change the close time: `IDLE_AFTER=2m scripts/deploy-staging.sh`.
 
-## One-time host setup (done 2026-09-30)
+## One-time host setup (max: done 2026-10-03; taurus before, 2026-09-30)
 
 ```sh
-sudo apt-get install ffmpeg
+sudo apt-get install ffmpeg php8.3-mbstring
 sudo useradd --system --home-dir /var/lib/listen --no-create-home --shell /usr/sbin/nologin listen
 sudo install -d -o listen -g listen -m 0700 /var/lib/listen /var/lib/listen/samples
 sudo install -d -m 0755 /var/www/listen.home.arpa
 ```
 
 TLS: leaf for `listen.home.arpa` signed by the home.arpa Internal CA (on nubes),
-valid until 2027-11-01. The key was generated on taurus and never left it.
+valid until 2027-11-04. The key was generated on max and never left it. The
+staging data (archive samples, memories) and `/etc/listen/llm.env` were copied
+from taurus on 2026-10-03; taurus no longer runs listen.
 Renewal: copy `/etc/ssl/home-arpa/listen.csr` to nubes and sign it with the CA
 (SAN `DNS:listen.home.arpa`, `keyUsage=critical,digitalSignature,keyEncipherment`,
 `extendedKeyUsage=serverAuth`, `basicConstraints=critical,CA:false`, `-days 397`,
-random serial). Then install the new `listen.crt` on taurus and reload nginx.
+random serial). Then install the new `listen.crt` on max and reload nginx.
 
 ## Audio playback
 
@@ -58,7 +60,7 @@ back until its sound is heard. Only enable it where the source's terms allow it.
 
 ## Adding or changing a source
 
-Edit `site/_config/sources.json` and run `scripts/deploy-taurus.sh`. The script
+Edit `site/_config/sources.json` and run `scripts/deploy-staging.sh`. The script
 checks the file (slugs, unique ports, no spaces in inputs or flags), writes one env
 file and one pair of nginx routes per source, starts or restarts
 `listen-listener@<slug>` for every source and removes instances whose source is gone.

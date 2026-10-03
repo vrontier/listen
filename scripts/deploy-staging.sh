@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Deploy listeners and site to taurus (listen.home.arpa). Idempotent; run from
-# anywhere in the repo. One-time host setup is described in deploy/README.md.
+# Deploy listeners and site to the staging host (listen.home.arpa, on max since
+# 2026-10-03; taurus before). Idempotent; run from anywhere in the repo.
+# DEPLOY_HOST picks another host. One-time host setup: deploy/README.md.
 #
 # Sources come from site/_config/sources.json: every entry gets a listener
 # instance (listen-listener@<slug>) and nginx routes under /<slug>/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-host="${DEPLOY_HOST:-taurus-mike}"
+host="${DEPLOY_HOST:-max-mike}"
 stage=/tmp/listen-deploy
 cfg=site/_config/sources.json
 gen=bin/deploy-gen
@@ -39,7 +40,7 @@ scp -q bin/listen-listener-linux-amd64 "deploy/systemd/listen-listener@.service"
 scp -q "$gen"/sources/*.env "$host:$stage/sources/"
 
 # Contact form: mail.php (gitignored) from .email (gitignored), with the
-# rate-limit directory that exists on taurus.
+# rate-limit directory on the staging host.
 scripts/mail-config.sh /var/lib/listen-web
 
 echo "syncing site"

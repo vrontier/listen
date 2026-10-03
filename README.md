@@ -73,7 +73,7 @@ stay on 127.0.0.1. The listener is cross-compiled to a
 static linux/amd64 binary, so the server needs no Go. `scripts/gen-sources.sh`
 generates the per-source systemd settings and NGINX routes from `sources.json`.
 
-- **With sudo** (staging): `scripts/deploy-taurus.sh` builds, uploads and installs
+- **With sudo** (staging): `scripts/deploy-staging.sh` builds, uploads and installs
   everything in one go. Host setup and file locations: [`deploy/README.md`](deploy/README.md).
 - **Without root** (production): `scripts/deploy-ionos.sh` builds and stages
   everything in the deploy account's home, and an admin runs the idempotent

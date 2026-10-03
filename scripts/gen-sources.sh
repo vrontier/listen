@@ -6,7 +6,7 @@
 #                               api/history/events?type=narrative.update. The rest
 #                               (motif details, feature history) stays on 127.0.0.1.
 #   <out>/slugs                 the slugs, space separated
-# Used by scripts/deploy-taurus.sh and scripts/deploy-ionos.sh.
+# Used by scripts/deploy-staging.sh and scripts/deploy-ionos.sh.
 #   scripts/gen-sources.sh <out> [extra nginx directives for every route]
 set -euo pipefail
 cd "$(dirname "$0")/.."
