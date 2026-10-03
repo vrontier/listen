@@ -21,6 +21,10 @@ $description = $page['description'] ?? '';
   <meta property="og:title" content="<?= e($fullTitle) ?>">
   <meta property="og:description" content="<?= e($description) ?>">
   <meta property="og:url" content="https://<?= e(SITE_HOST) ?>/<?= e($source['slug']) ?>">
+  <!-- Link previews (text only; the site has no preview image). -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="<?= e(SITE_NAME) ?>">
+  <meta name="twitter:card" content="summary">
   <meta name="theme-color" content="#07080a">
   <link rel="icon" href="<?= e(asset('favicon.svg')) ?>" type="image/svg+xml">
   <link rel="stylesheet" href="<?= e(asset('css/site.css')) ?>">
