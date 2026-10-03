@@ -27,6 +27,7 @@ const (
 type client struct {
 	ch      chan []byte
 	dropped atomic.Int64
+	tool    bool // ?role=tool: a program (e.g. listen-mcp), not a person watching
 }
 
 // MemoryView is what the memory contributes to the snapshot.
@@ -59,10 +60,31 @@ func New(origins []string) *Hub {
 // SetMemory adds the memory's active motifs and summaries to snapshots.
 func (h *Hub) SetMemory(m MemoryView) { h.memory = m }
 
-func (h *Hub) Listeners() int {
+// Listeners counts the live pages connected: what the landing page shows and
+// what the narrator waits for. Tools are not counted.
+func (h *Hub) Listeners() int { return h.count(false) }
+
+// Tools counts connected programs (?role=tool), such as listen-mcp.
+func (h *Hub) Tools() int { return h.count(true) }
+
+// Connections counts everyone; it wakes an on-demand source and bounds
+// capacity.
+func (h *Hub) Connections() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.clients)
+}
+
+func (h *Hub) count(tool bool) int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	n := 0
+	for c := range h.clients {
+		if c.tool == tool {
+			n++
+		}
+	}
+	return n
 }
 
 // Broadcast records msg in the snapshot and queues it for every client. A
@@ -158,7 +180,7 @@ func (h *Hub) Routes(mux *http.ServeMux) {
 }
 
 func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
-	if h.Listeners() >= maxClients {
+	if h.Connections() >= maxClients {
 		http.Error(w, "too many listeners", http.StatusServiceUnavailable)
 		return
 	}
@@ -167,7 +189,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ws: accept from %s: %v", r.RemoteAddr, err)
 		return
 	}
-	c := &client{ch: make(chan []byte, clientBuffer)}
+	c := &client{ch: make(chan []byte, clientBuffer), tool: r.URL.Query().Get("role") == "tool"}
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()

@@ -171,7 +171,7 @@ func main() {
 		t := time.NewTicker(5 * time.Second)
 		defer t.Stop()
 		for {
-			h.Broadcast(stamper.Stamp(events.TypeStatus, time.Now(), 0, st.payload(h.Listeners())))
+			h.Broadcast(stamper.Stamp(events.TypeStatus, time.Now(), 0, st.payload(h.Listeners(), h.Tools())))
 			select {
 			case <-ctx.Done():
 				return
@@ -184,7 +184,7 @@ func main() {
 	run := func(ctx context.Context, cfg source.Config) error { return source.Run(ctx, cfg) }
 	if *onDemand {
 		run = func(ctx context.Context, cfg source.Config) error {
-			return runOnDemand(ctx, cfg, h.Listeners, *idleAfter)
+			return runOnDemand(ctx, cfg, h.Connections, *idleAfter) // tools wake it too
 		}
 		log.Printf("on demand: connecting only while a live page is open (idle after %s)", *idleAfter)
 	}
@@ -207,7 +207,7 @@ func main() {
 				prev := st.setStream(s)
 				if s != prev {
 					log.Printf("stream: %s", s)
-					h.Broadcast(stamper.Stamp(events.TypeStatus, time.Now(), 0, st.payload(h.Listeners())))
+					h.Broadcast(stamper.Stamp(events.TypeStatus, time.Now(), 0, st.payload(h.Listeners(), h.Tools())))
 				}
 			},
 		})
@@ -385,7 +385,7 @@ func (s *status) setLatency(d time.Duration) {
 	s.mu.Unlock()
 }
 
-func (s *status) payload(listeners int) events.Status {
+func (s *status) payload(listeners, tools int) events.Status {
 	audioListeners := 0
 	if s.audioListeners != nil {
 		audioListeners = s.audioListeners()
@@ -405,6 +405,7 @@ func (s *status) payload(listeners int) events.Status {
 		LatencyMs:      float64(lat.Milliseconds()),
 		Listeners:      listeners,
 		AudioListeners: audioListeners,
+		Tools:          tools,
 		Input:          s.input,
 		SampleRate:     s.sampleRate,
 		UptimeS:        float64(int(time.Since(s.started).Seconds())),

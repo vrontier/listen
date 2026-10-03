@@ -84,6 +84,22 @@ generates the per-source systemd settings and NGINX routes from `sources.json`.
 Both scripts are idempotent. A source removed from `sources.json` is stopped on
 the next full deploy.
 
+### MCP access (read-only)
+
+`listen-mcp` (in `listener/cmd/listen-mcp`) is a small MCP server that runs next to the
+listeners and speaks MCP over stdio, typically through SSH:
+
+```json
+{"mcpServers": {"listen": {"command": "ssh", "args": ["<host>", "bin/listen-mcp"]}}}
+```
+
+Tools: `service_status`, `list_sources`, `get_extract` (records the *next* n seconds of
+analysis data from a source: features, events, frames, spectrum, never audio),
+`get_motifs` and `get_narratives`. It reads `sources.json` and queries the listeners
+on 127.0.0.1. Its live connections use `?role=tool`, so they count as tools rather
+than listeners, but they still wake an on-demand source. It needs no root: build it
+with `GOOS=linux GOARCH=amd64 go build ./cmd/listen-mcp` and copy it to `~/bin`.
+
 ## How it works
 
 The listener implements the MVP of the [event model](docs/live_visualization_event_model.md)

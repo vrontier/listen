@@ -188,6 +188,7 @@ type Status struct {
 	LatencyMs      float64 `json:"latency_ms"`
 	Listeners      int     `json:"listeners"`       // live pages connected (/ws/live)
 	AudioListeners int     `json:"audio_listeners"` // of those, receiving audio (/ws/audio)
+	Tools          int     `json:"tools"`           // programs connected with ?role=tool (e.g. listen-mcp)
 	Input          string  `json:"input"`
 	SampleRate     int     `json:"sample_rate"`
 	UptimeS        float64 `json:"uptime_s"`
