@@ -25,7 +25,7 @@ listener ────────┤
 (shared engine)  └──► Workbench               accounts, tokens, own streams, own analyses
 ```
 
-Both projects run on the same listener, the Go service in the Observatory's repository that decodes a stream and analyses it. The Workbench adds accounts, tokens and configuration on top; it does not fork the analysis.
+Both projects run on the same listener, the Go service in the Observatory's repository that decodes a stream and analyses it. The Workbench adds accounts, tokens and configuration on top; it does not fork the analysis. What this means for running a Workbench is under [Dependencies](#dependencies).
 
 Four rules shape the design (details in [docs/design.md](docs/design.md)):
 
@@ -34,11 +34,24 @@ Four rules shape the design (details in [docs/design.md](docs/design.md)):
 3. **The Observatory's filters never apply here.** A filter is a property of one analysis, not of the stream. The Workbench works on raw audio or on its own analysis, with its own rules or none.
 4. **Researchers bring their own streams.** A stream is added by the person who runs it, or with the explicit permission of its operator.
 
+## Dependencies
+
+The Workbench does not run on its own. It needs the engine, which lives in another repository.
+
+- **Required: the engine.** One program built from [github.com/vrontier/listen](https://github.com/vrontier/listen) (directory `listener/`), running on the same host next to the Workbench's own process. The host also needs ffmpeg, which the engine uses to decode audio.
+- **Not required: a Listening Observatory.** The Workbench needs none of the Observatory's website, source list, per-stream listeners or narrator setup. It can run on a server where no Observatory exists.
+- **Sharing a host with an Observatory** is needed in one case only: when the Workbench is to analyse streams that the Observatory also analyses. Both must then use one engine process, because of the one-connection-per-stream rule.
+- **Two repositories.** Anyone running a Workbench fetches and builds from two repositories. Moving the engine into a repository of its own is a possible later step; it is not planned now.
+- **Staying in step (proposed).** The engine reports the version of its control API, the Workbench checks it at start, and this repository states the minimum engine version it needs.
+- **What exists.** The engine process the Workbench needs is not built yet. Today's listener runs one analysis of one stream per process.
+
+Details: [docs/design.md](docs/design.md#dependencies).
+
 ## Documents
 
 | Document | Content |
 |---|---|
-| [docs/design.md](docs/design.md) | Goals, the split from the Observatory, the design rules, features, order of work, open questions |
+| [docs/design.md](docs/design.md) | Goals, the split from the Observatory, the design rules, dependencies, the processes, features, order of work, open questions |
 | [docs/analyses-and-filters.md](docs/analyses-and-filters.md) | One decode with several analyses; filter rules; what is and is not filtered; motifs |
 | [docs/members-and-streams.md](docs/members-and-streams.md) | Accounts, registering a stream, states of a stream, limits, rights and privacy |
 
