@@ -54,6 +54,7 @@ Details: [docs/design.md](docs/design.md#dependencies).
 | [docs/design.md](docs/design.md) | Goals, the split from the Observatory, the design rules, dependencies, the processes, features, order of work, open questions |
 | [docs/analyses-and-filters.md](docs/analyses-and-filters.md) | One decode with several analyses; filter rules; what is and is not filtered; motifs |
 | [docs/members-and-streams.md](docs/members-and-streams.md) | Accounts, registering a stream, states of a stream, limits, rights and privacy |
+| [docs/control-api.md](docs/control-api.md) | The contract between the Workbench and the engine process: streams, analyses, validation, probe, data, versions |
 
 ## Licence
 

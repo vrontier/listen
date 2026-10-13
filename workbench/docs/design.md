@@ -121,7 +121,7 @@ web server ──► Workbench process ──control API, local socket──► 
 
 ### Between them
 
-- **A control API on a local socket.** The Workbench tells the engine which streams and analyses should exist and with which settings. The engine reports their state. The same socket carries the analysis events that the Workbench passes on. The API is to be written as a spec in this repository before either side is built (question 4).
+- **A control API on a local socket.** The Workbench tells the engine which streams and analyses should exist and with which settings. The engine reports their state. The same socket carries the analysis events that the Workbench passes on. Its draft is [control-api.md](control-api.md); it is to be settled before either side is built (question 4).
 - **No shared database.** The catalogue belongs to the Workbench alone. The engine never reads it. This replaces "the hub reads the catalogue" of the earlier drafts. The reasons: a shared file would tie a database schema to two repositories, and it would put account data within reach of the engine.
 - **The engine validates.** Filter rules, analysis settings and motif definitions are checked by the engine, which is asked through the control API before anything is saved. The Workbench therefore imports no engine code and keeps no second copy of the rule syntax, which is what rule 1 asks for.
 - **Importing is not possible anyway.** All of the engine's packages sit under `listener/internal/`, and Go refuses imports of an `internal/` directory from another module. A program built from those packages has to live in the listen repository, unless the engine publishes packages for others to use.
@@ -213,7 +213,7 @@ A **proposed** order that respects the first view:
 
 | Step | Content | Depends on |
 |---|---|---|
-| 0 | The control API, written as a spec in this repository | — |
+| 0 | The control API, written as a spec in this repository: [control-api.md](control-api.md), a draft | — |
 | 1a | Engine, piece A: one process, many streams, added and removed at run time through the control API | 0 |
 | 1b | Engine, piece B: several analyses on one decode | 1a |
 | 2 | Catalogue and accounts: login by email link, own streams, private pages | 1a; privacy notice and legal notice |
