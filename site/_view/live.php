@@ -142,14 +142,14 @@ $filters = analysis_filters($source);
     <dialog id="filters" class="filters" aria-labelledby="filters-title">
       <h2 id="filters-title">Filters applied</h2>
       <p>Known interference at these frequencies never becomes a resonance or a motif,
-        and is not read as the dominant frequency.</p>
+        is not read as the dominant frequency and gets no peak in the frequency spectrum.</p>
       <ul>
 <?php foreach ($filters as $f): ?>
         <li><?= e($f['what']) ?><?= $f['detail'] !== '' ? ' <span>' . e($f['detail']) . '</span>' : '' ?>
           <code><?= e($f['rule']) ?></code></li>
 <?php endforeach; ?>
       </ul>
-      <p>The sound, the spectrogram and the frequency spectrum are unfiltered.</p>
+      <p>The sound and the spectrogram are unfiltered.</p>
       <form method="dialog"><button class="dial__export" type="submit">Close</button></form>
     </dialog>
 <?php endif; ?>
