@@ -83,6 +83,32 @@ function live_ws_url(array $source): string
     return '/' . $source['slug'] . '/ws/live';
 }
 
+// What a source's listener leaves out of its analysis, in words: the mains
+// filter (-mains) and the filter rules (-ignore) from the listener's args.
+function analysis_filters(array $source): array
+{
+    $args = $source['listener']['args'] ?? [];
+    $out = [];
+    for ($i = 0; $i + 1 < count($args); $i++) {
+        $val = (string) $args[$i + 1];
+        if ($args[$i] === '-mains' && (float) $val > 0) {
+            $out[] = (float) $val . ' Hz mains hum and its harmonics';
+        } elseif ($args[$i] === '-ignore') {
+            $parts = explode(',', $val);
+            [$kind, $hz] = array_pad(explode('=', $parts[0], 2), 2, '');
+            if ((float) $hz <= 0) {
+                continue;
+            }
+            if ($kind === 'comb') {
+                $out[] = (float) $hz . ' Hz and its ' . (in_array('odd', $parts, true) ? 'odd ' : '') . 'harmonics';
+            } elseif ($kind === 'line') {
+                $out[] = 'a line at ' . (float) $hz . ' Hz';
+            }
+        }
+    }
+    return $out;
+}
+
 // Base URL of a source's listener API (for the stream cards' live status).
 function live_api_base(array $source): string
 {

@@ -130,5 +130,11 @@ $source = $page['source'];
 <?php endif; ?>
         Analysis and visualization: <a href="/">Listening Observatory</a> (prototype).
       </p>
+<?php if ($filters = analysis_filters($source)): ?>
+      <p>
+        Filtered from resonances and motifs as known interference: <?= e(implode('; ', $filters)) ?>.
+        The sound and the spectrogram are unfiltered.
+      </p>
+<?php endif; ?>
     </footer>
   </div>
