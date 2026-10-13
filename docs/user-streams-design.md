@@ -2,6 +2,11 @@
 
 Status: draft for review (2026-10-02). Nothing here is built yet.
 
+> **Moved (2026-10-13).** Accounts and self-registered streams are no longer planned for Listening
+> Observatory, which stays a curated exhibit without accounts. This design continues in
+> [Listening Observatory Workbench](https://github.com/vrontier/listen-workbench), as
+> `docs/members-and-streams.md` there. This file is kept as the original draft.
+
 ## Goal
 
 People who run a live environmental stream (a hydrophone, a VLF receiver, a garden microphone)
