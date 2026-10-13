@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Deploy to production (listen.vrontier.org on ionos). The deploy account has no
 # root, so this script builds and stages everything in ~questmaster/listen-deploy
+# (and installs the MCP server in ~/bin, which needs no root)
 # and an admin runs the root step there (see deploy/ionos/INFOS_listen_vrontier.md):
 #   scripts/deploy-ionos.sh              # stage everything; admin runs install.sh
 #   scripts/deploy-ionos.sh --site-only  # PHP site only, no root step needed
@@ -35,6 +36,7 @@ for f in $(jq -r --arg d "$samples/" '.sources[].listener.input | select(startsw
 done
 
 scripts/build-listener.sh "$stage/listen-listener"
+scripts/build-listener.sh bin/listen-mcp-linux-amd64 listen-mcp
 
 # Contact form: mail.php (gitignored) from .email (gitignored).
 scripts/mail-config.sh /var/lib/listen-web
@@ -57,6 +59,13 @@ ssh "$host" 'mkdir -p ~/listen-deploy && chmod 0700 ~/listen-deploy'
 rsync -rlt --delete "$stage/" "$host:listen-deploy/"
 ssh "$host" 'chmod -R go= ~/listen-deploy'
 scp -q deploy/ionos/INFOS_listen_vrontier.md "$host:INFOS_listen_vrontier.md"
+
+# MCP server: started over ssh as bin/listen-mcp of the deploy account
+# (docs/mcp.md), so it needs no root step. Renamed into place, so a session
+# that is running keeps its old binary.
+ssh "$host" "mkdir -p bin"
+scp -q bin/listen-mcp-linux-amd64 "$host:bin/listen-mcp.new"
+ssh "$host" "chmod 0755 bin/listen-mcp.new && mv bin/listen-mcp.new bin/listen-mcp"
 
 echo
 echo "staged. Root step (admin, see ~/INFOS_listen_vrontier.md):"

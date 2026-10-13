@@ -25,7 +25,8 @@ MCP client ──stdio over ssh──► listen-mcp ──HTTP / WebSocket on 12
 
 ## Install on a host
 
-`scripts/deploy-staging.sh` builds and installs it on the staging host with every deploy. By hand:
+`scripts/deploy-staging.sh` and `scripts/deploy-ionos.sh` (full deploy, not `--site-only`) build and
+install it with every deploy. By hand:
 
 ```sh
 cd listener
