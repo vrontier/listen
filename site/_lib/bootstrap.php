@@ -83,8 +83,9 @@ function live_ws_url(array $source): string
     return '/' . $source['slug'] . '/ws/live';
 }
 
-// What a source's listener leaves out of its analysis, in words: the mains
-// filter (-mains) and the filter rules (-ignore) from the listener's args.
+// What a source's listener leaves out of its analysis: the mains filter
+// (-mains) and the filter rules (-ignore) from the listener's args, each as
+// ['what' => in words, 'detail' => tolerance and drift, 'rule' => as configured].
 function analysis_filters(array $source): array
 {
     $args = $source['listener']['args'] ?? [];
@@ -92,18 +93,25 @@ function analysis_filters(array $source): array
     for ($i = 0; $i + 1 < count($args); $i++) {
         $val = (string) $args[$i + 1];
         if ($args[$i] === '-mains' && (float) $val > 0) {
-            $out[] = (float) $val . ' Hz mains hum and its harmonics';
+            $out[] = ['what' => (float) $val . ' Hz mains hum and its harmonics', 'detail' => '', 'rule' => '-mains ' . $val];
         } elseif ($args[$i] === '-ignore') {
             $parts = explode(',', $val);
             [$kind, $hz] = array_pad(explode('=', $parts[0], 2), 2, '');
-            if ((float) $hz <= 0) {
+            if ((float) $hz <= 0 || ($kind !== 'comb' && $kind !== 'line')) {
                 continue;
             }
-            if ($kind === 'comb') {
-                $out[] = (float) $hz . ' Hz and its ' . (in_array('odd', $parts, true) ? 'odd ' : '') . 'harmonics';
-            } elseif ($kind === 'line') {
-                $out[] = 'a line at ' . (float) $hz . ' Hz';
+            $what = $kind === 'line' ? 'A line at ' . (float) $hz . ' Hz'
+                : (float) $hz . ' Hz and its ' . (in_array('odd', $parts, true) ? 'odd ' : '') . 'harmonics';
+            $detail = [];
+            foreach (array_slice($parts, 1) as $part) {
+                [$key, $v] = array_pad(explode('=', $part, 2), 2, '');
+                if ($key === 'tol') {
+                    $detail[] = 'within ±' . (float) $v . ' Hz';
+                } elseif ($key === 'drift') {
+                    $detail[] = 'base frequency followed within ±' . (float) $v . ' %';
+                }
             }
+            $out[] = ['what' => $what, 'detail' => implode(', ', $detail), 'rule' => '-ignore ' . $val];
         }
     }
     return $out;

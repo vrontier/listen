@@ -217,6 +217,16 @@
   dialEl.addEventListener('pointerdown', showTip);
   dialEl.addEventListener('pointerleave', function () { tip.hidden = true; dial.setHover(null); });
 
+  // Filters overlay: the rules this source's analysis leaves out.
+  var filtersEl = document.getElementById('filters'), filtersOpen = document.getElementById('filters-open');
+  if (filtersEl && filtersOpen && filtersEl.showModal) {
+    filtersOpen.addEventListener('click', function () { filtersEl.showModal(); });
+    filtersEl.addEventListener('click', function (ev) {   // a click on the backdrop closes
+      var r = filtersEl.getBoundingClientRect();
+      if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) filtersEl.close();
+    });
+  }
+
   setInterval(function () { panels.features(); panels.interpretation(); }, 250);
   setInterval(function () { panels.drawHarmonicMap(); }, 1000);
 })(window.LO = window.LO || {});

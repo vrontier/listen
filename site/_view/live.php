@@ -1,6 +1,7 @@
 <?php
 /** @var array $page */
 $source = $page['source'];
+$filters = analysis_filters($source);
 ?>
   <div class="observatory" data-ws="<?= e(live_ws_url($source)) ?>" data-source="<?= e($source['slug']) ?>" data-tz="<?= e($source['timezone']) ?>"<?= $source['audio'] ? ' data-audio="1"' : '' ?>>
     <section class="stage" aria-label="Live visualization">
@@ -18,6 +19,11 @@ $source = $page['source'];
         <div><dt>Harmonicity</dt><dd id="ro-harmonicity">—</dd></div>
         <div><dt>Spectral entropy</dt><dd id="ro-entropy">—</dd></div>
         <div><dt>Novelty</dt><dd id="ro-novelty">—</dd></div>
+<?php if ($filters): ?>
+        <div class="readout__filters"><dd><button id="filters-open" class="filters-link" type="button" aria-haspopup="dialog">Filters applied.</button></dd></div>
+<?php else: ?>
+        <div class="readout__filters"><dd>No filters applied.</dd></div>
+<?php endif; ?>
         <div class="readout__conn"><dd><span id="conn" class="conn" data-state="connecting">connecting</span></dd></div>
 <?php if ($source['audio']): ?>
         <div class="readout__listen"><dd>
@@ -130,11 +136,21 @@ $source = $page['source'];
 <?php endif; ?>
         Analysis and visualization: <a href="/">Listening Observatory</a> (prototype).
       </p>
-<?php if ($filters = analysis_filters($source)): ?>
-      <p>
-        Filtered from resonances and motifs as known interference: <?= e(implode('; ', $filters)) ?>.
-        The sound and the spectrogram are unfiltered.
-      </p>
-<?php endif; ?>
     </footer>
+
+<?php if ($filters): ?>
+    <dialog id="filters" class="filters" aria-labelledby="filters-title">
+      <h2 id="filters-title">Filters applied</h2>
+      <p>Known interference at these frequencies never becomes a resonance or a motif,
+        and is not read as the dominant frequency.</p>
+      <ul>
+<?php foreach ($filters as $f): ?>
+        <li><?= e($f['what']) ?><?= $f['detail'] !== '' ? ' <span>' . e($f['detail']) . '</span>' : '' ?>
+          <code><?= e($f['rule']) ?></code></li>
+<?php endforeach; ?>
+      </ul>
+      <p>The sound, the spectrogram and the frequency spectrum are unfiltered.</p>
+      <form method="dialog"><button class="dial__export" type="submit">Close</button></form>
+    </dialog>
+<?php endif; ?>
   </div>
