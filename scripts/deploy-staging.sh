@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy listeners and site to the staging host (listen.home.arpa, on max since
+# Deploy listeners, site and MCP server to the staging host (listen.home.arpa, on max since
 # 2026-10-03; taurus before). Idempotent; run from anywhere in the repo.
 # DEPLOY_HOST picks another host. One-time host setup: deploy/README.md.
 #
@@ -25,11 +25,18 @@ echo "node default: ${LISTEN_MODE:-on-demand} (idle after ${IDLE_AFTER:-30s}); p
 column -t "$gen/modes" | sed 's/^/  /'
 
 scripts/build-listener.sh bin/listen-listener-linux-amd64
+scripts/build-listener.sh bin/listen-mcp-linux-amd64 listen-mcp
 
 ssh "$host" "rm -rf $stage && mkdir -p $stage/sources"
 scp -q bin/listen-listener-linux-amd64 "deploy/systemd/listen-listener@.service" \
   deploy/nginx/listen.home.arpa.conf deploy/php-fpm/listen.conf "$gen/listen-sources.conf" "$host:$stage/"
 scp -q "$gen"/sources/*.env "$host:$stage/sources/"
+
+# MCP server: started over ssh as bin/listen-mcp of the deploy user (docs/mcp.md).
+# Renamed into place, so a session that is running keeps its old binary.
+ssh "$host" "mkdir -p bin"
+scp -q bin/listen-mcp-linux-amd64 "$host:bin/listen-mcp.new"
+ssh "$host" "chmod 0755 bin/listen-mcp.new && mv bin/listen-mcp.new bin/listen-mcp"
 
 # Contact form: mail.php (gitignored) from .email (gitignored), with the
 # rate-limit directory on the staging host.

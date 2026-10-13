@@ -25,6 +25,8 @@ MCP client ──stdio over ssh──► listen-mcp ──HTTP / WebSocket on 12
 
 ## Install on a host
 
+`scripts/deploy-staging.sh` builds and installs it on the staging host with every deploy. By hand:
+
 ```sh
 cd listener
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -trimpath -o listen-mcp ./cmd/listen-mcp

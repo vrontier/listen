@@ -2,10 +2,12 @@
 # Builds the listener (static linux/amd64) for a deploy, from a clean working
 # tree only: Go stamps the commit and a "modified" flag into the binary, so
 # only a committed tree gives production and staging the byte-identical file.
-#   scripts/build-listener.sh <output>      ALLOW_DIRTY=1 to build anyway
+#   scripts/build-listener.sh <output> [cmd]   ALLOW_DIRTY=1 to build anyway
+# cmd is the directory under listener/cmd: listener (default) or listen-mcp.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-out="${1:?usage: build-listener.sh <output>}"
+out="${1:?usage: build-listener.sh <output> [cmd]}"
+cmd="${2:-listener}"
 
 if [[ -n $(git status --porcelain) && ${ALLOW_DIRTY:-} != 1 ]]; then
   echo "working tree has uncommitted changes; commit them first, so both nodes get the same build:" >&2
@@ -14,10 +16,10 @@ if [[ -n $(git status --porcelain) && ${ALLOW_DIRTY:-} != 1 ]]; then
   exit 1
 fi
 
-echo "building listener (linux/amd64, static)"
-(cd listener && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -trimpath -o "$OLDPWD/$out" ./cmd/listener)
+echo "building $cmd (linux/amd64, static)"
+(cd listener && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -trimpath -o "$OLDPWD/$out" "./cmd/$cmd")
 rev=$(go version -m "$out" | sed -n 's/.*vcs\.revision=\([0-9a-f]\{7\}\).*/\1/p')
 mod=$(go version -m "$out" | sed -n 's/.*vcs\.modified=\(.*\)$/\1/p')
 sum=$(shasum -a 256 "$out" | cut -c1-16)
 [[ $mod == true ]] && rev="$rev (modified)"
-echo "listener build: commit $rev, sha256 $sum…"
+echo "$cmd build: commit $rev, sha256 $sum…"
