@@ -12,6 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"net/http"
 	"net/url"
@@ -59,6 +60,7 @@ func main() {
 		minHz         = flag.Float64("min-hz", 0, "bottom of the analysed range (bands, peaks); 0: 20 Hz. VLF radio: 800")
 		maxHz         = flag.Float64("max-hz", 0, "top of the analysed range; 0: just below Nyquist. VLF radio: 12000")
 		mainsHz       = flag.Float64("mains", 0, "mains frequency (50 or 60) whose harmonics are ignored as hum; 0: off")
+		ignore        ignoreFlag
 		onDemand      = flag.Bool("on-demand", false, "connect to the input only while a live page is open (staging); default: listen continuously")
 		idleAfter     = flag.Duration("idle-after", 30*time.Second, "with -on-demand: disconnect this long after the last live page closed")
 		retryMax      = flag.Duration("retry-max", 5*time.Minute, "longest wait between reconnects to a source that keeps failing (doubles from 1 s)")
@@ -69,6 +71,8 @@ func main() {
 		start         = flag.String("start", "", "recording time of a file's first sample (RFC 3339); "+
 			"default: parsed from a YYYYMMDDTHHMMSSZ stamp in the file name")
 	)
+	flag.Var(&ignore, "ignore", "filter rule for known interference, repeatable: comb=<hz>[,odd][,tol=<hz>] (harmonics of a base, "+
+		"e.g. comb=16.7,odd,tol=4 for a 16.7 Hz railway) or line=<hz>[,tol=<hz>]")
 	flag.Parse()
 	if *in == "" {
 		flag.Usage()
@@ -97,13 +101,16 @@ func main() {
 	}
 
 	stamper := events.NewStamper(*src)
+	// Live: the clock is the wall clock, not a recording's own time.
+	live := !*dump && !rec.known && (isURL || *realtime)
 	var mem *memory.Memory
 	if *memDir != "" {
 		var err error
 		mem, err = memory.New(memory.Config{
-			Dir:         filepath.Join(*memDir, safeName(*src), inputKey(*in)+focusKey(*minHz, *maxHz, *mainsHz)),
+			Dir:         filepath.Join(*memDir, safeName(*src), inputKey(*in)+focusKey(*minHz, *maxHz, *mainsHz, ignore)),
 			ReturnAfter: *motifReturn,
 			HistoryDays: *historyDays,
+			Live:        live,
 		}, stamper)
 		if err != nil {
 			log.Fatalf("memory: %v", err)
@@ -123,7 +130,7 @@ func main() {
 	}
 
 	if *dump {
-		runDump(ctx, *in, *sampleRate, analysis.Options{TransientK: *transientK, TransientGap: *transientGap, MinHz: *minHz, MaxHz: *maxHz, MainsHz: *mainsHz}, stamper, through, *loop, *realtime, *ffmpeg, rec)
+		runDump(ctx, *in, *sampleRate, analysis.Options{TransientK: *transientK, TransientGap: *transientGap, MinHz: *minHz, MaxHz: *maxHz, MainsHz: *mainsHz, Ignore: ignore}, stamper, through, *loop, *realtime, *ffmpeg, rec)
 		return
 	}
 
@@ -141,9 +148,9 @@ func main() {
 		go nar.Run(ctx)
 		log.Printf("narrator on: %s (%s, %s, every %s while watched)", *narratorURL, *narratorModel, *narrateMode, *narrateEvery)
 	}
-	a := analysis.New(*sampleRate, stamper, through(broadcast), analysis.Options{TransientK: *transientK, TransientGap: *transientGap, MinHz: *minHz, MaxHz: *maxHz, MainsHz: *mainsHz})
+	a := analysis.New(*sampleRate, stamper, through(broadcast), analysis.Options{TransientK: *transientK, TransientGap: *transientGap, MinHz: *minHz, MaxHz: *maxHz, MainsHz: *mainsHz, Ignore: ignore})
 
-	a.Live(!rec.known && (isURL || *realtime))
+	a.Live(live)
 	st := &status{input: describe(*in), started: time.Now(), stream: source.Connecting, sampleRate: *sampleRate}
 	mux := http.NewServeMux()
 	h.Routes(mux)
@@ -429,12 +436,41 @@ func describe(in string) string {
 // inputKey names the memory of one input, so switching between a replay and
 // the live stream starts (or resumes) a separate memory.
 // focusKey keeps the memory of a narrowed analysis (-min-hz, -max-hz,
-// -mains) apart: motifs heard in another range, or made of hum, don't carry over.
-func focusKey(minHz, maxHz, mainsHz float64) string {
-	if minHz <= 0 && maxHz <= 0 && mainsHz <= 0 {
+// -mains, -ignore) apart: motifs heard in another range, or made of hum, don't
+// carry over.
+func focusKey(minHz, maxHz, mainsHz float64, ignore []analysis.Ignore) string {
+	if minHz <= 0 && maxHz <= 0 && mainsHz <= 0 && len(ignore) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("_focus-%g-%g-m%g", minHz, maxHz, mainsHz)
+	key := fmt.Sprintf("_focus-%g-%g-m%g", minHz, maxHz, mainsHz)
+	if len(ignore) > 0 {
+		h := fnv.New32a()
+		for _, r := range ignore {
+			h.Write([]byte(r.String() + ";"))
+		}
+		key += fmt.Sprintf("-i%08x", h.Sum32())
+	}
+	return key
+}
+
+// ignoreFlag collects the -ignore rules.
+type ignoreFlag []analysis.Ignore
+
+func (f *ignoreFlag) String() string {
+	parts := make([]string, len(*f))
+	for i, r := range *f {
+		parts[i] = r.String()
+	}
+	return strings.Join(parts, " ")
+}
+
+func (f *ignoreFlag) Set(s string) error {
+	r, err := analysis.ParseIgnore(s)
+	if err != nil {
+		return err
+	}
+	*f = append(*f, r)
+	return nil
 }
 
 func inputKey(in string) string {

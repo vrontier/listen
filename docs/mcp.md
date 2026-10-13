@@ -117,7 +117,8 @@ frequency range; plus totals per stream state. No arguments.
 
 The catalogue: slug, name, place, `listed`, kind (`live` stream or `replay` of a recording),
 time zone, whether audio may be played, credit and link, rights note, analysis settings
-(`sample-rate`, `min-hz`, `max-hz`, `mains`, `transient-k`).
+(`sample-rate`, `min-hz`, `max-hz`, `mains`, `transient-k`, and `ignore`: the source's filter rules
+for known interference).
 
 | Argument | Type | Default | |
 |---|---|---|---|

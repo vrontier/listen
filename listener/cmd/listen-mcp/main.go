@@ -333,6 +333,15 @@ func (a *app) listSources(ctx context.Context, raw json.RawMessage) (any, error)
 				}
 			}
 		}
+		var ignore []string
+		for j := 0; j+1 < len(s.Listener.Args); j++ {
+			if s.Listener.Args[j] == "-ignore" {
+				ignore = append(ignore, s.Listener.Args[j+1])
+			}
+		}
+		if ignore != nil {
+			analysis["ignore"] = ignore
+		}
 		m := map[string]any{
 			"slug": s.Slug, "name": s.Name, "place": place, "listed": s.Listed, "kind": kindOf(s.Listener.Input),
 			"timezone": s.Timezone, "audio_playback": s.Audio, "credit": s.Credit.Text, "credit_url": s.Credit.URL,

@@ -314,34 +314,56 @@
           }
           ctx.globalCompositeOperation = 'source-over';
 
-          // Label, nudged down if it would collide with one already placed.
+          // Label, at its measured size: to the left of the spire where the
+          // right side would run into the title, the readout or the edge, then
+          // nudged down past labels already placed.
           // A partial shared by two resonances is labelled once.
           if (!text.label || labelled[text.label]) return;
           labelled[text.label] = true;
+          var size = main ? 15 : 13;
+          ctx.font = size + 'px ' + mono;
+          var w = ctx.measureText(text.label).width;
+          if (sub) {
+            ctx.font = '13px ' + mono;
+            w = Math.max(w, ctx.measureText(sub).width);
+          }
+          var down = sub ? 22 : 5; // below the baseline; `size` above it
+          function hits(b, lx, ly) {
+            return lx + w + 6 > b.left && lx - 6 < b.right && ly + down > b.top && ly - size < b.bottom;
+          }
+          function blocked(lx, ly) {
+            if (lx < 4 || lx + w > W - 4) return true;
+            for (var o = 0; o < avoid.length; o++) if (hits(avoid[o], lx, ly)) return true;
+            return false;
+          }
           var ly = top - 8;
-          for (var pass = 0; pass < 2; pass++) {
+          var lx = x + 7;
+          if (lx + w > W - 4) lx = Math.max(4, x - 7 - w);
+          else if (blocked(lx, ly) && !blocked(x - 7 - w, ly)) lx = x - 7 - w;
+          var flipped = lx < x; // then the text ends at the spire
+          var tx = flipped ? lx + w : lx;
+          for (var pass = 0; pass < 3; pass++) {
             for (var j = 0; j < labels.length; j++) {
-              if (Math.abs(labels[j].x - x) < 110 && Math.abs(labels[j].y - ly) < 36) ly = labels[j].y + 36;
+              if (hits(labels[j], lx, ly)) ly = labels[j].bottom + size + 3;
             }
             for (var o = 0; o < avoid.length; o++) {
-              var a = avoid[o];
-              if (x + 120 > a.left && x < a.right && ly + 22 > a.top && ly - 16 < a.bottom) ly = a.bottom + 18;
+              if (hits(avoid[o], lx, ly)) ly = avoid[o].bottom + 18;
             }
           }
-          labels.push({ x: x, y: ly });
+          labels.push({ left: lx, right: lx + w, top: ly - size, bottom: ly + down });
           ctx.lineJoin = 'round';
           ctx.strokeStyle = 'rgba(7,8,10,' + (0.85 * alpha).toFixed(3) + ')';
           ctx.lineWidth = 4;
-          ctx.font = (main ? 15 : 13) + 'px ' + mono;
-          ctx.textAlign = 'left';
-          ctx.strokeText(text.label, x + 7, ly);
+          ctx.font = size + 'px ' + mono;
+          ctx.textAlign = flipped ? 'right' : 'left';
+          ctx.strokeText(text.label, tx, ly);
           ctx.fillStyle = 'rgba(236,235,231,' + alpha.toFixed(3) + ')';
-          ctx.fillText(text.label, x + 7, ly);
+          ctx.fillText(text.label, tx, ly);
           if (sub) {
             ctx.font = '13px ' + mono;
-            ctx.strokeText(sub, x + 7, ly + 17);
+            ctx.strokeText(sub, tx, ly + 17);
             ctx.fillStyle = 'rgba(169,172,176,' + alpha.toFixed(3) + ')';
-            ctx.fillText(sub, x + 7, ly + 17);
+            ctx.fillText(sub, tx, ly + 17);
           }
         }
 

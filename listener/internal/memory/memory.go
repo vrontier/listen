@@ -20,6 +20,7 @@ type Config struct {
 	HistoryDays  int           // history files kept
 	SummaryEvery time.Duration
 	Window       time.Duration // texture window
+	Live         bool          // live stream: the clock follows the observation time (see advance)
 
 	ResonanceMatch float64 // minimum similarity to join a resonance motif
 	TextureMatch   float64 // minimum similarity to join a texture motif
@@ -62,7 +63,7 @@ type Memory struct {
 	store   *store
 
 	mu         sync.Mutex
-	runStart   time.Time // memory clock: runStart + audio position
+	runStart   time.Time // memory clock of a replay: runStart + audio position
 	now        time.Time
 	motifs     []*Motif
 	aliases    map[string]string
@@ -140,7 +141,7 @@ func (m *Memory) Process(msg events.Message) []events.Message {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if msg.Env.Position > 0 {
-		m.now = m.runStart.Add(time.Duration(msg.Env.Position * float64(time.Second)))
+		m.advance(msg.Env)
 	}
 	if m.cur == nil {
 		m.cur = newMinute(m.now)
@@ -172,6 +173,39 @@ func (m *Memory) Process(msg events.Message) []events.Message {
 		m.saveLocked()
 	}
 	return out
+}
+
+// liveGap is the silence after which a live stream counts as interrupted.
+const liveGap = 10 * time.Second
+
+// advance moves the memory clock to an audio-positioned event. A replayed
+// file counts listening time (runStart + position), because its recording
+// time repeats with every loop. A live stream follows the observation time,
+// so that dates stay true across an outage; the outage itself is kept out of
+// durations and presence, since nothing was heard in it.
+func (m *Memory) advance(env events.Envelope) {
+	if !m.cfg.Live {
+		m.now = m.runStart.Add(time.Duration(env.Position * float64(time.Second)))
+		return
+	}
+	gap := env.Timestamp.Sub(m.now)
+	if gap <= 0 {
+		return
+	}
+	m.now = env.Timestamp
+	if gap < liveGap {
+		return
+	}
+	for _, ep := range m.open {
+		ep.start = ep.start.Add(gap)
+	}
+	if !m.tex.start.IsZero() {
+		m.tex.start = m.tex.start.Add(gap)
+	}
+	if m.texActive != nil {
+		m.texActive.open = 0
+		m.texActive = nil
+	}
 }
 
 func (m *Memory) onFeature(f events.Feature) []events.Message {

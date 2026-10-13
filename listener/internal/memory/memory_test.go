@@ -213,3 +213,38 @@ func TestNarrativesGoToHistory(t *testing.T) {
 		t.Fatalf("narrative not in history: %v", found)
 	}
 }
+
+// A live stream that drops out for hours keeps true dates, and the outage
+// counts neither as presence nor as part of an episode.
+func TestLiveClockSkipsOutage(t *testing.T) {
+	st := events.NewStamper("test")
+	m, err := New(Config{Live: true}, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, pos := time.Now().Add(time.Second), 1.0
+	send := func(at time.Duration, typ string, payload any) {
+		pos += 0.5
+		m.Process(st.Stamp(typ, base.Add(at), pos, payload))
+	}
+	const outage = 2 * time.Hour
+	send(0, events.TypeResonance, events.Resonance{ID: "res-00001", Status: "start", FundamentalHz: 1000, Strength: 0.8})
+	for d := 500 * time.Millisecond; d <= 30*time.Second; d += 500 * time.Millisecond {
+		send(d, events.TypeFeature, quiet)
+	}
+	for d := 30 * time.Second; d < 60*time.Second; d += 500 * time.Millisecond {
+		send(outage+d, events.TypeFeature, quiet)
+	}
+	send(outage+60*time.Second, events.TypeResonance, events.Resonance{ID: "res-00001", Status: "end", FundamentalHz: 1000, Strength: 0.8})
+
+	if len(m.motifs) != 1 {
+		t.Fatalf("motifs = %d, want 1", len(m.motifs))
+	}
+	mo := m.motifs[0]
+	if want := base.Add(outage + 60*time.Second); !mo.LastSeen.Equal(want.UTC()) {
+		t.Errorf("last seen %v, want %v", mo.LastSeen, want.UTC())
+	}
+	if mo.PresenceS < 55 || mo.PresenceS > 65 {
+		t.Errorf("presence %.1f s, want about 60 s without the outage", mo.PresenceS)
+	}
+}

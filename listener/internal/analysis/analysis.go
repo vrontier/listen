@@ -40,7 +40,8 @@ type Analyzer struct {
 	maxHz      float64 // top of bands and shape: just below Nyquist
 	peakMinHz  float64
 	peakMaxHz  float64
-	mainsHz    float64 // 50 or 60: peaks on its harmonics are hum; 0: off
+	ignore     []Ignore  // filter rules: peaks they match are dropped
+	ignoreBase []float64 // per rule: the comb's base in the current frame
 
 	emit    func(events.Message)
 	stamper *events.Stamper
@@ -104,6 +105,9 @@ type Options struct {
 	// MainsHz (50 or 60) drops spectral peaks on mains harmonics, so hum
 	// never becomes a resonance or a motif. Zero: off.
 	MainsHz float64
+	// Ignore holds further filter rules for known interference of this
+	// source, such as the harmonics of a railway's traction current.
+	Ignore []Ignore
 }
 
 // New returns an analyzer for mono input at sampleRate (0: the default).
@@ -126,9 +130,14 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 		if o.MainsHz > 0 {
 			opt.MainsHz = o.MainsHz
 		}
+		opt.Ignore = append(opt.Ignore, o.Ignore...)
 	}
 	if sampleRate <= 0 {
 		sampleRate = DefaultSampleRate
+	}
+	ignore := opt.Ignore
+	if opt.MainsHz > 0 {
+		ignore = append([]Ignore{{Hz: opt.MainsHz, Comb: true}}, ignore...)
 	}
 	scale := float64(sampleRate) / DefaultSampleRate
 	a := &Analyzer{
@@ -138,7 +147,8 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 		maxHz:      math.Round(11000 * scale),
 		peakMinHz:  peakMinHz,
 		peakMaxHz:  math.Round(6000 * scale),
-		mainsHz:    opt.MainsHz,
+		ignore:     ignore,
+		ignoreBase: make([]float64, len(ignore)),
 		emit:       emit,
 		stamper:    stamper,
 		fft:        dsp.NewFFT(fftSize),
@@ -288,7 +298,16 @@ func (a *Analyzer) hop(x []float64) {
 	flux := detect.Clamp01(fluxDB / 12)
 	novelty := a.novelty.Update(a.bandNorm)
 
-	peaks := a.dropMains(dsp.FindPeaks(a.magDB, a.binHz, a.peakMinHz, a.peakMaxHz, 8, maxPeaks))
+	// With filter rules, look deeper first: strong interference lines must
+	// not use up the places of the peaks that remain.
+	limit := maxPeaks
+	if len(a.ignore) > 0 {
+		limit = 4 * maxPeaks
+	}
+	peaks := a.dropIgnored(dsp.FindPeaks(a.magDB, a.binHz, a.peakMinHz, a.peakMaxHz, 8, limit))
+	if len(peaks) > maxPeaks {
+		peaks = peaks[:maxPeaks]
+	}
 	a.lastPeaks = peaks
 	pef := dsp.PeakEnergyFraction(a.mag, a.binHz, int(a.peakMinHz/a.binHz), int(a.peakMaxHz/a.binHz), peaks)
 	harmonicity, _ := dsp.Harmonicity(peaks, pef)
@@ -444,22 +463,4 @@ func round(x float64, places int) float64 {
 	}
 	p := math.Pow(10, float64(places))
 	return math.Round(x*p) / p
-}
-
-// dropMains removes peaks that sit on a harmonic of the mains frequency
-// (within mainsTolerance bins), so steady hum lines never become resonances.
-func (a *Analyzer) dropMains(peaks []dsp.SpectralPeak) []dsp.SpectralPeak {
-	if a.mainsHz <= 0 {
-		return peaks
-	}
-	tol := mainsTolerance * a.binHz
-	kept := peaks[:0]
-	for _, p := range peaks {
-		k := math.Round(p.Hz / a.mainsHz)
-		if k >= 1 && math.Abs(p.Hz-k*a.mainsHz) <= tol {
-			continue
-		}
-		kept = append(kept, p)
-	}
-	return kept
 }
