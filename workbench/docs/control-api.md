@@ -1,8 +1,8 @@
 # Control API between the Workbench and the engine process
 
-Status: draft (2026-10-13). Nothing here is built. API version described: **1.0**.
+Status: draft (2026-10-13), with additions for the maintainer's answers of 2026-10-14. Nothing here is built. API version described: **1.0**.
 
-Everything in this document is **proposed**. It becomes stable only after it has been read against the engine's code in the listen repository (see [design.md](design.md#open-questions), question 4). Points that are still **open** are collected at the end.
+Everything in this document is **proposed**. It becomes stable only after it has been read against the engine's code in the listen repository (see [design.md](design.md#questions-and-answers), question 4, decided). Points that are still **open** are collected at the end.
 
 This is the contract for step 0 of the [order of work](design.md#order-of-work). The engine process is built to it in the listen repository; the Workbench is built to it here, at first against a stand-in.
 
@@ -14,7 +14,7 @@ The control API is the only connection between the two processes of [design.md](
 - The engine reports what state they are in, and serves each analysis's data.
 - The engine checks every setting and rule. The Workbench keeps no copy of the engine's rules about what is valid.
 
-The engine knows nothing of members, accounts, tokens, publication or texts. Nothing in this API carries a member's name, email address or token.
+The engine knows nothing of members, accounts, tokens, publication or texts. Nothing in this API carries a member's name, email address or token. The one exception, once the interpretation is added, is a member's language-model API key, which travels with an analysis's settings (see [Reserved](#reserved)).
 
 Not part of version 1: audio (relay and captures), the language-model interpretation, defined motifs and profiles, analyses across several streams. The places where they would attach are named under [Reserved](#reserved).
 
@@ -63,7 +63,7 @@ engine
 
 | Method and path | Purpose |
 |---|---|
-| `GET /v1/engine` | versions, instance, limits, capabilities |
+| `GET /v1/engine` | versions, instance, limits, capabilities, the host's capacity and use |
 | `GET /v1/events` | stream of state changes of all streams and analyses |
 | `GET /v1/streams` | all streams with their state and their analyses |
 | `PUT /v1/streams/{stream}` | create or change a stream |
@@ -107,12 +107,15 @@ engine
     "file_inputs": false,
     "address_check": "initial"
   },
-  "counts": { "streams": 3, "connected": 1, "analyses": 4 }
+  "counts": { "streams": 3, "connected": 1, "analyses": 4 },
+  "host": { "cores": 4, "memory_mb": 8192 },
+  "usage": { "cpu_percent": 31.5, "memory_mb": 412, "in_kbps": 288 }
 }
 ```
 
 - `limits` are set by the engine's operator when it is started. The engine enforces them. Limits per member are the Workbench's business and unknown to the engine.
 - `capabilities` lets the Workbench build its forms from what this engine can do. `detectors` is empty until defined motifs exist.
+- `host` and `usage` are for the Workbench's caps, see [Usage](#usage).
 
 ## Streams
 
@@ -157,7 +160,8 @@ Response to `PUT` and `GET`:
   "last_error": null,
   "reconnects": 0,
   "delay_ms": 180,
-  "analyses": ["a-0001", "a-0002"]
+  "analyses": ["a-0001", "a-0002"],
+  "usage": { "cpu_percent": 3.1, "memory_mb": 24, "in_kbps": 96, "in_measured": false }
 }
 ```
 
@@ -265,7 +269,8 @@ This is the listener's `-ignore` syntax as an object. The engine returns each ru
   },
   "state": "running",
   "subscribers": 1,
-  "motifs": 12
+  "motifs": 12,
+  "usage": { "cpu_percent": 1.8, "memory_mb": 6, "memory_estimated": true }
 }
 ```
 
@@ -286,6 +291,27 @@ The memory of an analysis is kept under a key made of the range and the rules, i
 - `DELETE` of an analysis keeps its memories unless `?purge=true` is given.
 
 The stream's identifier and the analysis's identifier are both part of the memory's location. This is the change asked for in [analyses-and-filters.md](analyses-and-filters.md): today two analyses of one stream with equal settings would share one memory.
+
+## Usage
+
+Added for the maintainer's answers of 2026-10-14 (decided: every analysis's cost is measured and accounted against CPU and RAM; caps for the server and per member). The fields are **proposed**.
+
+The engine measures; the Workbench records, adds up, counts each member's share against their cap and enforces the caps. The engine knows nothing of members, so it enforces only its own `limits`.
+
+| Where | Field | Meaning |
+|---|---|---|
+| engine | `host.cores`, `host.memory_mb` | what the machine has, so that a cap can be set as a share of it |
+| engine | `usage.cpu_percent`, `usage.memory_mb` | the engine process and all its ffmpeg children together; 100 is one core |
+| engine, stream | `usage.in_kbps` | incoming bandwidth |
+| stream | `usage.cpu_percent`, `usage.memory_mb` | the stream's ffmpeg process: connection and decode |
+| stream | `usage.in_measured` | `false` while `in_kbps` is the bit rate the probe found, not a measurement |
+| analysis | `usage.cpu_percent` | time spent in this analysis's work |
+| analysis | `usage.memory_mb`, `usage.memory_estimated` | memory held by the analysis; `true` while this is an estimate |
+
+- Values are averages over the last 10 seconds, and are `0` for an idle stream or analysis.
+- `GET /v1/events` sends a `usage` event every 10 seconds with these values for everything that runs, so that the Workbench does not have to ask each object.
+- **Exactness** (assumed from the engine's code, to be confirmed by the engine session): an ffmpeg process can be measured exactly. The analyses all run inside the engine process; their CPU time can be measured by timing their work, their memory only estimated, since Go does not report memory per part of a program. Incoming bandwidth is exact only once the engine opens the HTTP connection itself (see [Which addresses the engine connects to](#which-addresses-the-engine-connects-to)).
+- Memory on disk is reported per memory under `…/memories` and is what the Workbench counts against a member's disk quota.
 
 ## Validation
 
@@ -394,6 +420,7 @@ A page that opens fetches `…/state` and then follows `…/events`, as the Obse
 | `stream.state` | a stream changes state | the stream as in `GET /v1/streams/{stream}`, without its `input` |
 | `analysis.state` | an analysis starts, stops or switches memory | the analysis's identifiers, `state`, `memory.key` |
 | `engine.hello` | first event of every connection | `instance` and `api`, as in `GET /v1/engine` |
+| `usage` | every 10 seconds | `usage` of the engine, of every connected stream and of every running analysis, see [Usage](#usage) |
 
 After connecting, the Workbench reads `engine.hello`, lists the streams once and from then on follows the events. If the `instance` has changed, it sends its whole wanted state again.
 
@@ -434,9 +461,9 @@ Not in version 1. Named here so that version 1 does not block them.
 | Later feature | Where it attaches |
 |---|---|
 | Defined motifs and profiles | a `definitions` list in an analysis; `capabilities.detectors` with each detector's parameters and ranges; a new event type |
-| Trial runs on a capture | a resource for captures under a stream, and a way to run an analysis over one without touching its live memory |
-| Audio in the browser | a field `audio` on a stream and a data path for the encoded audio; the stream's `position_s` already allows lining events up with it |
-| Interpretation by a language model | a setting of an analysis; the engine would need to be told whether a person is watching |
+| Trial runs on a capture | a resource for captures under a stream, and a way to run an analysis over one without touching its live memory. A trial on the live stream needs nothing new: see [Open](#open), point 3 |
+| Audio in the browser | allowed (decided 2026-10-14). A field `audio` on a stream and a data path for the encoded audio; the stream's `position_s` already allows lining events up with it. The engine's existing relay is the starting point. Its encoder's CPU and the outgoing bandwidth belong in [Usage](#usage) |
+| Interpretation by a language model | decided to run for member analyses (2026-10-14), through the OpenAI and the Anthropic API, with the member's own API key. A setting of an analysis that carries provider, model and key; the engine keeps the key in memory only, never writes it to disk or logs, and never returns it in a response (`GET` shows only that a key is set). The engine would need to be told whether a person is watching. Today's narrator speaks the OpenAI format only |
 | Station time | additive fields in the envelope and in `system.status`, as drafted in the listen repository |
 
 ## For the engine session
@@ -459,15 +486,16 @@ What this spec asks of the engine, against what exists in the listener today.
 | Probe | not present; the length of a file is read with ffprobe |
 | Address check at every connection | not possible while ffmpeg opens the connection |
 | Control API on a Unix socket, `GET /v1/events` | not present |
+| CPU, memory and bandwidth per stream and analysis | not present |
 
 The paths the Observatory's site uses today (`/<slug>/ws/live` and the others) are not part of this API. Whether the engine process also serves them is a question for the day the Observatory moves onto it.
 
 ## Open
 
 1. **Should the engine remember its configuration across a restart?** Proposed here: no, the Workbench sends it again. The price: if the engine restarts while the Workbench is down, nothing is listened to until the Workbench is back, which leaves a gap in a continuous stream's memory.
-2. **Two callers on one engine.** If the Observatory's streams ever run in the same engine process, something other than the Workbench configures them. The Workbench's "delete what should not be there" after a restart would then remove them. Version 1 assumes one caller. A second caller would need a namespace per caller.
-3. **Is a trial without a memory change needed in version 1?** A member tuning rules creates a new memory with every save. Setting `memory.enabled` to false while tuning is possible with this spec; whether that is enough is question 16 in [design.md](design.md#open-questions).
-4. **Does one more analysis cost a whole spectrum?** Today each analysis computes its own. Sharing it between the analyses of a stream would make an analysis much cheaper and would not change this API. The limit `analyses_per_stream` depends on the answer and should be set from a measurement.
-5. **Limits on the size of a memory** are not in this spec. The Workbench can read sizes from `…/memories` and delete; whether the engine should also enforce a ceiling is undecided.
+2. **Two callers on one engine.** If the Observatory's streams ever run in the same engine process, something other than the Workbench configures them. The Workbench's "delete what should not be there" after a restart would then remove them. Version 1 assumes one caller. A second caller would need a namespace per caller. Since 2026-10-14 the Workbench starts with members' streams only (decided), so this can wait.
+3. **Trial mode.** Decided on 2026-10-14 that there is one. Proposed: a trial is an ordinary analysis with its own identifier and `memory.enabled` false, `PUT` next to the analysis it tries a change for and deleted afterwards. That needs nothing new in this API, but it counts against `analyses_per_stream`, so that limit has to leave room for trials. Open: whether the engine should mark such an analysis as a trial, for example so that it never writes to disk.
+4. **Does one more analysis cost a whole spectrum?** Today each analysis computes its own. Sharing it between the analyses of a stream would make an analysis much cheaper and would not change this API. The limit `analyses_per_stream` depends on the answer and should be set from a measurement, which [Usage](#usage) now provides.
+5. **Limits on the size of a memory** are not in this spec. A disk quota of 0.5 GB per member is decided (2026-10-14); the Workbench enforces it from the sizes under `…/memories`. Open: what happens to a running analysis whose member is over quota. If it should stop writing history, the engine needs a setting for that.
 6. **Server-Sent Events between the two processes** are proposed because they need no library on either side. The engine speaks WebSocket today. If keeping WebSocket there is much less work, only the transport of `…/events` changes.
 7. **The identifiers in `source`.** Events reach browsers and token holders with the catalogue's internal identifiers in them. If that is unwanted, the Workbench has to rewrite every event, which costs.

@@ -1,6 +1,6 @@
 # Design: Listening Observatory Workbench
 
-Status: draft (2026-10-13). Nothing here is built yet.
+Status: draft (2026-10-13), with the maintainer's answers of 2026-10-14. Nothing here is built yet.
 
 Each statement in this document is marked by where it stands: **decided** (agreed, build to it), **proposed** (a suggestion that has not been confirmed) or **open** (a question without an answer).
 
@@ -15,7 +15,7 @@ Listening Observatory began as one site that would grow a community section: acc
 | Purpose | show a few streams to the public | support individual research |
 | Streams | curated by the maintainer | brought by researchers |
 | Accounts | none | yes |
-| Analysis per stream | one, configured by the maintainer | several, one per researcher or project |
+| Analysis per stream | one, configured by the maintainer | several; each belongs to one researcher |
 | Filters | 1 to n rules per stream, set by the maintainer | defined by each researcher |
 | Personal data | none | email address, display name, tokens |
 | Obligations | credits per source | privacy notice, legal notice, moderation |
@@ -84,7 +84,7 @@ Rule 1 makes the Workbench depend on the Observatory's repository; that much is 
 
 **When the two share a host:**
 
-- Only if the Workbench is to analyse streams that the Observatory also analyses. Rule 2 then requires that one engine process holds the connection for both, so both run on the same host and use the same engine process. Whether the Workbench does this at all is **open** (question 1).
+- Only if the Workbench is to analyse streams that the Observatory also analyses. Rule 2 then requires that one engine process holds the connection for both, so both run on the same host and use the same engine process. **Decided** (2026-10-14): not at first. The Workbench starts with members' own streams (question 1), so it needs no shared host.
 
 **Consequence:** anyone running a Workbench fetches and builds from two repositories. Moving the engine into a repository of its own is a possible later step. It is not planned now.
 
@@ -92,7 +92,7 @@ Rule 1 makes the Workbench depend on the Observatory's repository; that much is 
 
 ### Staying in step
 
-**Proposed.** The two repositories change independently, so the Workbench must be able to tell whether the engine next to it fits.
+**Decided** (2026-10-14, question 17). The two repositories change independently, so the Workbench must be able to tell whether the engine next to it fits.
 
 - The control API (see [Processes](#processes)) has a version of its own with two numbers. The first is raised for a change that breaks existing callers, the second for an addition.
 - The engine process reports this version and its own build version on the control API.
@@ -102,7 +102,7 @@ Rule 1 makes the Workbench depend on the Observatory's repository; that much is 
 
 ## Processes
 
-**Proposed**, all of this section. It comes from a review of the engine's code on 2026-10-13.
+**Proposed**, all of this section except where marked decided. It comes from a review of the engine's code on 2026-10-13.
 
 ```text
 browser, programs, AI assistants
@@ -132,9 +132,9 @@ Earlier drafts call the engine process "the hub" or `listen-hub`. The engine alr
 
 ### Go rather than PHP for the Workbench
 
-The Observatory's site is vanilla PHP behind NGINX. The proposal for the Workbench is Go, with server-rendered pages, plain JavaScript, vendored dependencies and no build step for the front end.
+**Decided** (2026-10-14): Go, and the Go binary also renders the HTML pages. There is no PHP part. **Proposed:** pages rendered on the server with Go's templates, plain JavaScript, vendored dependencies and no build step for the front end.
 
-Reasons:
+The Observatory's site is vanilla PHP behind NGINX. The reasons that were given for Go:
 
 - **Long-lived connections.** The data stream and the MCP endpoint are connections that stay open for minutes or hours and must be checked against a session or a token. Under PHP-FPM each of them occupies one worker for its whole life.
 - **One place that checks access.** With PHP pages and a separate Go program for the long-lived connections, two programs would have to verify sessions and tokens, and two would write to the catalogue. One process is simpler to reason about and to secure.
@@ -149,11 +149,13 @@ Deployment is not a reason either way. A Go binary needs a one-time root step on
 
 ### Server-Sent Events for the data stream
 
+**Decided** (2026-10-14, question 7): SSE first. The reasons:
+
 - The engine's event stream is one-way today, server to client, so SSE loses nothing against WebSocket.
 - SSE is plain HTTP: it passes proxies, works with `curl`, and a program sends its token in a request header.
 - A browser page uses the session cookie, since a browser's `EventSource` cannot set headers.
 - Every event carries a sequence number, so a client can see that it missed something. Replaying missed events is not offered: the engine keeps no backlog.
-- WebSocket is not offered at first. Relaying audio, if it is ever allowed (question 10), would need a channel of its own.
+- WebSocket is not offered at first. Audio is allowed (question 10); it gets a channel of its own and never travels in the data stream.
 
 ## Features
 
@@ -161,12 +163,12 @@ Deployment is not a reason either way. A Go binary needs a one-time root step on
 
 | Feature | What it means | State of the detail |
 |---|---|---|
-| Public presentation of research | Pages that show ongoing work: the stream, the researcher's analysis, their notes | open: page design, who may publish what |
-| Member area | Log in, manage streams, filters, motifs and tokens through forms | proposed in [members-and-streams.md](members-and-streams.md) |
-| Streams | Register a stream, probe it, run it on demand | proposed, same document |
-| Filters and motifs | Define what an analysis ignores and what it looks for | filters: rule syntax exists in the listener; motifs: drafted as "defined motifs" in the Observatory's spec |
-| Data stream by token | The analysis events of one's own analyses | proposed: SSE, see [Processes](#processes); open: how the token is passed, limits |
-| MCP by token | The same data and the motif memory for AI assistants | proposed: an HTTP endpoint in the Workbench process; open: authentication detail |
+| Public presentation of research | Pages that show ongoing work: the stream, the researcher's analysis, their notes | decided: the member publishes at once, no review; proposed: an analysis is what is published; open: page design |
+| Member area | Log in, manage streams, filters, motifs and tokens through forms | decided: comes first, kept narrow (question 5); an analysis page shows the spectrogram, the events, the motifs and an export (question 13); detail proposed in [members-and-streams.md](members-and-streams.md) |
+| Streams | Register a stream, probe it, run it on demand in draft and always on in production, share it with invited members | decided in outline (questions 1 to 3); detail proposed, same document |
+| Filters and motifs | Define what an analysis ignores and what it looks for; a shared library; a trial mode | filters: rule syntax exists in the listener; library and trial mode decided (questions 9, 16); motifs: drafted as "defined motifs" in the Observatory's spec |
+| Data stream by token | The analysis events of one's own analyses | decided: SSE, follows the member area; proposed: token in the `Authorization` header (question 14) |
+| MCP by token | The same data and the motif memory for AI assistants | decided: an HTTP endpoint in the Workbench process, after the data stream; proposed: the same token header |
 
 What exists today that these build on:
 
@@ -195,8 +197,9 @@ The analysis itself is already an object that is fed samples, so feeding two of 
 - **Sample rate belongs to the decode.** ffmpeg resamples to the rate the listener asks for, so the rate is fixed before any analysis sees a sample. It has to become a property of the stream, not a setting of an analysis. See [analyses-and-filters.md](analyses-and-filters.md).
 - **The memory needs the analysis in its key.** Today the memory's directory is named after the source, the input and the range and rules. Two analyses of one stream with the same range and rules would write to the same directory.
 - **A cap** on analyses per stream, and a measured cost of one more analysis. Each analysis computes its own spectrum today.
+- **Measuring.** The engine reports the CPU, memory and bandwidth of each stream and analysis, for the Workbench's accounting (decided, question 11; see [members-and-streams.md](members-and-streams.md#resources-and-caps)).
 
-Piece B is needed as soon as one stream has a second analysis: a member comparing two settings on their own stream, a second member on the same stream, or the Observatory and the Workbench on the same stream.
+Piece B is needed as soon as one stream has a second analysis: a member comparing two settings on their own stream, a second member on the same stream, or a trial run next to the analysis it tries a change for. With shared streams and the trial mode decided, the Workbench needs piece B early.
 
 ### A third change, for safety
 
@@ -204,7 +207,7 @@ The limits in [members-and-streams.md](members-and-streams.md) ask that a stream
 
 ## Order of work
 
-The order is **open**. Two views are on record:
+**Decided** (2026-10-14, question 5): the member area comes first, kept narrow; the data-stream token follows, MCP after it. **Decided** (question 6): the first installation is on the intranet. The rest of the order is **proposed**. Two views were on record:
 
 - The maintainer expects the member area to be needed early, because the researchers are not all programmers. A token and a WebSocket URL are of little use to someone without a client.
 - The earlier proposal was to start with tokens on the existing listeners, as the smallest step from what runs today. Since the rules were decided this no longer holds: the existing listeners are the Observatory's filtered analyses (rule 3), and extra listeners for research would be extra connections (rule 2).
@@ -216,52 +219,82 @@ A **proposed** order that respects the first view:
 | 0 | The control API, written as a spec in this repository: [control-api.md](control-api.md), a draft | — |
 | 1a | Engine, piece A: one process, many streams, added and removed at run time through the control API | 0 |
 | 1b | Engine, piece B: several analyses on one decode | 1a |
-| 2 | Catalogue and accounts: login by email link, own streams, private pages | 1a; privacy notice and legal notice |
-| 3 | Filters per analysis, set in a form; the page shows which rules are applied | 2; a second analysis on one stream needs 1b |
-| 4 | Tokens: data stream and MCP for one's own analyses | 2 |
+| 2 | Catalogue and accounts: login by invitation and email link, own streams, private analysis pages, resource accounting and caps, audit trail | 1a; privacy notice and legal notice before it leaves the intranet |
+| 3 | Filters per analysis, set in a form, with trial mode; the page shows which rules are applied; sharing a stream with invited members; the filter library | 2; a second analysis on one stream needs 1b |
+| 4 | Token for the data stream of one's own analyses | 2 |
+| 4b | MCP with the same tokens | 4 |
 | 5 | Defined motifs per analysis; captures and trial runs | the listener's defined-motif work |
-| 6 | Public research pages | 2, and a decision on publishing |
+| 6 | Public research pages | 2; publishing is decided (at once, no review) |
+| 7 | Audio in the browser; the language-model interpretation | 2; questions 10 and 19 |
 
-Step 2 can be built against a stand-in for the engine as soon as step 0 is stable. The engine opening the stream connection itself (see above) has to be done before sign-up is open to people the maintainer does not know.
+Step 2 can be built against a stand-in for the engine as soon as step 0 is stable. The engine opening the stream connection itself (see above) has to be done before sign-up is open to people the maintainer does not know. Sign-up is by invitation (decided).
 
-## Open questions
 
-Recommendations are the reviewer's, from the review of 2026-10-13. They are **proposed**, not decided.
+## Questions and answers
 
-### For the maintainer to decide first
+Answers are the maintainer's of 2026-10-14 and are **decided**. Where an answer leaves a detail to settle, the detail is marked. Recommendations are the reviewer's and are **proposed**.
 
-These four shape the architecture.
+### Shaping the architecture
 
-1. **Whose streams?** Members' own streams only at first, or the Observatory's streams too? The second would move the Observatory's production listeners into the shared engine process, and each operator would have to agree to the new use.
-   - *Recommendation:* members' own streams only at first. The engine process is then proven on streams whose operators are the members themselves, and the Observatory's production setup stays untouched. Taking in the Observatory's streams is a later decision of its own.
-2. **On demand or continuous for private streams?** The draft runs a private stream only while its owner watches or a token reads. Learned motifs need continuous listening: a memory built from scattered minutes shows what happened to be heard, not what recurs.
-   - *Recommendation:* the owner chooses per stream, on demand by default. Continuous listening is allowed on a stream the member runs themselves, within a cap on continuously running streams. Every analysis page states the mode and which hours were actually heard, so that a memory with gaps is not misread.
-3. **Who may add an analysis to someone else's stream, and what is published: a stream or an analysis?** Rule 2 speaks of several researchers on one stream, but the drafts nest analyses under one's own streams and give the states to the stream.
-   - *Recommendation:* at first nobody but the stream's owner. Later, a member whom the owner has invited by name, which keeps rule 4 intact. What is published is an analysis: a research page shows one analysis with its rules, and carries the stream's name, place and credit. A stream then has the states that concern its connection (draft, active, paused, suspended), an analysis those that concern visibility (private, published, withdrawn). Publishing an analysis of someone else's stream needs that owner's consent.
-4. **Who builds the engine step, and in which order?** The maintainer's current thinking: the control API is first written as a spec here, and the engine work then happens in a session in the listen repository, so that two sessions never edit that repository at once.
-   - *Recommendation:* agreed, with one addition. The spec should be read against the engine's code by the engine session before it counts as stable, since that is where it will meet the existing wiring. Changes found there come back as edits to the spec in this repository.
+1. **Whose streams?** Members' own streams only at first, or the Observatory's streams too?
+   - **Decided:** members' streams. Members set up and configure new streams themselves. The Observatory's streams and production setup stay outside the Workbench.
+2. **On demand or continuous?** Learned motifs need continuous listening.
+   - **Decided:** a stream in draft runs only while a member watches or a token reads. A stream in production may run always on. The Workbench monitors how many streams run and what bandwidth and compute they need, shows each member their own use, and enforces a cap for the server and a cap per member, both set by the master admin.
+   - Detail, **proposed:** [members-and-streams.md](members-and-streams.md#states), [Resources and caps](members-and-streams.md#resources-and-caps).
+3. **Who may add an analysis to someone else's stream, and what is published?**
+   - **Decided:** the shared model. A stream is shared, its analyses are individual. Once connected, a stream goes offline only when all its consumers have stopped. A stream always shows who is connected to it.
+   - **Decided** (question 21): what is published is an analysis.
+   - **Proposed:** the owner invites members by name; the owner can still pause the stream (see [members-and-streams.md](members-and-streams.md#of-a-stream)).
+4. **Who builds the engine step, and in which order?**
+   - **Decided:** as recommended. The control API is written as a spec here; the engine session in the listen repository reads it against the engine's code before it counts as stable, and changes found there come back as edits to the spec here.
 
 ### Carried over
 
-5. Which comes first for the first researchers: the member area or token access?
-   - *Recommendation:* the member area, kept narrow: login, registering one's own stream, the probe, one private analysis page and the filter form. The data-stream token follows directly, MCP later.
-6. Does the Workbench run on the same server and domain as the Observatory, or separately? The server is answered in part under [Dependencies](#dependencies): always on the engine process's host, and on the Observatory's host only when streams are shared. The domain is open.
-   - *Recommendation:* a name of its own, so that cookies, the privacy notice and the content rules of the two sites stay apart.
+5. Member area or token access first?
+   - **Decided:** the member area, kept narrow: login, registering a stream, the probe, one private analysis page and the filter form. The data-stream token follows, MCP afterwards.
+6. Same server and domain as the Observatory?
+   - **Decided:** a name of its own. The Workbench starts on the intranet as `low.home.arpa`. Production will be `low.vrontier.org`, which is still to be set up.
+   - **Proposed** points for the intranet start: `home.arpa` names get no certificate from a public authority, so the intranet needs a local certificate authority or plain HTTP inside the network. The email login needs mail to leave the intranet. The privacy notice and legal notice are needed before the Workbench is reachable from outside.
 7. Data stream: SSE, WebSocket, or both?
-   - *Recommendation:* SSE only at first, see [Processes](#processes).
-8. MCP: stay with a process reached over SSH, or offer an HTTP endpoint with a token? Only the second works for researchers without a shell account.
-   - *Recommendation:* the HTTP endpoint, in the Workbench process.
+   - **Decided:** SSE first.
+8. MCP: a process reached over SSH, or an HTTP endpoint with a token?
+   - **Decided:** the HTTP endpoint, in the Workbench process.
 9. May a researcher see or reuse another researcher's filters and motifs?
-10. Does audio leave the Workbench at all (relay to the browser, captures), or analysis data only? This is a question for each stream's operator as much as for the design.
-11. How many analyses may run on one stream, and what does one cost? (One listener with one analysis costs about 5 % of a core and 25 to 30 MB today. How much of that is the decode and how much the analysis has not been measured.)
+   - **Decided:** yes, through a shared library for all members.
+   - **Proposed:** the library is part of the Workbench, not a git repository, and taking from it makes a copy. See [members-and-streams.md](members-and-streams.md#sharing).
+10. Does audio leave the Workbench at all?
+    - **Decided:** audio is allowed (members' question 3).
+    - Asked back: is audio needed for the analysis? No. The analysis runs on the decoded samples inside the engine; nothing about it needs audio to leave the server. Audio leaving serves the researcher: hearing what a detection was is often the quickest way to tell a bird from a bearing.
+    - **Proposed:** playback in the browser, per stream, switched on by its owner and off by default. It is relayed by the Workbench from the engine's one connection, never by sending the browser to the operator's server, so rule 2 holds. The engine has such a relay today (re-encoding to AAC or Opus for browsers, verified in its code). Short captures around an event count against the disk quota. No audio through the data-stream token or MCP at first. Every listener adds an encoder share and outgoing bandwidth, both accounted. For a stream the member does not run, the operator's permission has to cover playback.
+11. How many analyses may run on one stream, and what does one cost?
+    - **Decided:** the cost of each analysis is measured and accounted against CPU and RAM. What can and cannot be measured exactly is under [Measurement limits](members-and-streams.md#measurement-limits).
 12. Who reviews what becomes public?
+    - **Decided:** nobody. There is no hierarchy; the member decides.
+13. What does a private analysis page show?
+    - **Decided:** the spectrogram, the list of events, the motifs and an export.
+    - **Proposed:** the export gives the events and the motifs of a chosen period as CSV and as JSON, with the analysis's settings and rules revision in the file.
+14. How is a token passed to the data stream?
+    - Asked back: how do private APIs solve this? Almost all take the token in a request header: `Authorization: Bearer <token>` (GitHub, Stripe, OpenAI), or a header of their own (Anthropic uses `x-api-key`). Many give tokens a recognisable prefix (`ghp_` at GitHub, `sk_live_` at Stripe) so that leaked tokens can be found by secret scanning. A token in the address is avoided because addresses end up in server logs, proxies and browser histories. Browsers cannot set headers on an `EventSource`, which is why a browser page uses its session cookie. The MCP specification's authorisation for HTTP endpoints builds on OAuth 2.1, which also ends in a bearer token in the `Authorization` header.
+    - **Proposed:** the `Authorization: Bearer` header with a token prefixed `low_` for programs and MCP clients; the session cookie for browser pages; never the address. OAuth only if an assistant the members use cannot be given a static header (to be checked when MCP is built).
+15. What is a "project"?
+    - **Decided:** there are no projects for now. A member defines streams and filters and may let others work on them.
+16. Saving a rule change starts a fresh motif memory. A trial mode, or a warning?
+    - **Decided:** a trial mode. And an audit trail of the creation, change and deletion of streams, their settings and their filters.
+    - **Proposed:** a trial runs the changed settings as a temporary extra analysis on the same decode, with its memory switched off, next to the analysis it is a trial for. It ends when its page is closed, or after one hour. "Keep" saves the settings as a new revision of the analysis, which then starts its new memory; "discard" ends it. A trial counts against the caps. Audit detail in [members-and-streams.md](members-and-streams.md#audit-trail).
+17. How are the two repositories kept in step?
+    - **Decided:** as proposed under [Staying in step](#staying-in-step).
 
-### Gaps found in the review
+### Raised by the answers
 
-13. What does a private analysis page show? The Observatory's live page is made for an audience. A researcher probably needs a spectrogram, the list of events, the motifs and an export. This is most of the work of the member area and is not described anywhere.
-14. How is a token passed to the data stream? A request header works for programs. A token in the address would end up in logs.
-15. What is a "project"? The table at the top says "one per researcher or project"; nothing else defines it.
-16. Saving a rule change starts a fresh motif memory. With a form this happens at every correction. Should there be a trial mode that does not touch the memory, or a warning before saving?
-17. How are the two repositories kept in step? A mechanism is proposed under [Staying in step](#staying-in-step).
+Answered by the maintainer on 2026-10-14; **decided**.
 
-Further gaps that concern accounts, streams and limits are listed in [members-and-streams.md](members-and-streams.md).
+18. **Whose cap does the decode of a shared stream count against?** Costs are counted against CPU and RAM caps, not billed.
+    - **Decided:** it is split equally among the members who have an analysis running on the stream. See [Resources and caps](members-and-streams.md#resources-and-caps).
+19. **The language-model interpretation: whose key?**
+    - **Decided:** each member registers their own API key for the OpenAI or the Anthropic API; the provider bills the member. Without a key there is no interpretation. Handling of the keys is **proposed** in [members-and-streams.md](members-and-streams.md#language-model-keys).
+20. **Go or PHP for the Workbench?**
+    - **Decided:** Go, with the HTML pages rendered by the same binary. See [Processes](#processes).
+21. **What is published, a stream or an analysis?**
+    - **Decided:** an analysis. See [members-and-streams.md](members-and-streams.md#of-an-analysis).
+
+Further questions that concern accounts, streams and limits are in [members-and-streams.md](members-and-streams.md#questions-and-answers).
