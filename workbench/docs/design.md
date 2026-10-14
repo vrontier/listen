@@ -280,7 +280,7 @@ Answers are the maintainer's of 2026-10-14 and are **decided**. Where an answer 
     - **Decided:** there are no projects for now. A member defines streams and filters and may let others work on them.
 16. Saving a rule change starts a fresh motif memory. A trial mode, or a warning?
     - **Decided:** a trial mode. And an audit trail of the creation, change and deletion of streams, their settings and their filters.
-    - **Proposed:** a trial runs the changed settings as a temporary extra analysis on the same decode, with its memory switched off, next to the analysis it is a trial for. It ends when its page is closed, or after one hour. "Keep" saves the settings as a new revision of the analysis, which then starts its new memory; "discard" ends it. A trial counts against the caps. Audit detail in [members-and-streams.md](members-and-streams.md#audit-trail).
+    - **Proposed:** a trial runs the changed settings as a temporary extra analysis on the same decode, next to the analysis it is a trial for. Its memory is kept in RAM only: it learns motifs as the real analysis would, so the member sees what the change does to them, and nothing is written to disk. It ends when its page is closed, or after one hour. "Keep" saves the settings as a new revision of the analysis, which then starts its new memory; "discard" ends it. A trial counts against the caps. Audit detail in [members-and-streams.md](members-and-streams.md#audit-trail).
 17. How are the two repositories kept in step?
     - **Decided:** as proposed under [Staying in step](#staying-in-step).
 

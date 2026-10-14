@@ -1,6 +1,6 @@
 # Control API between the Workbench and the engine process
 
-Status: draft (2026-10-13), with additions for the maintainer's answers of 2026-10-14. Nothing here is built. API version described: **1.0**.
+Status: draft (2026-10-13), with additions for the maintainer's answers of 2026-10-14 and corrections from a reading of the engine's code on 2026-10-14. Nothing here is built. API version described: **1.0**.
 
 Everything in this document is **proposed**. It becomes stable only after it has been read against the engine's code in the listen repository (see [design.md](design.md#questions-and-answers), question 4, decided). Points that are still **open** are collected at the end.
 
@@ -134,7 +134,7 @@ engine
 | Field | Required | Meaning |
 |---|---|---|
 | `input` | yes | The stream's address. `http` and `https` only. A file path is accepted only if the engine was started with file inputs allowed, which is meant for development and tests. |
-| `sample_rate` | yes | The rate of the decode, the same for every analysis of this stream. Normally the rate the probe reported. |
+| `sample_rate` | yes | The rate of the decode, the same for every analysis of this stream. See [Choosing the sample rate](#choosing-the-sample-rate). |
 | `mode` | no, default `on_demand` | `continuous`: connected for as long as the stream exists. `on_demand`: connected only while an analysis of it has a subscriber. |
 | `idle_after_s` | no, default 30 | `on_demand` only: how long after the last subscriber left the connection is closed. |
 | `retry_max_s` | no, default 300 | The longest wait between attempts to reach a stream that keeps failing. The wait doubles from 1 second. |
@@ -174,11 +174,20 @@ Response to `PUT` and `GET`:
 | `reconnecting` | the connection was lost; waiting for the next attempt |
 | `refused` | the engine will not connect to this address; `last_error` says why |
 
-- `since` is when the stream entered its present state. A stream that has been `reconnecting` for 24 hours is paused by the Workbench, not by the engine: the engine has no notion of pausing and would not know whom to tell.
+- `since` is when the stream entered its present state. A stream whose `last_data` is more than 24 hours old is paused by the Workbench, not by the engine: the engine has no notion of pausing and would not know whom to tell. The rule uses `last_data`, not the state, because a stream that is down moves between `buffering` and `reconnecting` (see below).
+- ffmpeg retries a lost connection by itself for a while (up to 10 seconds between attempts) before it gives up. During those retries the state is `buffering`, not `reconnecting`, and `reconnects` counts only the times ffmpeg was started again.
 - **Pausing** a stream is deleting it from the engine. Its memories stay on disk and are found again when the same identifiers return.
 - `last_error` is `null` or an object with `code`, `message` and `at`.
 
 `DELETE /v1/streams/s-0001` closes the connection and removes the stream and its analyses. The memories stay unless `?purge=true` is given.
+
+### Choosing the sample rate
+
+**Proposed** (2026-10-14, from the engine's code). The rate cannot be changed later, so the form has to explain the choice.
+
+- The analysis window is always 4096 points. A higher rate therefore makes each analysis bin wider: about 5.4 Hz at 22 050 Hz, 7.8 Hz at 32 000 Hz, 10.8 Hz at 44 100 Hz. Two tones closer than about two bins cannot be told apart.
+- A higher rate also costs more: the decode, and every analysis, process proportionally more samples.
+- The default is therefore 22 050 Hz, the listener's default today, which covers content up to about 11 kHz. 32 000, 44 100 and 48 000 Hz are offered for streams whose interesting content lies higher (VLF radio, for example), never above the stream's own rate as the probe found it.
 
 ### Which addresses the engine connects to
 
@@ -208,7 +217,7 @@ The engine, not the Workbench, enforces what may be connected to, because only t
     { "kind": "line", "hz": 1000, "tol_hz": 5 }
   ],
   "memory": {
-    "enabled": true,
+    "mode": "disk",
     "motif_return_s": 180,
     "history_days": 30
   },
@@ -225,7 +234,7 @@ Every part is optional. An empty object is an analysis of the full range with no
 | `settings.transient_k` | 6 | How far above the usual change in the spectrum a transient must stand. Higher is less sensitive. |
 | `settings.transient_gap_s` | 0.3 | Shortest time between two transients. |
 | `rules` | none | Filter rules, see below. At most `limits.rules_per_analysis`. |
-| `memory.enabled` | `true` | Whether motifs are learned and history is kept. |
+| `memory.mode` | `disk` | `disk`: motifs are learned and kept with the history on disk. `ram`: motifs are learned but nothing is written, and all is gone when the analysis ends; meant for trials. `off`: no motifs, no history. All three exist in the listener today (a memory directory, a memory without one, no memory). |
 | `memory.motif_return_s` | 180 | Absence after which a known motif counts as returned. |
 | `memory.history_days` | 30 | Days of history kept. |
 | `label` | none | Up to 63 characters, opaque to the engine, returned with the analysis and in its status events. Meant for the Workbench's revision of the settings, so that a result can be traced to it. |
@@ -256,7 +265,7 @@ This is the listener's `-ignore` syntax as an object. The engine returns each ru
   "rules": [
     { "kind": "comb", "hz": 50, "text": "comb=50" }
   ],
-  "memory": { "enabled": true, "motif_return_s": 180, "history_days": 30, "key": "r800-12000-i3fa91c07" },
+  "memory": { "mode": "disk", "motif_return_s": 180, "history_days": 30, "key": "r800-12000-i3fa91c07" },
   "label": "rev-7",
   "effective": {
     "sample_rate": 32000,
@@ -281,12 +290,16 @@ This is the listener's `-ignore` syntax as an object. The engine returns each ru
 
 | Changed | Effect |
 |---|---|
-| `transient_k`, `transient_gap_s`, `memory.*`, `label` | Applied to the running analysis. The memory continues. |
+| `transient_k`, `transient_gap_s`, `memory.motif_return_s`, `memory.history_days`, `label` | Applied to the running analysis. The memory continues. |
+| `memory.mode` | The memory is opened or closed; the analysis itself continues. |
 | `min_hz`, `max_hz`, `rules` | The analysis starts again and uses a different memory. |
+
+Applying a setting to a running analysis needs setters in the engine. Making a new analysis object instead would not do: its resonance numbering would start again at `res-00001`, and the memory, which follows open resonances by that number, would mix old and new ones.
 
 The memory of an analysis is kept under a key made of the range and the rules, inside the directory of that analysis. Motifs learned with other rules are not comparable, so a change of range or rules switches to another memory: an empty one, or the earlier one if exactly these values were used before. The response's `memory.key` names the memory in use.
 
 - `GET …/memories` lists the memories kept for the analysis: key, range and rules, first and last use, number of motifs, size on disk.
+- The stored history belongs to a memory too: in the listener the history files lie in the memory's directory. After a change of range or rules, `…/history/…` and `…/motifs` show the new memory only. They take `?memory=<key>` to read an earlier one, which the export across revisions needs.
 - `DELETE …/memories/{key}` deletes one. The memory in use cannot be deleted (`409`, code `in_use`).
 - `DELETE` of an analysis keeps its memories unless `?purge=true` is given.
 
@@ -356,7 +369,8 @@ The engine connects, listens for `listen_s` seconds (default 10, at most 30) and
 ```json
 {
   "ok": true,
-  "content_type": "application/ogg",
+  "exists": null,
+  "content_type": null,
   "codec": "vorbis",
   "sample_rate": 32000,
   "channels": 1,
@@ -368,7 +382,8 @@ The engine connects, listens for `listen_s` seconds (default 10, at most 30) and
 ```
 
 - `ok` is false if the address is not allowed, nothing answers, the content is not audio, it cannot be decoded, the bit rate is above `limits.max_bitrate_kbps`, or only silence arrived. `problems` then lists `code` and `message` for each reason.
-- A probe is a connection to the operator's server. If a stream with this `input` already exists and is connected, the engine answers from that decode and opens no second connection.
+- A probe is a connection to the operator's server. If a stream with this `input` already exists, the engine opens no connection and answers `"ok": false` with `exists` set to that stream's identifier; the Workbench then offers to join the shared stream. A running decode could not answer anyway: it delivers samples at the stream's chosen rate and knows nothing of the codec or the stream's own rate.
+- `codec`, `sample_rate`, `channels` and `bitrate_kbps` describe the stream as sent, as ffprobe reports them. `content_type` stays `null` until the engine opens the HTTP connection itself, since ffmpeg does not pass it on.
 - The engine runs one probe at a time per address and a few at a time overall; more are answered with `429`.
 
 ## Data of an analysis
@@ -388,6 +403,7 @@ data: {"type":"signal.frame","version":1,"timestamp":"2026-10-13T09:30:02.150Z",
 
 - `data` is the event's envelope exactly as the listener produces it. `id` is its sequence number and `event` its type.
 - `source` in the envelope is the stream's and the analysis's identifier, joined by a slash.
+- `position_s` in the envelope is on the **stream's** timeline: seconds of audio decoded since the engine created the stream. It is the same for every analysis of a stream, and does not restart when an analysis is added or starts again. This is a change: today each analysis counts its own samples from the moment it was made. Without it, two analyses of one stream would disagree about when something happened, and neither would line up with relayed audio.
 - Sequence numbers count per analysis and start again when the analysis starts again. A gap means events were missed. Nothing is replayed, and `Last-Event-ID` is ignored.
 - `?types=` limits the stream to the listed event types, separated by commas.
 - A comment line is sent every 20 seconds so that both sides notice a dead connection.
@@ -395,7 +411,7 @@ data: {"type":"signal.frame","version":1,"timestamp":"2026-10-13T09:30:02.150Z",
 - **A subscription is what "on demand" means.** A stream in mode `on_demand` connects when the first subscription to any of its analyses opens, and closes `idle_after_s` after the last one ended.
 - **The Workbench subscribes once per analysis** and hands the events on to however many pages and token holders are reading. It ends the subscription when the last of them has gone. The engine allows only `limits.subscriptions_per_analysis` at a time.
 
-Event types today: `signal.frame`, `signal.spectrum`, `feature.state`, `event.transient`, `event.resonance`, `motif.detected`, `motif.returned`, `memory.summary`, `system.status`.
+Event types today: `signal.frame`, `signal.spectrum`, `feature.state`, `event.transient`, `event.resonance`, `motif.detected`, `motif.returned`, `memory.summary`, `system.status`, and `narrative.update` from the interpretation.
 
 `system.status` is sent every 5 seconds and on every change of the stream's state. Under the engine process it describes one analysis: the stream's state, the delay, the sample rate, the analysis's `label` and `memory.key`. The counts of listeners that today's status carries are dropped, because the engine no longer sees the readers.
 
@@ -404,8 +420,8 @@ Event types today: `signal.frame`, `signal.spectrum`, `feature.state`, `event.tr
 | Path | Content | As today's |
 |---|---|---|
 | `…/state` | the latest frame, spectrum, features and status, the active resonances and motifs, recent events, the memory's summaries | `/api/state/current` |
-| `…/motifs` | all motifs of the memory in use | `/api/motifs` |
-| `…/motifs/{motif}` | one motif with its recent occurrences | `/api/motifs/{id}` |
+| `…/motifs` | the established motifs of the memory in use, and the aliases of motifs merged into others | `/api/motifs` |
+| `…/motifs/{motif}` | one motif with its recent occurrences; a merged motif's old identifier leads to the one it was merged into | `/api/motifs/{id}` |
 | `…/history/events` | stored events; `?from=&to=` (default: the last hour), `?type=`, `?limit=` (at most 2000) | `/api/history/events` |
 | `…/history/features` | per-minute aggregates; `?window=1h` or `24h` | `/api/history/features` |
 
@@ -463,7 +479,7 @@ Not in version 1. Named here so that version 1 does not block them.
 | Defined motifs and profiles | a `definitions` list in an analysis; `capabilities.detectors` with each detector's parameters and ranges; a new event type |
 | Trial runs on a capture | a resource for captures under a stream, and a way to run an analysis over one without touching its live memory. A trial on the live stream needs nothing new: see [Open](#open), point 3 |
 | Audio in the browser | allowed (decided 2026-10-14). A field `audio` on a stream and a data path for the encoded audio; the stream's `position_s` already allows lining events up with it. The engine's existing relay is the starting point. Its encoder's CPU and the outgoing bandwidth belong in [Usage](#usage) |
-| Interpretation by a language model | decided to run for member analyses (2026-10-14), through the OpenAI and the Anthropic API, with the member's own API key. A setting of an analysis that carries provider, model and key; the engine keeps the key in memory only, never writes it to disk or logs, and never returns it in a response (`GET` shows only that a key is set). The engine would need to be told whether a person is watching. Today's narrator speaks the OpenAI format only |
+| Interpretation by a language model | decided to run for member analyses (2026-10-14), through the OpenAI and the Anthropic API, with the member's own API key. A setting of an analysis that carries provider, model and key; the engine keeps the key in memory only, never writes it to disk or logs, and never returns it in a response (`GET` shows only that a key is set). The engine would need to be told whether a person is watching: today it counts browser connections apart from programs (`?role=tool`), but under this API it sees one subscription by the Workbench. Proposed: the Workbench reports the number of people watching each analysis with a small `PUT`. Today's narrator speaks the OpenAI format only |
 | Station time | additive fields in the envelope and in `system.status`, as drafted in the listen repository |
 
 ## For the engine session
@@ -487,6 +503,11 @@ What this spec asks of the engine, against what exists in the listener today.
 | Address check at every connection | not possible while ffmpeg opens the connection |
 | Control API on a Unix socket, `GET /v1/events` | not present |
 | CPU, memory and bandwidth per stream and analysis | not present |
+| `position_s` on the stream's timeline | counted per analysis from its creation |
+| Settings applied to a running analysis | fixed when the analysis is made; no setters |
+| `memory.mode` | the three modes exist, chosen by flags at start |
+| History and motifs of an earlier memory (`?memory=`) | only the memory in use is served |
+| Probe reporting codec, rate and bit rate | ffmpeg runs with `-loglevel error` and reports none of these |
 
 The paths the Observatory's site uses today (`/<slug>/ws/live` and the others) are not part of this API. Whether the engine process also serves them is a question for the day the Observatory moves onto it.
 
@@ -494,8 +515,10 @@ The paths the Observatory's site uses today (`/<slug>/ws/live` and the others) a
 
 1. **Should the engine remember its configuration across a restart?** Proposed here: no, the Workbench sends it again. The price: if the engine restarts while the Workbench is down, nothing is listened to until the Workbench is back, which leaves a gap in a continuous stream's memory.
 2. **Two callers on one engine.** If the Observatory's streams ever run in the same engine process, something other than the Workbench configures them. The Workbench's "delete what should not be there" after a restart would then remove them. Version 1 assumes one caller. A second caller would need a namespace per caller. Since 2026-10-14 the Workbench starts with members' streams only (decided), so this can wait.
-3. **Trial mode.** Decided on 2026-10-14 that there is one. Proposed: a trial is an ordinary analysis with its own identifier and `memory.enabled` false, `PUT` next to the analysis it tries a change for and deleted afterwards. That needs nothing new in this API, but it counts against `analyses_per_stream`, so that limit has to leave room for trials. Open: whether the engine should mark such an analysis as a trial, for example so that it never writes to disk.
+3. **Trial mode.** Decided on 2026-10-14 that there is one. Proposed: a trial is an ordinary analysis with its own identifier and `memory.mode` `ram`, `PUT` next to the analysis it tries a change for and deleted afterwards. It learns motifs as the real one would, so the member sees what the change does to them, and writes nothing to disk. That needs nothing new in this API, but it counts against `analyses_per_stream`, so that limit has to leave room for trials.
 4. **Does one more analysis cost a whole spectrum?** Today each analysis computes its own. Sharing it between the analyses of a stream would make an analysis much cheaper and would not change this API. The limit `analyses_per_stream` depends on the answer and should be set from a measurement, which [Usage](#usage) now provides.
 5. **Limits on the size of a memory** are not in this spec. A disk quota of 0.5 GB per member is decided (2026-10-14); the Workbench enforces it from the sizes under `…/memories`. Open: what happens to a running analysis whose member is over quota. If it should stop writing history, the engine needs a setting for that.
 6. **Server-Sent Events between the two processes** are proposed because they need no library on either side. The engine speaks WebSocket today. If keeping WebSocket there is much less work, only the transport of `…/events` changes.
 7. **The identifiers in `source`.** Events reach browsers and token holders with the catalogue's internal identifiers in them. If that is unwanted, the Workbench has to rewrite every event, which costs.
+8. **Feeding the analyses.** The listener hands samples to its analysis in the goroutine that reads ffmpeg's output. With several analyses fed one after the other there, one slow analysis delays the others and, in the end, ffmpeg. Whether each analysis gets its own goroutine with a short queue is the engine session's choice; it does not change this API.
+9. **Sharing the spectrum** (point 4) needs the analyses of a stream to step through the audio on the same grid of 1/20 s. An analysis added later has to join that grid, which the stream's timeline above makes possible.
