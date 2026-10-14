@@ -1,0 +1,122 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+{{with .Data}}
+<p class="crumbs"><a href="/account">Streams</a> › <a href="/account/streams/{{.Stream.Slug}}">{{.Stream.Texts.Name}}</a></p>
+<div class="heading-row">
+  <h1>{{.Analysis.Name}}</h1>
+  <span class="state state-{{.Analysis.State}}">{{.Analysis.State}} · {{.Analysis.Label}}</span>
+</div>
+
+{{if or (eq .Stream.State "draft") (eq .Stream.State "production")}}
+<section id="live" class="live" data-live="{{.LivePath}}" data-data="{{.DataPath}}">
+  <div class="live-head">
+    <span id="status" class="conn">connecting…</span>
+    <span id="level" class="meta"></span>
+    <span class="meta">{{if eq .Stream.State "draft"}}The stream is connected while this page is open.{{end}}</span>
+  </div>
+  <div class="spectro">
+    <div class="axis"><span id="axis-max"></span><span id="axis-min"></span></div>
+    <canvas id="spectrogram" width="960" height="240" aria-label="Spectrogram: time runs to the left, frequency upwards on a log scale"></canvas>
+  </div>
+  <p class="meta">Spectrogram of the analysed range, newest on the right. Dots mark the spectral peaks left after the filter rules; the bands themselves are never filtered.</p>
+  <div class="grid">
+    <div>
+      <h2>Events</h2>
+      <ol id="events" class="events"></ol>
+    </div>
+    <div>
+      <h2>Motifs</h2>
+      <table id="motifs"><thead><tr><th>Motif</th><th>Kind</th><th>Seen</th><th>Presence</th><th>Last</th></tr></thead><tbody></tbody></table>
+      <p class="meta">What the memory has found to recur. It starts afresh when the range or the rules change.</p>
+    </div>
+  </div>
+</section>
+<script src="/static/analysis.js" defer></script>
+{{else}}
+<p class="note">The stream is {{.Stream.State}}; nothing is analysed now.</p>
+{{end}}
+
+<section>
+  <h2>Export</h2>
+  <form method="get" action="/account/streams/{{.Stream.Slug}}/analyses/{{.Analysis.ID}}/export" class="inline-form">
+    <label>From <input type="datetime-local" name="from"></label>
+    <label>To <input type="datetime-local" name="to"></label>
+    <label>Format <select name="format"><option value="csv">CSV</option><option value="json">JSON with motifs</option></select></label>
+    <button class="secondary">Download</button>
+  </form>
+  <p class="meta">Stored events of the period (default: the last 24 hours, at most 31 days), with the settings in the file.</p>
+</section>
+
+<section>
+  <h2>Settings and filter rules</h2>
+  {{with .Warnings}}<div class="note warn-note">{{range .}}<p>{{.}}</p>{{end}}</div>{{end}}
+  <form method="post" action="/account/streams/{{.Stream.Slug}}/analyses/{{.Analysis.ID}}/settings" class="stack" id="settings">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <fieldset>
+      <legend>Range and sensitivity</legend>
+      <p class="meta">Empty means the engine's default.{{if .Engine}} In use: {{hz .Engine.Effective.MinHz}} to {{hz .Engine.Effective.MaxHz}}, peaks searched from {{hz .Engine.Effective.PeakMinHz}} to {{hz .Engine.Effective.PeakMaxHz}}, bins of {{hz .Engine.Effective.BinHz}}.{{end}}</p>
+      <div class="row four">
+        <label>Lowest Hz {{with index .Errs "min_hz"}}<span class="field-error">{{.}}</span>{{end}}<input name="min_hz" value="{{.Form.MinHz}}" inputmode="decimal" placeholder="20"></label>
+        <label>Highest Hz {{with index .Errs "max_hz"}}<span class="field-error">{{.}}</span>{{end}}<input name="max_hz" value="{{.Form.MaxHz}}" inputmode="decimal" placeholder="near half the rate"></label>
+        <label>Transient threshold {{with index .Errs "transient_k"}}<span class="field-error">{{.}}</span>{{end}}<input name="transient_k" value="{{.Form.TransientK}}" inputmode="decimal" placeholder="6"></label>
+        <label>Gap between transients, s {{with index .Errs "transient_gap_s"}}<span class="field-error">{{.}}</span>{{end}}<input name="transient_gap_s" value="{{.Form.TransientGap}}" inputmode="decimal" placeholder="0.3"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Filter rules</legend>
+      <p class="meta">A rule removes spectral peaks at known interference before resonances and motifs are derived from them. It does not change the audio or the spectrogram. A comb covers a frequency and its harmonics.</p>
+      {{with index .Errs "rules"}}<p class="field-error">{{.}}</p>{{end}}
+      <table class="rules" id="rules">
+        <thead><tr><th>Kind</th><th>Hz</th><th>Odd only</th><th>Tolerance Hz</th><th>Drift %</th><th>As configured</th></tr></thead>
+        <tbody>
+        {{$errs := .Errs}}
+        {{range $i, $r := .Form.Rules}}
+        <tr>
+          <td><select name="rule_kind_{{$i}}"><option value="comb" {{if eq $r.Kind "comb"}}selected{{end}}>comb</option><option value="line" {{if eq $r.Kind "line"}}selected{{end}}>line</option></select></td>
+          <td><input name="rule_hz_{{$i}}" value="{{$r.Hz}}" inputmode="decimal" size="7">{{with index $errs (printf "rule_hz_%d" $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
+          <td><input type="checkbox" name="rule_odd_{{$i}}" {{if $r.Odd}}checked{{end}}></td>
+          <td><input name="rule_tol_{{$i}}" value="{{$r.Tol}}" inputmode="decimal" size="5" placeholder="1.5 bins">{{with index $errs (printf "rule_tol_%d" $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
+          <td><input name="rule_drift_{{$i}}" value="{{$r.Drift}}" inputmode="decimal" size="4">{{with index $errs (printf "rule_drift_%d" $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
+          <td><code>{{$r.Text}}</code></td>
+        </tr>
+        {{end}}
+        </tbody>
+      </table>
+      <input type="hidden" name="rule_count" value="{{len .Form.Rules}}">
+      <button type="button" class="secondary" id="add-rule" hidden>Add a rule</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Memory</legend>
+      {{$mm := .Form.MemoryMode}}
+      <label class="check"><input type="radio" name="memory_mode" value="disk" {{if eq $mm "disk"}}checked{{end}}> learn motifs and keep them with the history</label>
+      <label class="check"><input type="radio" name="memory_mode" value="ram" {{if eq $mm "ram"}}checked{{end}}> learn motifs but keep nothing</label>
+      <label class="check"><input type="radio" name="memory_mode" value="off" {{if eq $mm "off"}}checked{{end}}> no motifs, no history</label>
+      {{with index .Errs "memory_mode"}}<span class="field-error">{{.}}</span>{{end}}
+    </fieldset>
+    <p class="meta">Changing the range or the rules starts a fresh motif memory; the earlier one is kept and comes back if you return to the same values. The engine checks everything before it is saved.</p>
+    <button>Save as a new revision</button>
+  </form>
+</section>
+
+<div class="grid">
+<section>
+  <h2>Revisions</h2>
+  <table>
+    <thead><tr><th>#</th><th>When</th><th>By</th><th>Settings</th></tr></thead>
+    <tbody>{{range .Revisions}}<tr><td>{{.Revision}}</td><td>{{when .Created}}</td><td>{{.CreatedBy}}</td><td><code class="small">{{printf "%s" .Spec}}</code></td></tr>{{end}}</tbody>
+  </table>
+</section>
+<section>
+  <h2>Memories</h2>
+  {{if .Memories}}
+  <table>
+    <thead><tr><th>Key</th><th>Motifs</th><th>Size</th><th>Last used</th></tr></thead>
+    <tbody>{{range .Memories}}<tr><td><code class="small">{{.Key}}</code>{{if .InUse}} <span class="meta">in use</span>{{end}}</td><td>{{.Motifs}}</td><td>{{bytes .Bytes}}</td><td>{{when .LastUsed}}</td></tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="meta">{{if .EngineErr}}{{.EngineErr}}{{else}}None kept yet.{{end}}</p>{{end}}
+</section>
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,66 @@
+{{define "content"}}
+<section class="narrow wide">
+<h1>Register a stream</h1>
+{{$csrf := .CSRF}}
+{{with .Data}}
+{{if .Existing}}
+  <div class="note">
+    <p><strong>{{.Existing.Texts.Name}}</strong> is this address, registered by {{.Existing.OwnerName}}. Streams are shared: a stream exists once, and its owner can invite others to add their own analyses. Inviting is not built yet; please ask the owner directly for now.</p>
+  </div>
+{{end}}
+<form method="post" action="/account/streams/new" class="stack">
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+  <label>Stream address <small>http or https, the address an audio player would open</small>
+    <input name="input" value="{{.Input}}" required placeholder="https://stream.example.org/live.mp3" {{if .Probe}}{{if .Probe.OK}}readonly{{end}}{{end}}>
+    {{with index .Errs "input"}}<span class="field-error">{{.}}</span>{{end}}
+  </label>
+
+  {{if not .Probe}}
+    <p class="meta">The stream is checked first: the engine connects for a few seconds and reports what it hears. That is one short connection to the operator's server.</p>
+    <button name="action" value="probe">Check the stream</button>
+  {{else if not .Probe.OK}}
+    <div class="note bad-note">
+      <p><strong>The check did not pass.</strong></p>
+      <ul>{{range .Probe.Problems}}<li>{{.Message}}</li>{{end}}</ul>
+    </div>
+    <button name="action" value="probe">Check again</button>
+  {{else}}
+    <div class="note ok-note">
+      <p><strong>The stream answers.</strong> {{.Probe.Codec}}, {{.Probe.SampleRate}} Hz, {{.Probe.Channels}} channel{{if ne .Probe.Channels 1}}s{{end}}, {{.Probe.BitrateKbps}} kbit/s, level {{.Probe.LevelDB}} dB.</p>
+    </div>
+
+    <fieldset>
+      <legend>Sample rate of the analysis</legend>
+      <p class="meta">Fixed for good once saved. The analysis window has 4096 points, so a higher rate reaches higher frequencies but tells close tones apart less well and costs more. 22&#8202;050 Hz covers up to about 11 kHz; choose more only if what you study lies higher.</p>
+      {{$sel := .SampleRate}}
+      {{range .Rates}}
+        <label class="check"><input type="radio" name="sample_rate" value="{{.}}" {{if eq . $sel}}checked{{end}}> {{.}} Hz</label>
+      {{end}}
+      {{with index .Errs "sample_rate"}}<span class="field-error">{{.}}</span>{{end}}
+    </fieldset>
+
+    <label>Name {{with index .Errs "name"}}<span class="field-error">{{.}}</span>{{end}}
+      <input name="name" value="{{.Texts.Name}}" required maxlength="80"></label>
+    <div class="row">
+      <label>Place {{with index .Errs "place"}}<span class="field-error">{{.}}</span>{{end}}
+        <input name="place" value="{{.Texts.Place}}" maxlength="80"></label>
+      <label>Time zone {{with index .Errs "timezone"}}<span class="field-error">{{.}}</span>{{end}}
+        <input name="timezone" value="{{.Texts.TimeZone}}" placeholder="Europe/Berlin"></label>
+    </div>
+    <label>Description {{with index .Errs "description"}}<span class="field-error">{{.}}</span>{{end}}
+      <textarea name="description" rows="4" maxlength="2000">{{.Texts.Description}}</textarea></label>
+    <div class="row">
+      <label>Credit line {{with index .Errs "credit"}}<span class="field-error">{{.}}</span>{{end}}
+        <input name="credit" value="{{.Texts.Credit}}" maxlength="200"></label>
+      <label>Credit link {{with index .Errs "credit_url"}}<span class="field-error">{{.}}</span>{{end}}
+        <input name="credit_url" value="{{.Texts.CreditURL}}" placeholder="https://"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="attest" {{if .Attest}}checked{{end}}> I run this stream, or its operator has explicitly agreed to its analysis here.</label>
+    {{with index .Errs "attest"}}<span class="field-error">{{.}}</span>{{end}}
+    <label class="check"><input type="checkbox" name="audio" {{if .Audio}}checked{{end}}> Audio may be played in the browser</label>
+    <button name="action" value="save">Register</button>
+  {{end}}
+</form>
+{{end}}
+</section>
+{{end}}

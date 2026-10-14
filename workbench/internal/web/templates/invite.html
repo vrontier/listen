@@ -1,0 +1,17 @@
+{{define "content"}}
+<section class="narrow">
+  <h1>Welcome</h1>
+  {{with .Data}}
+  <p>You have been invited to the Workbench as <strong>{{.Email}}</strong>.</p>
+  <form method="post" action="/invite/{{.Token}}" class="stack">
+    <label>Display name <small>shown to members you share a stream with, and on pages you publish</small>
+      <input name="name" value="{{.Name}}" required minlength="2" maxlength="60" autofocus></label>
+    <div class="note">
+      <p>The Workbench keeps your email address and display name, the streams and settings you enter, a record of what you created, changed and deleted, and when you logged in. Login links and sessions are stored only as hashes.</p>
+    </div>
+    <label class="check"><input type="checkbox" name="privacy"> I have read this</label>
+    <button>Create my account</button>
+  </form>
+  {{end}}
+</section>
+{{end}}

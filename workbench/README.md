@@ -6,7 +6,24 @@ The Observatory is a small, curated, public exhibit: a handful of streams, each 
 
 ## Status
 
-Design only. Nothing in this repository runs yet. The specs in [`docs/`](docs/) record what has been decided, what is proposed and what is still open.
+First part of the member area, built against a stand-in for the engine; the engine process itself does not exist yet. The specs in [`docs/`](docs/) record what has been decided, what is proposed and what is still open.
+
+Working: invitation by the master admin, login by email link, registering a stream with a probe, draft and production modes, pausing and deleting, the analysis page (live spectrogram, events, motifs, export as CSV or JSON), the filter form with validation by the engine and revisions, the list of who is connected, the audit trail. Not yet: sharing a stream with invited members, the filter library, trial mode, resource accounting and caps, tokens, the data stream for programs, MCP, publishing.
+
+## Running it for development
+
+Needs Go 1.26 or later. The stand-in serves the control API of [docs/control-api.md](docs/control-api.md) with made-up data and connects to no stream.
+
+```sh
+go build ./cmd/...
+./listen-standin -socket engine.sock &
+./workbench -db workbench.db -engine engine.sock -base-url http://127.0.0.1:8090 &
+./workbench -db workbench.db -base-url http://127.0.0.1:8090 admin -email you@example.org -name "Your Name"
+```
+
+The last command creates the master admin and prints a login link. Without `-smtp`, login links and invitations are written to the Workbench's log. A Unix socket path may be at most about 100 characters long. The stand-in's probe answers by words in the address: `unreachable`, `notaudio`, `loud` and `silent` give the failures, `.ogg` a 32 kHz stream.
+
+Tests: `go test ./...`. The engine's control API version this Workbench needs: **1.0**.
 
 ## What it will offer
 

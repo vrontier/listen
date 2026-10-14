@@ -179,6 +179,8 @@ Response to `PUT` and `GET`:
 - **Pausing** a stream is deleting it from the engine. Its memories stay on disk and are found again when the same identifiers return.
 - `last_error` is `null` or an object with `code`, `message` and `at`.
 
+`GET /v1/streams` answers `{ "streams": [ … ] }`, each as above.
+
 `DELETE /v1/streams/s-0001` closes the connection and removes the stream and its analyses. The memories stay unless `?purge=true` is given.
 
 ### Choosing the sample rate
@@ -298,7 +300,7 @@ Applying a setting to a running analysis needs setters in the engine. Making a n
 
 The memory of an analysis is kept under a key made of the range and the rules, inside the directory of that analysis. Motifs learned with other rules are not comparable, so a change of range or rules switches to another memory: an empty one, or the earlier one if exactly these values were used before. The response's `memory.key` names the memory in use.
 
-- `GET …/memories` lists the memories kept for the analysis: key, range and rules, first and last use, number of motifs, size on disk.
+- `GET …/memories` lists the memories kept for the analysis, as `{ "memories": [ … ] }`, each with `key`, `settings`, `rules`, `first_used`, `last_used`, `motifs` (the number), `bytes` (size on disk) and `in_use`.
 - The stored history belongs to a memory too: in the listener the history files lie in the memory's directory. After a change of range or rules, `…/history/…` and `…/motifs` show the new memory only. They take `?memory=<key>` to read an earlier one, which the export across revisions needs.
 - `DELETE …/memories/{key}` deletes one. The memory in use cannot be deleted (`409`, code `in_use`).
 - `DELETE` of an analysis keeps its memories unless `?purge=true` is given.
@@ -433,7 +435,7 @@ A page that opens fetches `…/state` and then follows `…/events`, as the Obse
 
 | Event | Sent when | Data |
 |---|---|---|
-| `stream.state` | a stream changes state | the stream as in `GET /v1/streams/{stream}`, without its `input` |
+| `stream.state` | a stream changes state, or is deleted | the stream as in `GET /v1/streams/{stream}`, without its `input`; after a `DELETE` only `id` and `"deleted": true` |
 | `analysis.state` | an analysis starts, stops or switches memory | the analysis's identifiers, `state`, `memory.key` |
 | `engine.hello` | first event of every connection | `instance` and `api`, as in `GET /v1/engine` |
 | `usage` | every 10 seconds | `usage` of the engine, of every connected stream and of every running analysis, see [Usage](#usage) |

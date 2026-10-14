@@ -1,0 +1,17 @@
+{{define "content"}}
+<section class="narrow">
+  <h1>Log in</h1>
+  {{with .Data}}
+  {{if .Sent}}
+    <p>If <strong>{{.Email}}</strong> belongs to a member, a login link is on its way. It works once, for 20 minutes.</p>
+  {{else}}
+    <p>There are no passwords. Enter your address and you get a link to log in with.</p>
+    <form method="post" action="/login" class="stack">
+      <input type="hidden" name="next" value="{{.Next}}">
+      <label>Email address <input type="email" name="email" value="{{.Email}}" required autofocus autocomplete="email"></label>
+      <button>Send me a link</button>
+    </form>
+  {{end}}
+  {{end}}
+</section>
+{{end}}

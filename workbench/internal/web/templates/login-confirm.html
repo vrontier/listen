@@ -1,0 +1,9 @@
+{{define "content"}}
+<section class="narrow">
+  <h1>Log in</h1>
+  <form method="post" action="/login/{{.Data.Token}}" class="stack">
+    <input type="hidden" name="next" value="{{.Data.Next}}">
+    <button autofocus>Log in now</button>
+  </form>
+</section>
+{{end}}

@@ -1,0 +1,96 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+{{with .Data}}
+<div class="heading-row">
+  <h1>{{.Stream.Texts.Name}}</h1>
+  <span class="state state-{{.Stream.State}}">{{.Stream.State}}{{if .Stream.AlwaysOn}}, always on{{end}}</span>
+</div>
+<p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz · registered {{when .Stream.Created}} by {{.Stream.OwnerName}}</p>
+
+<div class="grid">
+<section>
+  <h2>Connection</h2>
+  {{if .InEngine}}
+    <p>State: <span class="conn conn-{{.Engine.State}}">{{.Engine.State}}</span> for {{since .Engine.Since}}.
+    {{if .Engine.LastData}}Last audio {{since (deref .Engine.LastData)}} ago.{{end}}</p>
+    {{if .Engine.LastError}}<p class="field-error">{{.Engine.LastError.Message}}</p>{{end}}
+  {{else}}
+    <p>Not in the engine{{if eq .Stream.State "paused"}}: the stream is paused{{end}}.</p>
+  {{end}}
+  <p class="meta">{{if eq .Stream.State "draft"}}In draft the stream connects only while someone watches one of its analyses or a token reads it.{{else if eq .Stream.State "production"}}{{if .Stream.AlwaysOn}}Always on: connected as long as it has an analysis.{{else}}In production, on demand.{{end}}{{end}}</p>
+
+  <h3>Who is connected</h3>
+  <table>
+    <thead><tr><th>Analysis</th><th>Member</th><th>State</th><th>Reading now</th></tr></thead>
+    <tbody>
+    {{$slug := .Stream.Slug}}
+    {{range .Consumers}}
+      <tr><td><a href="/account/streams/{{$slug}}/analyses/{{.Analysis.ID}}">{{.Analysis.Name}}</a></td><td>{{.Owner}}</td><td>{{.State}}</td>
+      <td>{{.Readers.People}} page{{if ne .Readers.People 1}}s{{end}}, {{.Readers.Programs}} token{{if ne .Readers.Programs 1}}s{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+
+  {{if ne .Stream.State "suspended"}}
+  <h3>Mode</h3>
+  <div class="actions">
+    {{if eq .Stream.State "paused"}}
+      <form method="post" action="/account/streams/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="resume">Resume</button></form>
+    {{else}}
+      {{if eq .Stream.State "draft"}}
+      <form method="post" action="/account/streams/{{.Stream.Slug}}/state" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}">
+        <label class="check"><input type="checkbox" name="always_on"> always on</label>
+        <button name="to" value="production">Move to production</button></form>
+      {{else}}
+      <form method="post" action="/account/streams/{{.Stream.Slug}}/state" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}">
+        <label class="check"><input type="checkbox" name="always_on" {{if .Stream.AlwaysOn}}checked{{end}}> always on</label>
+        <button name="to" value="production">Apply</button></form>
+      <form method="post" action="/account/streams/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="draft" class="secondary">Back to draft</button></form>
+      {{end}}
+      <form method="post" action="/account/streams/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="pause" class="secondary">Pause</button></form>
+    {{end}}
+  </div>
+  <p class="meta">Always on is for a stream you run, or whose operator has agreed to continuous listening.</p>
+  {{end}}
+</section>
+
+<section>
+  <h2>Description</h2>
+  <form method="post" action="/account/streams/{{.Stream.Slug}}" class="stack">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Name {{with index .Errs "name"}}<span class="field-error">{{.}}</span>{{end}}<input name="name" value="{{.Texts.Name}}" required maxlength="80"></label>
+    <div class="row">
+      <label>Place {{with index .Errs "place"}}<span class="field-error">{{.}}</span>{{end}}<input name="place" value="{{.Texts.Place}}" maxlength="80"></label>
+      <label>Time zone {{with index .Errs "timezone"}}<span class="field-error">{{.}}</span>{{end}}<input name="timezone" value="{{.Texts.TimeZone}}"></label>
+    </div>
+    <label>Description {{with index .Errs "description"}}<span class="field-error">{{.}}</span>{{end}}<textarea name="description" rows="3" maxlength="2000">{{.Texts.Description}}</textarea></label>
+    <div class="row">
+      <label>Credit line {{with index .Errs "credit"}}<span class="field-error">{{.}}</span>{{end}}<input name="credit" value="{{.Texts.Credit}}" maxlength="200"></label>
+      <label>Credit link {{with index .Errs "credit_url"}}<span class="field-error">{{.}}</span>{{end}}<input name="credit_url" value="{{.Texts.CreditURL}}"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="audio" {{if .Stream.AudioAllowed}}checked{{end}}> Audio may be played in the browser</label>
+    <button>Save</button>
+  </form>
+  <p class="meta">Address: <code>{{.Stream.Input}}</code><br>Checked: {{.Probe.Codec}}, {{.Probe.SampleRate}} Hz, {{.Probe.BitrateKbps}} kbit/s. The address and the sample rate cannot be changed.</p>
+</section>
+</div>
+
+<section>
+  <h2>Changes</h2>
+  <table class="audit">
+    <thead><tr><th>When</th><th>Who</th><th>What</th><th>Details</th></tr></thead>
+    <tbody>{{range .Audit}}<tr><td>{{when .At}}</td><td>{{.UserName}}</td><td>{{.Action}}</td><td><code class="small">{{.After}}</code></td></tr>{{end}}</tbody>
+  </table>
+</section>
+
+<section class="danger">
+  <h2>Delete</h2>
+  <p>Deleting removes the stream, all its analyses and their memories. The change log keeps a record.</p>
+  <form method="post" action="/account/streams/{{.Stream.Slug}}/delete" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Type the name to confirm <input name="confirm" autocomplete="off"></label>
+    <button class="danger">Delete</button>
+  </form>
+</section>
+{{end}}
+{{end}}

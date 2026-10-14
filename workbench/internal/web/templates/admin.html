@@ -1,0 +1,40 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+{{with .Data}}
+<h1>Admin</h1>
+<div class="grid">
+<section>
+  <h2>Invite a member</h2>
+  <form method="post" action="/admin/invitations" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Email address <input type="email" name="email" required></label>
+    <button>Invite</button>
+  </form>
+  {{if .Link}}<p class="note">Invitation sent. The link, valid for 14 days, in case the mail does not arrive:<br><code class="small">{{.Link}}</code></p>{{end}}
+  <h3>Invitations</h3>
+  <table><thead><tr><th>Address</th><th>Sent</th><th>State</th></tr></thead>
+  <tbody>{{range .Invitations}}<tr><td>{{.Email}}</td><td>{{when .Created}}</td><td>{{if .Accepted}}accepted{{else}}open until {{when .Expires}}{{end}}</td></tr>{{end}}</tbody></table>
+</section>
+<section>
+  <h2>Engine</h2>
+  {{if .EngineReady}}
+    <p>Connected. Control API {{.EngineInfo.API}}, engine {{.EngineInfo.EngineVersion}}, started {{when .EngineInfo.Started}}.</p>
+    <p class="meta">{{.EngineInfo.Counts.Streams}} streams, {{.EngineInfo.Counts.Connected}} connected, {{.EngineInfo.Counts.Analyses}} analyses. Host: {{.EngineInfo.Host.Cores}} cores, {{.EngineInfo.Host.MemoryMB}} MB.</p>
+  {{else}}
+    <p class="field-error">{{.EngineNote}}</p>
+  {{end}}
+  <h3>Members</h3>
+  <table><thead><tr><th>Name</th><th>Address</th><th>Since</th></tr></thead>
+  <tbody>{{range .Users}}<tr><td>{{.Name}}{{if .Admin}} <span class="meta">admin</span>{{end}}</td><td>{{.Email}}</td><td>{{when .Created}}</td></tr>{{end}}</tbody></table>
+  <h3>Streams</h3>
+  <table><thead><tr><th>Name</th><th>Owner</th><th>State</th></tr></thead>
+  <tbody>{{range .Streams}}<tr><td>{{.Texts.Name}}</td><td>{{.OwnerName}}</td><td>{{.State}}{{if .AlwaysOn}}, always on{{end}}</td></tr>{{end}}</tbody></table>
+</section>
+</div>
+<section>
+  <h2>Audit log</h2>
+  <table class="audit"><thead><tr><th>When</th><th>Who</th><th>Object</th><th>Action</th><th>After</th></tr></thead>
+  <tbody>{{range .Audit}}<tr><td>{{when .At}}</td><td>{{.UserName}}</td><td>{{.Object}} {{.ObjectID}}</td><td>{{.Action}}</td><td><code class="small">{{.After}}</code></td></tr>{{end}}</tbody></table>
+</section>
+{{end}}
+{{end}}

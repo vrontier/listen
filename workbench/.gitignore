@@ -34,3 +34,11 @@ go.work.sum
 
 # macOS
 .DS_Store
+
+# Built programs and local data
+/workbench
+/listen-standin
+*.db
+*.db-shm
+*.db-wal
+*.sock

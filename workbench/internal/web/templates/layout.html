@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if .Title}}{{.Title}} · {{end}}{{.Site}}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">{{.Site}}</a>
+  <nav>
+    {{if .User}}
+      <a href="/account">Streams</a>
+      {{if .User.Admin}}<a href="/admin">Admin</a>{{end}}
+      <span class="who">{{.User.Name}}</span>
+      <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link">Log out</button></form>
+    {{else}}
+      <a href="/login">Log in</a>
+    {{end}}
+  </nav>
+</header>
+<main>
+  {{if .EngineProblem}}<p class="banner warn">Engine: {{.EngineProblem}}</p>{{end}}
+  {{if .Flash}}<p class="banner ok">{{.Flash}}</p>{{end}}
+  {{if .Error}}<p class="banner bad">{{.Error}}</p>{{end}}
+  {{template "content" .}}
+</main>
+<footer>Listening Observatory Workbench · nothing here is public unless you publish it</footer>
+</body>
+</html>
