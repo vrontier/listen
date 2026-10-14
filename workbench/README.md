@@ -25,6 +25,26 @@ The last command creates the master admin and prints a login link. Without `-smt
 
 Tests: `go test ./...`. The engine's control API version this Workbench needs: **1.0**.
 
+`make run` builds both programs and starts them together.
+
+## Deploying
+
+`make deploy intranet` runs the tests, builds both programs for Linux and installs them on the intranet host as `low.home.arpa`. That host's SSH name goes in `deploy/local.mk` (ignored by git) as `INTRANET_HOST = …`; the account needs sudo without a password. `make deploy production` is reserved for `low.vrontier.org`, which is not set up yet.
+
+What `deploy/install.sh` sets up there:
+
+| Part | Where |
+|---|---|
+| User and group `low` | system user, no login |
+| Programs | `/usr/local/bin/low-workbench`, `/usr/local/bin/low-standin` |
+| Engine | `low-engine.service`, socket `/run/low-engine/control.sock`; for now the stand-in, with made-up data |
+| Workbench | `low-workbench.service` on 127.0.0.1:8110, catalogue `/var/lib/low/workbench.db` |
+| Settings | `/etc/low/workbench.env` (base address, mail server); created once, then kept |
+| nginx | `/etc/nginx/sites-available/low.home.arpa` and `snippets/low-workbench-proxy.conf`; home LAN and WireGuard only |
+| TLS | key and signing request `/etc/ssl/home-arpa/low.{key,csr}`, made on the host. Until `low.crt`, signed by the internal CA, is installed there, the site is served over plain HTTP; the next deploy after that switches to HTTPS. |
+
+`make admin intranet EMAIL=… NAME=…` creates a master admin there and prints a login link. Without a mail server in `workbench.env`, login links and invitations appear in `journalctl -u low-workbench`.
+
 ## What it will offer
 
 - **Public presentation of research:** pages that show ongoing work to visitors.

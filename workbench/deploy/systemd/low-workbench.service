@@ -1,0 +1,52 @@
+# The Workbench: member area, catalogue, live data. Listens on loopback
+# behind nginx and talks to the engine on its socket.
+#
+# Settings in /etc/low/workbench.env (root, 0640, group low):
+#   LOW_BASE_URL       address as members reach it (set by deploy/install.sh)
+#   LOW_SMTP           mail server host:port; empty: links go to the journal
+#   LOW_SMTP_FROM      sender address
+#   LOW_SMTP_USER, LOW_SMTP_PASSWORD
+[Unit]
+Description=Listening Observatory Workbench
+Wants=network-online.target low-engine.service
+After=network-online.target low-engine.service
+
+[Service]
+Type=simple
+User=low
+Group=low
+EnvironmentFile=/etc/low/workbench.env
+Environment=LOW_ENGINE=/run/low-engine/control.sock
+ExecStart=/usr/local/bin/low-workbench -addr 127.0.0.1:8110 -db /var/lib/low/workbench.db
+Restart=always
+RestartSec=5
+StateDirectory=low
+StateDirectoryMode=0750
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+
+CPUQuota=100%
+MemoryMax=512M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

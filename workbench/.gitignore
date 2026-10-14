@@ -42,3 +42,5 @@ go.work.sum
 *.db-shm
 *.db-wal
 *.sock
+/build/
+deploy/local.mk
