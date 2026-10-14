@@ -169,6 +169,7 @@ Deployment is not a reason either way. A Go binary needs a one-time root step on
 | Filters and motifs | Define what an analysis ignores and what it looks for; a shared library; a trial mode | filters: rule syntax exists in the listener; library and trial mode decided (questions 9, 16); motifs: drafted as "defined motifs" in the Observatory's spec |
 | Data stream by token | The analysis events of one's own analyses | decided: SSE, follows the member area; proposed: token in the `Authorization` header (question 14) |
 | MCP by token | The same data and the motif memory for AI assistants | decided: an HTTP endpoint in the Workbench process, after the data stream; proposed: the same token header |
+| Groups | Several stream analyses aligned on one time axis and compared: activity side by side, station clocks, impulses shared between stations | decided: a second layer over the analyses of single streams, usable with one's own streams; proposed in [groups.md](groups.md) |
 
 What exists today that these build on:
 
@@ -205,6 +206,16 @@ Piece B is needed as soon as one stream has a second analysis: a member comparin
 
 The limits in [members-and-streams.md](members-and-streams.md) ask that a stream's address is checked again on every redirect and reconnect. That cannot be done while ffmpeg owns the connection. The engine would have to open the HTTP connection itself and hand the bytes to ffmpeg. The Observatory's draft on station time asks for the same change for another reason. It is needed before strangers can register stream addresses, not before the first private use.
 
+### For groups: station time, impulse times, the group service
+
+**Proposed** (2026-10-14). Analysing several streams together ([groups.md](groups.md)) needs three more things of the engine, in this order:
+
+- **The group service:** aligning the events of several analyses on one time axis, and the group analyses. With wall time it can run `activity`, accurate to seconds.
+- **Station time:** reading the timestamps some streams carry in their Ogg container, so that events carry the time at the station rather than the time they reached the engine. It builds on the third change above: the engine reads the bytes itself and passes them to ffmpeg. The listen repository's draft also records an unexplained lag of motif times after a long outage, to be found as part of this.
+- **Impulse times:** a new low-level output of an analysis, timed to well under a millisecond, which `clock` and `coincidence` work on.
+
+The listen repository's draft makes the timing analyses conditional on a premise test with `activity`; [groups.md](groups.md#the-premise-test) takes this over.
+
 ## Order of work
 
 **Decided** (2026-10-14, question 5): the member area comes first, kept narrow; the data-stream token follows, MCP after it. **Decided** (question 6): the first installation is on the intranet. The rest of the order is **proposed**. Two views were on record:
@@ -226,8 +237,11 @@ A **proposed** order that respects the first view:
 | 5 | Defined motifs per analysis; captures and trial runs | the listener's defined-motif work |
 | 6 | Public research pages | 2; publishing is decided (at once, no review) |
 | 7 | Audio in the browser; the language-model interpretation | 2; questions 10 and 19 |
+| 8a | Groups in the control API (1.1) and the Workbench's group pages, against the stand-in | 0; [groups.md](groups.md) |
+| 8b | Engine: the group service with `activity` on wall time; then the premise test | 1a, 1b |
+| 8c | Engine: its own HTTP connection, station time, impulse times; then `clock` and `coincidence` | 8b, a positive premise test |
 
-Step 2 can be built against a stand-in for the engine as soon as step 0 is stable. The engine opening the stream connection itself (see above) has to be done before sign-up is open to people the maintainer does not know. Sign-up is by invitation (decided).
+Step 2 can be built against a stand-in for the engine as soon as step 0 is stable, and step 8a likewise. Steps 1a and 1b are what makes the Workbench real: until they exist, the intranet installation runs on the stand-in's made-up data. The engine opening the stream connection itself (see above) has to be done before sign-up is open to people the maintainer does not know. Sign-up is by invitation (decided).
 
 
 ## Questions and answers
@@ -296,5 +310,13 @@ Answered by the maintainer on 2026-10-14; **decided**.
     - **Decided:** Go, with the HTML pages rendered by the same binary. See [Processes](#processes).
 21. **What is published, a stream or an analysis?**
     - **Decided:** an analysis. See [members-and-streams.md](members-and-streams.md#of-an-analysis).
+
+### Raised by groups
+
+These are **open**; the detail is in [groups.md](groups.md#open).
+
+22. **The name:** "group", "comparison" or "study"?
+23. **The first goal:** side-by-side activity first (possible on wall time), or straight to the coincidence analysis of VLF stations (needs station time)?
+24. **Where the group service runs:** inside the engine process or as a separate process fed by it. The engine session's choice; the control API does not depend on it.
 
 Further questions that concern accounts, streams and limits are in [members-and-streams.md](members-and-streams.md#questions-and-answers).

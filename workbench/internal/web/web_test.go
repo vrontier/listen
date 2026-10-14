@@ -203,7 +203,7 @@ func TestMemberFlow(t *testing.T) {
 	if code, page, _ = r.post(member, "/account/streams/new", form); code != 400 || !strings.Contains(page, "decimal degrees") {
 		t.Fatalf("bad coordinates: %d", code)
 	}
-	form.Set("coords", "49,41234; 8,69121")
+	form.Set("coords", "50,12345; 10,54321")
 	code, _, hdr := r.post(member, "/account/streams/new", form)
 	if code != http.StatusSeeOther {
 		t.Fatalf("save: %d", code)
@@ -213,10 +213,10 @@ func TestMemberFlow(t *testing.T) {
 		t.Fatalf("redirect to %q", analysisURL)
 	}
 
-	if st, _ := r.db.StreamBySlug(ctx, "garden-mic"); st.Texts.Lat == nil || *st.Texts.Lat != 49.41234 || *st.Texts.Lon != 8.69121 {
+	if st, _ := r.db.StreamBySlug(ctx, "garden-mic"); st.Texts.Lat == nil || *st.Texts.Lat != 50.12345 || *st.Texts.Lon != 10.54321 {
 		t.Fatalf("coordinates not stored: %+v", st.Texts)
 	}
-	if _, page, _ := r.get(member, "/account/streams/garden-mic"); !strings.Contains(page, `value="49.41234, 8.69121"`) || !strings.Contains(page, "map-picker") {
+	if _, page, _ := r.get(member, "/account/streams/garden-mic"); !strings.Contains(page, `value="50.12345, 10.54321"`) || !strings.Contains(page, "map-picker") {
 		t.Fatal("coordinates or map not on the stream page")
 	}
 	// A second registration of the same address is pointed to the stream.

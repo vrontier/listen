@@ -45,7 +45,7 @@
       <label>Place {{with index .Errs "place"}}<span class="field-error">{{.}}</span>{{end}}
         <input name="place" value="{{.Texts.Place}}" maxlength="80"></label>
       <label>Coordinates <small>latitude, longitude; optional</small> {{with index .Errs "coords"}}<span class="field-error">{{.}}</span>{{end}}
-        <span class="with-button"><input name="coords" id="coords" value="{{.Texts.Coords}}" placeholder="49.41234, 8.69121" inputmode="decimal"><button type="button" class="secondary" data-map-for="coords" hidden>Map</button></span></label>
+        <span class="with-button"><input name="coords" id="coords" value="{{.Texts.Coords}}" placeholder="50.12345, 10.54321" inputmode="decimal"><button type="button" class="secondary" data-map-for="coords" hidden>Map</button></span></label>
       <label>Time zone {{with index .Errs "timezone"}}<span class="field-error">{{.}}</span>{{end}}
         <input name="timezone" value="{{.Texts.TimeZone}}" placeholder="Europe/Berlin"></label>
     </div>

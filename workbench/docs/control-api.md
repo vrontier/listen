@@ -16,7 +16,7 @@ The control API is the only connection between the two processes of [design.md](
 
 The engine knows nothing of members, accounts, tokens, publication or texts. Nothing in this API carries a member's name, email address or token. The one exception, once the interpretation is added, is a member's language-model API key, which travels with an analysis's settings (see [Reserved](#reserved)).
 
-Not part of version 1: audio (relay and captures), the language-model interpretation, defined motifs and profiles, analyses across several streams. The places where they would attach are named under [Reserved](#reserved).
+Not part of version 1.0: audio (relay and captures), the language-model interpretation, defined motifs and profiles. The places where they would attach are named under [Reserved](#reserved). Analyses across several streams, with station time, are drafted as the addition 1.1 under [Groups](#groups).
 
 ## Transport
 
@@ -82,6 +82,8 @@ engine
 | `GET /v1/streams/{stream}/analyses/{analysis}/history/features` | per-minute aggregates |
 | `GET /v1/streams/{stream}/analyses/{analysis}/memories` | the memories kept on disk for this analysis |
 | `DELETE /v1/streams/{stream}/analyses/{analysis}/memories/{key}` | delete one of them |
+| `GET /v1/groups`, `PUT`, `GET`, `DELETE /v1/groups/{group}` | groups of analyses (1.1, see [Groups](#groups)) |
+| `GET /v1/groups/{group}/events`, `…/state`, `…/history/events` | a group's results (1.1) |
 
 ## The engine
 
@@ -190,6 +192,7 @@ Response to `PUT` and `GET`:
 - The analysis window is always 4096 points. A higher rate therefore makes each analysis bin wider: about 5.4 Hz at 22 050 Hz, 7.8 Hz at 32 000 Hz, 10.8 Hz at 44 100 Hz. Two tones closer than about two bins cannot be told apart.
 - A higher rate also costs more: the decode, and every analysis, process proportionally more samples.
 - The default is therefore 22 050 Hz, the listener's default today, which covers content up to about 11 kHz. 32 000, 44 100 and 48 000 Hz are offered for streams whose interesting content lies higher (VLF radio, for example), never above the stream's own rate as the probe found it.
+- **Exception:** a stream that carries station time (the probe's `station_time`) must be decoded at its own rate, so that the decoder's sample count matches the count in its timestamps. Its rate is the probe's `sample_rate`, without a choice. See [groups.md](groups.md#time).
 
 ### Which addresses the engine connects to
 
@@ -379,6 +382,7 @@ The engine connects, listens for `listen_s` seconds (default 10, at most 30) and
   "bitrate_kbps": 96,
   "level_db": -31.5,
   "silent": false,
+  "station_time": true,
   "problems": []
 }
 ```
@@ -386,6 +390,7 @@ The engine connects, listens for `listen_s` seconds (default 10, at most 30) and
 - `ok` is false if the address is not allowed, nothing answers, the content is not audio, it cannot be decoded, the bit rate is above `limits.max_bitrate_kbps`, or only silence arrived. `problems` then lists `code` and `message` for each reason.
 - A probe is a connection to the operator's server. If a stream with this `input` already exists, the engine opens no connection and answers `"ok": false` with `exists` set to that stream's identifier; the Workbench then offers to join the shared stream. A running decode could not answer anyway: it delivers samples at the stream's chosen rate and knows nothing of the codec or the stream's own rate.
 - `codec`, `sample_rate`, `channels` and `bitrate_kbps` describe the stream as sent, as ffprobe reports them. `content_type` stays `null` until the engine opens the HTTP connection itself, since ffmpeg does not pass it on.
+- `station_time` is true when the stream carries timestamps of the receiving station (in 1.0 always false; from 1.1, once the engine reads them).
 - The engine runs one probe at a time per address and a few at a time overall; more are answered with `429`.
 
 ## Data of an analysis
@@ -442,6 +447,89 @@ A page that opens fetches `…/state` and then follows `…/events`, as the Obse
 
 After connecting, the Workbench reads `engine.hello`, lists the streams once and from then on follows the events. If the `instance` has changed, it sends its whole wanted state again.
 
+## Groups
+
+**Proposed** as the addition 1.1 (2026-10-14). The design is in [groups.md](groups.md). An engine reporting 1.0 has none of this, and the Workbench offers no groups then.
+
+### Station time
+
+Additive fields, as drafted in the listen repository (its `docs/group-analysis-spec.md`, Part A):
+
+| Field | Where | Meaning |
+|---|---|---|
+| `timestamp` | every envelope | station time when the stream carries it, wall time otherwise |
+| `time_source` | every audio-positioned envelope, `system.status`, the stream's response | `stream`, `wall` or `recording` |
+| `stream_delay_s` | `system.status`, the stream's response | how far station time is behind wall time |
+| `station_time` | the probe | the stream carries timestamps |
+
+- The engine falls back to wall time, and says why in `last_error`, when station time is more than 5 minutes away from wall time or ahead of it.
+- `capabilities.station_time` in `GET /v1/engine` is true once the engine reads timestamps.
+
+### Impulse times
+
+A new event type of an analysis, `signal.impulses`, once per second: the second, the total count of impulses in it, and up to 40 of the strongest, each with its offset in microseconds, its height above the floor in dB and its width. It is sent only to subscribers that name it in `?types=`, since a page has no use for it. The group service is its main reader.
+
+### A group
+
+`PUT /v1/groups/g-0001`
+
+```json
+{
+  "members": [
+    { "stream": "s-0001", "analysis": "a-0001", "lat": 50.0, "lon": 10.0 },
+    { "stream": "s-0002", "analysis": "a-0004", "lat": 45.0, "lon": 7.0 },
+    { "stream": "s-0003", "analysis": "a-0007" }
+  ],
+  "analyses": ["activity"],
+  "history_days": 30,
+  "label": "rev-2"
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `members` | 2 to `limits.members_per_group` analyses, each named by stream and analysis. `lat` and `lon` are the station's position; needed for timing analyses. |
+| `analyses` | the group analyses to run, from `capabilities.group_analyses` |
+| `history_days` | days of results kept, default 30 |
+| `label` | opaque, returned with the group's events, as for an analysis |
+
+- The group's identifier follows the rules of [Identifiers](#identifiers).
+- The engine refuses a group analysis that a group member cannot serve: a timing analysis needs every group member on station time (`time_source` `stream`) and with a position. The refusal is `422` with `errors` naming the group member, as in [Validation](#validation).
+- A group keeps its group members' streams connected while it runs, as a subscription does. A group is either `continuous` (results all the time) or `on_demand` (only while its events have a subscriber), in a field `mode` like a stream's. Default `on_demand`.
+- Deleting a stream or an analysis that is a group member takes it out of the group; the group reports the group member as `removed` and goes on with the rest.
+
+`GET /v1/engine` gains:
+
+```json
+"limits": { "groups": 20, "members_per_group": 8 },
+"capabilities": {
+  "station_time": false,
+  "group_analyses": [
+    { "id": "activity", "timing": "seconds" },
+    { "id": "clock", "timing": "milliseconds" },
+    { "id": "coincidence", "timing": "milliseconds" }
+  ]
+}
+```
+
+### A group's results
+
+| Path | Content |
+|---|---|
+| `GET /v1/groups/{group}/events` | `text/event-stream` of the group's events, as for an analysis, with `?types=` |
+| `GET /v1/groups/{group}/state` | the group's status, the last 10 minutes of `activity`, the latest `correlation`, `clock` and `coincidence` results |
+| `GET /v1/groups/{group}/history/events` | stored results, `?from=&to=&type=&limit=` |
+
+| Event | Rate | Content |
+|---|---|---|
+| `group.status` | every 5 s | per group member: present, absent or removed, `time_source`, delay; the watermark; how far the view runs behind |
+| `group.activity` | 1 per s | per group member: level, flux, impulse rate of that second |
+| `group.correlation` | 1 per min | per pair: correlation of activity, its lag, and the shifted baseline |
+| `group.clock` | 1 per 10 min | per pair: clock offset, spread, share of impulses in the peak, physically possible or not |
+| `group.coincidence` | 1 per s | shared impulses per pair and for all three, the number expected by chance, the strongest with their times per group member |
+
+`source` in a group event's envelope is the group's identifier. Changes of a group's state are sent on `GET /v1/events` as `group.state`.
+
 ## Errors
 
 Every error has this body:
@@ -482,7 +570,6 @@ Not in version 1. Named here so that version 1 does not block them.
 | Trial runs on a capture | a resource for captures under a stream, and a way to run an analysis over one without touching its live memory. A trial on the live stream needs nothing new: see [Open](#open), point 3 |
 | Audio in the browser | allowed (decided 2026-10-14). A field `audio` on a stream and a data path for the encoded audio; the stream's `position_s` already allows lining events up with it. The engine's existing relay is the starting point. Its encoder's CPU and the outgoing bandwidth belong in [Usage](#usage) |
 | Interpretation by a language model | decided to run for member analyses (2026-10-14), through the OpenAI and the Anthropic API, with the member's own API key. A setting of an analysis that carries provider, model and key; the engine keeps the key in memory only, never writes it to disk or logs, and never returns it in a response (`GET` shows only that a key is set). The engine would need to be told whether a person is watching: today it counts browser connections apart from programs (`?role=tool`), but under this API it sees one subscription by the Workbench. Proposed: the Workbench reports the number of people watching each analysis with a small `PUT`. Today's narrator speaks the OpenAI format only |
-| Station time | additive fields in the envelope and in `system.status`, as drafted in the listen repository |
 
 ## For the engine session
 
@@ -510,6 +597,9 @@ What this spec asks of the engine, against what exists in the listener today.
 | `memory.mode` | the three modes exist, chosen by flags at start |
 | History and motifs of an earlier memory (`?memory=`) | only the memory in use is served |
 | Probe reporting codec, rate and bit rate | ffmpeg runs with `-loglevel error` and reports none of these |
+| 1.1: station time from the Ogg timestamp stream, `time_source` | ffmpeg drops the timestamp stream; the clock follows wall time |
+| 1.1: `signal.impulses` | not present; the transient detector works on 50 ms frames |
+| 1.1: groups through the control API, the group service, `activity`, then `clock` and `coincidence` | drafted in the listen repository as a separate process configured by a local file |
 
 The paths the Observatory's site uses today (`/<slug>/ws/live` and the others) are not part of this API. Whether the engine process also serves them is a question for the day the Observatory moves onto it.
 
@@ -524,3 +614,4 @@ The paths the Observatory's site uses today (`/<slug>/ws/live` and the others) a
 7. **The identifiers in `source`.** Events reach browsers and token holders with the catalogue's internal identifiers in them. If that is unwanted, the Workbench has to rewrite every event, which costs.
 8. **Feeding the analyses.** The listener hands samples to its analysis in the goroutine that reads ffmpeg's output. With several analyses fed one after the other there, one slow analysis delays the others and, in the end, ffmpeg. Whether each analysis gets its own goroutine with a short queue is the engine session's choice; it does not change this API.
 9. **Sharing the spectrum** (point 4) needs the analyses of a stream to step through the audio on the same grid of 1/20 s. An analysis added later has to join that grid, which the stream's timeline above makes possible.
+10. **Where the group service runs.** Inside the engine process, which already holds every analysis's events, or as a separate process fed by the engine, as the listen repository's draft has it. The API above is the same either way. The engine session's choice.

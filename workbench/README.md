@@ -40,7 +40,7 @@ What `deploy/install.sh` sets up there:
 | Engine | `low-engine.service`, socket `/run/low-engine/control.sock`; for now the stand-in, with made-up data |
 | Workbench | `low-workbench.service` on 127.0.0.1:8110, catalogue `/var/lib/low/workbench.db` |
 | Settings | `/etc/low/workbench.env` (base address, mail server); created once, then kept |
-| nginx | `/etc/nginx/sites-available/low.home.arpa` and `snippets/low-workbench-proxy.conf`; home LAN and WireGuard only |
+| nginx | `/etc/nginx/sites-available/low.home.arpa` and `snippets/low-workbench-proxy.conf`; only the networks given in `deploy/local.mk` (`INTRANET_ALLOW`), plus the host itself |
 | TLS | key and signing request `/etc/ssl/home-arpa/low.{key,csr}`, made on the host. Until `low.crt`, signed by the internal CA, is installed there, the site is served over plain HTTP; the next deploy after that switches to HTTPS. |
 
 `make admin intranet EMAIL=… NAME=…` creates a master admin there and prints a login link. Without a mail server in `workbench.env`, login links and invitations appear in `journalctl -u low-workbench`.
@@ -53,6 +53,7 @@ What `deploy/install.sh` sets up there:
 - **Filters and motifs:** define what the analysis leaves out and what it looks for, try a change before keeping it, and share filters through a common library.
 - **A data stream by token:** analysis data over Server-Sent Events.
 - **An MCP interface by token:** for AI-supported research.
+- **Groups:** several streams aligned on one time axis and compared, for example to tell lightning heard at several stations from local interference at one.
 
 ## How it relates to Listening Observatory
 
@@ -91,6 +92,7 @@ Details: [docs/design.md](docs/design.md#dependencies).
 | [docs/design.md](docs/design.md) | Goals, the split from the Observatory, the design rules, dependencies, the processes, features, order of work, open questions |
 | [docs/analyses-and-filters.md](docs/analyses-and-filters.md) | One decode with several analyses; filter rules; what is and is not filtered; motifs |
 | [docs/members-and-streams.md](docs/members-and-streams.md) | Accounts, registering a stream, states of a stream, limits, rights and privacy |
+| [docs/groups.md](docs/groups.md) | Analysing several streams together: groups, station time, the first group analyses |
 | [docs/control-api.md](docs/control-api.md) | The contract between the Workbench and the engine process: streams, analyses, validation, probe, data, versions |
 
 ## Third-party parts

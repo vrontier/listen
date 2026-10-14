@@ -11,6 +11,7 @@
 # deploy/local.mk (ignored by git):
 #
 #   INTRANET_HOST = my-ssh-alias
+#   INTRANET_ALLOW = 192.0.2.0/24 198.51.100.0/24   # networks that may reach the site
 
 -include deploy/local.mk
 
@@ -64,6 +65,7 @@ deploy-intranet: test linux
 	@dir=$$(ssh $(INTRANET_HOST) mktemp -d /tmp/low-deploy.XXXXXX) && \
 	scp -q $(LINUX)/workbench $(INTRANET_HOST):$$dir/low-workbench && \
 	scp -q $(LINUX)/listen-standin $(INTRANET_HOST):$$dir/low-standin && \
+	printf '%s\n' $(INTRANET_ALLOW) | ssh $(INTRANET_HOST) "cat > $$dir/allow.txt" && \
 	scp -q deploy/install.sh deploy/systemd/*.service deploy/nginx/*.conf $(INTRANET_HOST):$$dir/ && \
 	ssh $(INTRANET_HOST) "sudo bash $$dir/install.sh; rc=\$$?; rm -rf $$dir; exit \$$rc"
 

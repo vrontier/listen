@@ -66,6 +66,17 @@ systemctl daemon-reload
 
 # nginx: the HTTPS servers only once the certificate exists.
 install -m 0644 low-workbench-proxy.conf /etc/nginx/snippets/low-workbench-proxy.conf
+# Who may reach the site: the networks given at deploy time (allow.txt, one
+# per line), always the host itself, nobody else.
+{
+	while read -r net; do
+		[ -n "$net" ] && echo "allow $net;"
+	done < allow.txt
+	echo "allow 127.0.0.1;"
+	echo "allow ::1;"
+	echo "deny all;"
+} > low-allow.conf
+install -m 0644 low-allow.conf /etc/nginx/snippets/low-allow.conf
 if [ "$SCHEME" = https ]; then
 	sed '/#HTTP-ONLY-BEGIN/,/#HTTP-ONLY-END/d' low.home.arpa.conf > site.conf
 else

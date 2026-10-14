@@ -94,7 +94,7 @@ func formatCoords(lat, lon *float64) string {
 }
 
 // parseCoords reads "latitude, longitude" in decimal degrees, south and
-// west negative. "49.4123, 8.6912", "49.4123 8.6912" and "49,4123; 8,6912"
+// west negative. "50.12345, 10.54321", "50.12345 10.54321" and "50,12345; 10,54321"
 // are all understood. Values are kept to five decimals (about a metre).
 func parseCoords(s string) (lat, lon float64, ok bool) {
 	var parts []string
@@ -138,7 +138,7 @@ func checkTexts(tf *textsForm, errs map[string]string) {
 		if lat, lon, ok := parseCoords(tf.Coords); ok {
 			tf.Lat, tf.Lon = &lat, &lon
 		} else {
-			errs["coords"] = "latitude, longitude in decimal degrees, for example 49.41234, 8.69121 (south and west negative)"
+			errs["coords"] = "latitude, longitude in decimal degrees, for example 50.12345, 10.54321 (south and west negative)"
 		}
 	}
 	t := tf.StreamTexts
