@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{if .Title}}{{.Title}} · {{end}}{{.Site}}</title>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="{{asset "app.css"}}">
 </head>
 <body>
 <header class="top">
@@ -26,6 +26,29 @@
   {{if .Error}}<p class="banner bad">{{.Error}}</p>{{end}}
   {{template "content" .}}
 </main>
-<footer>Listening Observatory Workbench · nothing here is public unless you publish it</footer>
+<footer>© 2026 Mike Quest · <a href="https://github.com/vrontier/listen-workbench">GitHub</a></footer>
 </body>
 </html>
+
+{{define "mappicker"}}
+<dialog id="map-picker" class="map-picker">
+  <form method="dialog" class="map-head">
+    <strong>Pick the receiver's location</strong>
+    <button class="link" value="cancel" aria-label="Close">Close</button>
+  </form>
+  <form class="inline-form map-search" id="map-search">
+    <label>Search a place <input id="map-query" placeholder="town, region or address"></label>
+    <button class="secondary">Search</button>
+  </form>
+  <ol id="map-results" class="map-results"></ol>
+  <div id="map" class="map" style="min-height: 320px"></div>
+  <div class="map-foot">
+    <span id="map-coords" class="meta">Click the map, or drag the marker, to set the location.</span>
+    <button type="button" id="map-use" disabled>Use these coordinates</button>
+  </div>
+  <p class="meta small">Map and search: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. They are loaded by your browser from openstreetmap.org.</p>
+</dialog>
+<link rel="stylesheet" href="{{asset "leaflet/leaflet.css"}}">
+<script src="{{asset "leaflet/leaflet.js"}}" defer></script>
+<script src="{{asset "mappicker.js"}}" defer></script>
+{{end}}

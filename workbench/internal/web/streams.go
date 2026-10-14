@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -57,7 +58,7 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 
 type newStreamData struct {
 	Input      string
-	Texts      catalogue.StreamTexts
+	Texts      textsForm
 	Audio      bool
 	Attest     bool
 	Probe      *engine.ProbeResult
@@ -71,20 +72,76 @@ type newStreamData struct {
 func (d newStreamData) FormError() string { return d.Err }
 
 func (s *Server) streamNewForm(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, 200, "stream-new", "Register a stream", newStreamData{Texts: catalogue.StreamTexts{TimeZone: "UTC"}})
+	s.render(w, r, 200, "stream-new", "Register a stream", newStreamData{Texts: textsForm{StreamTexts: catalogue.StreamTexts{TimeZone: "UTC"}}})
 }
 
-func readTexts(r *http.Request) catalogue.StreamTexts {
+// textsForm is a stream's texts as the form holds them, with the
+// coordinates as typed.
+type textsForm struct {
+	catalogue.StreamTexts
+	Coords string
+}
+
+func textsOf(t catalogue.StreamTexts) textsForm {
+	return textsForm{StreamTexts: t, Coords: formatCoords(t.Lat, t.Lon)}
+}
+
+func formatCoords(lat, lon *float64) string {
+	if lat == nil || lon == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*lat, 'f', -1, 64) + ", " + strconv.FormatFloat(*lon, 'f', -1, 64)
+}
+
+// parseCoords reads "latitude, longitude" in decimal degrees, south and
+// west negative. "49.4123, 8.6912", "49.4123 8.6912" and "49,4123; 8,6912"
+// are all understood. Values are kept to five decimals (about a metre).
+func parseCoords(s string) (lat, lon float64, ok bool) {
+	var parts []string
+	switch {
+	case strings.Contains(s, ";"):
+		parts = strings.Split(s, ";")
+	case strings.Count(s, ",") == 1:
+		parts = strings.Split(s, ",")
+	default:
+		parts = strings.Fields(s)
+	}
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	num := func(v string) (float64, bool) {
+		v = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.Replace(v, ",", ".", 1)), "°"))
+		x, err := strconv.ParseFloat(v, 64)
+		return math.Round(x*1e5) / 1e5, err == nil && !math.IsNaN(x) && !math.IsInf(x, 0)
+	}
+	lat, ok1 := num(parts[0])
+	lon, ok2 := num(parts[1])
+	if !ok1 || !ok2 || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+		return 0, 0, false
+	}
+	return lat, lon, true
+}
+
+func readTexts(r *http.Request) textsForm {
 	f := func(k string) string { return strings.TrimSpace(r.PostFormValue(k)) }
-	return catalogue.StreamTexts{
+	return textsForm{StreamTexts: catalogue.StreamTexts{
 		Name: f("name"), Place: f("place"), TimeZone: f("timezone"), Description: f("description"),
 		Credit: f("credit"), CreditURL: f("credit_url"),
-	}
+	}, Coords: f("coords")}
 }
 
 // checkTexts applies the length limits; links are allowed in the credit
 // link only (members-and-streams.md, Filtering and limits).
-func checkTexts(t catalogue.StreamTexts, errs map[string]string) {
+func checkTexts(tf *textsForm, errs map[string]string) {
+	tf.Lat, tf.Lon = nil, nil
+	if tf.Coords != "" {
+		if lat, lon, ok := parseCoords(tf.Coords); ok {
+			tf.Lat, tf.Lon = &lat, &lon
+		} else {
+			errs["coords"] = "latitude, longitude in decimal degrees, for example 49.41234, 8.69121 (south and west negative)"
+		}
+	}
+	t := tf.StreamTexts
 	limit := func(field, v string, min, max int) {
 		if n := utf8.RuneCountInString(v); n < min || n > max {
 			if min > 0 {
@@ -200,7 +257,7 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Probe = &p.result
 	d.Rates = ratesFor(p.result.SampleRate)
-	checkTexts(d.Texts, d.Errs)
+	checkTexts(&d.Texts, d.Errs)
 	rateOK := false
 	for _, x := range d.Rates {
 		rateOK = rateOK || x == d.SampleRate
@@ -218,7 +275,7 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	}
 	probe, _ := json.Marshal(p.result)
 	st, a, err := s.db.CreateStream(r.Context(), catalogue.NewStream{
-		OwnerID: sess.User.ID, Input: d.Input, SampleRate: d.SampleRate, Texts: d.Texts, AudioAllowed: d.Audio,
+		OwnerID: sess.User.ID, Input: d.Input, SampleRate: d.SampleRate, Texts: d.Texts.StreamTexts, AudioAllowed: d.Audio,
 		Probe: probe, AnalysisName: "First analysis", AnalysisSpec: json.RawMessage(`{"memory":{"mode":"disk"}}`),
 	})
 	if errors.Is(err, catalogue.ErrDuplicateInput) {
@@ -259,7 +316,7 @@ type streamData struct {
 	Audit     []catalogue.AuditEntry
 	IsOwner   bool
 	Errs      map[string]string
-	Texts     catalogue.StreamTexts
+	Texts     textsForm
 	Err       string
 }
 
@@ -282,7 +339,7 @@ func (s *Server) ownStream(w http.ResponseWriter, r *http.Request) (catalogue.St
 }
 
 func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, error) {
-	d := streamData{Stream: st, Texts: st.Texts, IsOwner: true, Errs: map[string]string{}}
+	d := streamData{Stream: st, Texts: textsOf(st.Texts), IsOwner: true, Errs: map[string]string{}}
 	json.Unmarshal(st.Probe, &d.Probe)
 	d.Engine, d.InEngine = s.sync.stream(st.EngineID())
 	analyses, err := s.db.AnalysesOf(r.Context(), st.ID)
@@ -326,7 +383,7 @@ func (s *Server) streamEdit(w http.ResponseWriter, r *http.Request) {
 	}
 	t := readTexts(r)
 	errs := map[string]string{}
-	checkTexts(t, errs)
+	checkTexts(&t, errs)
 	if len(errs) > 0 {
 		d, err := s.streamData(r, st)
 		if err != nil {
@@ -337,7 +394,7 @@ func (s *Server) streamEdit(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, 400, "stream", st.Texts.Name, d)
 		return
 	}
-	if err := s.db.UpdateStreamTexts(r.Context(), st.ID, sess.User.ID, t, r.PostFormValue("audio") == "on"); err != nil {
+	if err := s.db.UpdateStreamTexts(r.Context(), st.ID, sess.User.ID, t.StreamTexts, r.PostFormValue("audio") == "on"); err != nil {
 		s.fail(w, r, err)
 		return
 	}

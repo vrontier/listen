@@ -201,7 +201,7 @@ func (e *Engine) getEngine(w http.ResponseWriter, r *http.Request) {
 			"file_inputs": false, "address_check": "initial",
 		},
 		"counts": counts,
-		"host":   map[string]int{"cores": 4, "memory_mb": 8192},
+		"host":   hostInfo(),
 		"usage":  map[string]float64{"cpu_percent": round(total.CPU+0.8, 1), "memory_mb": round(total.Mem+18, 0), "in_kbps": total.In},
 	})
 }

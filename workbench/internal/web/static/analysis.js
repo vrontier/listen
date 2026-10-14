@@ -179,7 +179,9 @@
         el.name = el.name.replace(/_\d+$/, "_" + i);
         if (el.type === "checkbox") el.checked = false; else if (el.tagName === "INPUT") el.value = "";
       }
-      for (const el of row.querySelectorAll(".field-error, code")) el.textContent = "";
+      for (const el of row.querySelectorAll(".field-error")) el.textContent = "";
+      const saved = row.querySelector(".saved-as");
+      if (saved) saved.innerHTML = '<span class="meta">—</span>';
       tbody.append(row);
       count.value = String(i + 1);
     });

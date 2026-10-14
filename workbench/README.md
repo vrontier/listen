@@ -93,6 +93,17 @@ Details: [docs/design.md](docs/design.md#dependencies).
 | [docs/members-and-streams.md](docs/members-and-streams.md) | Accounts, registering a stream, states of a stream, limits, rights and privacy |
 | [docs/control-api.md](docs/control-api.md) | The contract between the Workbench and the engine process: streams, analyses, validation, probe, data, versions |
 
+## Third-party parts
+
+| Part | Use | Licence |
+|---|---|---|
+| [JetBrains Mono](https://www.jetbrains.com/lp/mono/) 2.304 | the pages' font, served by the Workbench (`internal/web/static/fonts`) | SIL Open Font License 1.1 |
+| [Leaflet](https://leafletjs.com) 1.9.4 | the map pop-up for a stream's coordinates, served by the Workbench (`internal/web/static/leaflet`) | BSD 2-Clause |
+| [OpenStreetMap](https://www.openstreetmap.org/copyright) | map tiles and place search in that pop-up, loaded by the member's browser from openstreetmap.org | data ODbL; tiles and search under the OpenStreetMap Foundation's usage policies |
+| [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) | the catalogue database | BSD 3-Clause |
+
+The map pop-up is the only place where a member's browser contacts a third party; the privacy notice has to say so.
+
 ## Licence
 
 MIT, like Listening Observatory. See [LICENSE](LICENSE). Audio remains with its sources and is never stored in this repository.

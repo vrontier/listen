@@ -38,6 +38,17 @@ func (s *engineSync) status() (ready bool, problem string, info engine.Info) {
 	return s.ready, s.problem, s.info
 }
 
+// used is what the engine reported last as its own use, with the host.
+func (s *engineSync) used() (engine.Usage, engine.Host) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u := s.usage.Engine
+	if u.CPUPercent == 0 && u.MemoryMB == 0 {
+		u = s.info.Usage
+	}
+	return u, s.info.Host
+}
+
 func (s *engineSync) stream(id string) (engine.Stream, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -31,7 +31,7 @@
     </div>
   </div>
 </section>
-<script src="/static/analysis.js" defer></script>
+<script src="{{asset "analysis.js"}}" defer></script>
 {{else}}
 <p class="note">The stream is {{.Stream.State}}; nothing is analysed now.</p>
 {{end}}
@@ -68,7 +68,7 @@
       <p class="meta">A rule removes spectral peaks at known interference before resonances and motifs are derived from them. It does not change the audio or the spectrogram. A comb covers a frequency and its harmonics.</p>
       {{with index .Errs "rules"}}<p class="field-error">{{.}}</p>{{end}}
       <table class="rules" id="rules">
-        <thead><tr><th>Kind</th><th>Hz</th><th>Odd only</th><th>Tolerance Hz</th><th>Drift %</th><th>As configured</th></tr></thead>
+        <thead><tr><th>Kind</th><th>Hz</th><th>Odd only</th><th>Tolerance Hz</th><th>Drift %</th><th title="The rule as the engine applies it, in its own notation; shown once saved">Saved as</th></tr></thead>
         <tbody>
         {{$errs := .Errs}}
         {{range $i, $r := .Form.Rules}}
@@ -78,7 +78,7 @@
           <td><input type="checkbox" name="rule_odd_{{$i}}" {{if $r.Odd}}checked{{end}}></td>
           <td><input name="rule_tol_{{$i}}" value="{{$r.Tol}}" inputmode="decimal" size="5" placeholder="1.5 bins">{{with index $errs (printf "rule_tol_%d" $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
           <td><input name="rule_drift_{{$i}}" value="{{$r.Drift}}" inputmode="decimal" size="4">{{with index $errs (printf "rule_drift_%d" $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
-          <td><code>{{$r.Text}}</code></td>
+          <td class="saved-as">{{if $r.Text}}<code>{{$r.Text}}</code>{{else}}<span class="meta">—</span>{{end}}</td>
         </tr>
         {{end}}
         </tbody>

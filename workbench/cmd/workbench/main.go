@@ -101,6 +101,9 @@ func createAdmin(db *catalogue.DB, baseURL string, args []string) {
 		fs.Usage()
 		os.Exit(2)
 	}
+	if !mail.ValidAddress(*email) {
+		log.Fatalf("%q is not a complete email address", *email)
+	}
 	ctx := context.Background()
 	u, err := db.UserByEmail(ctx, *email)
 	if errors.Is(err, catalogue.ErrNotFound) {

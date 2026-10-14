@@ -37,12 +37,15 @@ type Stream struct {
 
 // StreamTexts are the parts of a stream its owner may edit at any time.
 type StreamTexts struct {
-	Name        string `json:"name"`
-	Place       string `json:"place"`
-	TimeZone    string `json:"timezone"`
-	Description string `json:"description"`
-	Credit      string `json:"credit"`
-	CreditURL   string `json:"credit_url"`
+	Name     string `json:"name"`
+	Place    string `json:"place"`
+	TimeZone string `json:"timezone"`
+	// Lat and Lon locate the receiver, in decimal degrees; nil when not given.
+	Lat         *float64 `json:"lat,omitempty"`
+	Lon         *float64 `json:"lon,omitempty"`
+	Description string   `json:"description"`
+	Credit      string   `json:"credit"`
+	CreditURL   string   `json:"credit_url"`
 }
 
 // EngineID is the stream's identifier towards the engine: the catalogue's
@@ -98,9 +101,9 @@ func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, Analysis, e
 			return err
 		}
 		res, err := tx.ExecContext(ctx, `INSERT INTO streams
-			(slug, owner_id, input, sample_rate, name, place, timezone, description, credit, credit_url, audio_allowed, attested, probe, created, updated)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			slug, n.OwnerID, n.Input, n.SampleRate, n.Texts.Name, n.Texts.Place, n.Texts.TimeZone, n.Texts.Description,
+			(slug, owner_id, input, sample_rate, name, place, timezone, lat, lon, description, credit, credit_url, audio_allowed, attested, probe, created, updated)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			slug, n.OwnerID, n.Input, n.SampleRate, n.Texts.Name, n.Texts.Place, n.Texts.TimeZone, n.Texts.Lat, n.Texts.Lon, n.Texts.Description,
 			n.Texts.Credit, n.Texts.CreditURL, n.AudioAllowed, stamp(now), string(n.Probe), stamp(now), stamp(now))
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed: streams.input") {
@@ -182,14 +185,14 @@ func Slugify(name string) string {
 	return s
 }
 
-const streamCols = `s.id, s.slug, s.owner_id, u.name, s.input, s.sample_rate, s.name, s.place, s.timezone, s.description,
+const streamCols = `s.id, s.slug, s.owner_id, u.name, s.input, s.sample_rate, s.name, s.place, s.timezone, s.lat, s.lon, s.description,
 	s.credit, s.credit_url, s.audio_allowed, s.state, s.always_on, s.attested, s.probe, s.created, s.updated`
 
 func scanStream(row interface{ Scan(...any) error }) (Stream, error) {
 	var s Stream
 	var attested, probe, created, updated string
 	err := row.Scan(&s.ID, &s.Slug, &s.OwnerID, &s.OwnerName, &s.Input, &s.SampleRate, &s.Texts.Name, &s.Texts.Place,
-		&s.Texts.TimeZone, &s.Texts.Description, &s.Texts.Credit, &s.Texts.CreditURL, &s.AudioAllowed, &s.State,
+		&s.Texts.TimeZone, &s.Texts.Lat, &s.Texts.Lon, &s.Texts.Description, &s.Texts.Credit, &s.Texts.CreditURL, &s.AudioAllowed, &s.State,
 		&s.AlwaysOn, &attested, &probe, &created, &updated)
 	s.Attested, s.Created, s.Updated = parseStamp(attested), parseStamp(created), parseStamp(updated)
 	s.Probe = json.RawMessage(probe)
@@ -246,9 +249,9 @@ func (d *DB) UpdateStreamTexts(ctx context.Context, id, by int64, t StreamTexts,
 		if err != nil {
 			return notFound(err)
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE streams SET name = ?, place = ?, timezone = ?, description = ?, credit = ?, credit_url = ?,
+		if _, err := tx.ExecContext(ctx, `UPDATE streams SET name = ?, place = ?, timezone = ?, lat = ?, lon = ?, description = ?, credit = ?, credit_url = ?,
 			audio_allowed = ?, updated = ? WHERE id = ?`,
-			t.Name, t.Place, t.TimeZone, t.Description, t.Credit, t.CreditURL, audioAllowed, stamp(now), id); err != nil {
+			t.Name, t.Place, t.TimeZone, t.Lat, t.Lon, t.Description, t.Credit, t.CreditURL, audioAllowed, stamp(now), id); err != nil {
 			return err
 		}
 		before, _ := json.Marshal(map[string]any{"texts": old.Texts, "audio_allowed": old.AudioAllowed})

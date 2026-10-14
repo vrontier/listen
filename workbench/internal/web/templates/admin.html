@@ -23,6 +23,16 @@
   {{else}}
     <p class="field-error">{{.EngineNote}}</p>
   {{end}}
+  <h3>Server cap</h3>
+  <p class="meta">How much of the host the Workbench's streams and analyses may use together. {{if .Host.Cores}}The host has {{.Host.Cores}} cores{{if .Host.MemoryMB}} and {{.Host.MemoryMB}} MB{{end}}.{{end}}
+  In use now: {{cores .Used.CPUPercent}} cores, {{printf "%.0f" .Used.MemoryMB}} MB{{if .EngineInfo.EngineVersion}} (as the engine reports it){{end}}.</p>
+  <form method="post" action="/admin/cap" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>CPU cores {{with index .CapErrs "cpu"}}<span class="field-error">{{.}}</span>{{end}}<input name="cpu_cores" value="{{.CapForm.CPU}}" inputmode="decimal" size="6" placeholder="no cap"></label>
+    <label>Memory, MB {{with index .CapErrs "memory"}}<span class="field-error">{{.}}</span>{{end}}<input name="memory_mb" value="{{.CapForm.Memory}}" inputmode="numeric" size="8" placeholder="no cap"></label>
+    <button>Save</button>
+  </form>
+  <p class="meta">{{if or .Cap.CPUCores .Cap.MemoryMB}}Set: {{if .Cap.CPUCores}}{{.Cap.CPUCores}} cores{{else}}no CPU cap{{end}}, {{if .Cap.MemoryMB}}{{.Cap.MemoryMB}} MB{{else}}no memory cap{{end}}.{{else}}No cap set.{{end}} Not enforced yet: refusing new streams and analyses at the cap comes with the resource accounting.</p>
   <h3>Members</h3>
   <table><thead><tr><th>Name</th><th>Address</th><th>Since</th></tr></thead>
   <tbody>{{range .Users}}<tr><td>{{.Name}}{{if .Admin}} <span class="meta">admin</span>{{end}}</td><td>{{.Email}}</td><td>{{when .Created}}</td></tr>{{end}}</tbody></table>

@@ -1,3 +1,10 @@
+/* JetBrains Mono, served from here (SIL Open Font License, see fonts/JetBrainsMono-OFL.txt). */
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: italic; font-weight: 400; font-display: swap; src: url("fonts/JetBrainsMono-Italic.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/JetBrainsMono-Medium.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/JetBrainsMono-Bold.woff2") format("woff2"); }
+
 :root {
   --bg: #f7f6f2;
   --surface: #ffffff;
@@ -34,10 +41,10 @@
   }
 }
 * { box-sizing: border-box; }
-html { font-size: 16px; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+html { font-size: 15px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 1rem/1.55 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
 a { color: var(--accent); }
-code { font: 0.85rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 0.05rem 0.3rem; border-radius: 3px; overflow-wrap: anywhere; }
+code { font: 0.85rem/1.4 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 0.05rem 0.3rem; border-radius: 3px; overflow-wrap: anywhere; }
 code.small { font-size: 0.75rem; }
 h1 { font-size: 1.6rem; margin: 0.2rem 0 0.6rem; }
 h2 { font-size: 1.2rem; margin: 1.6rem 0 0.6rem; }
@@ -78,12 +85,19 @@ footer { max-width: 1100px; margin: 0 auto; padding: 1rem 16px 2rem; color: var(
 .conn-reconnecting, .conn-buffering, .conn-refused { color: var(--bad); }
 
 form.stack { display: flex; flex-direction: column; gap: 0.8rem; }
-form.inline, form.inline-form { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; }
+form.inline, form.inline-form { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
+form.inline-form button { align-self: flex-end; padding-top: 0.5rem; padding-bottom: 0.5rem; }
 .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.8rem; }
 label { display: flex; flex-direction: column; gap: 0.25rem; font-weight: 500; }
 label small { font-weight: 400; color: var(--muted); }
 label.check { flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 400; }
 input, select, textarea { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 0.4rem 0.5rem; min-width: 0; }
+/* One height for every one-line field, selects included: browsers draw a
+   select in their own style unless told not to, which made it shorter. */
+input:not([type=checkbox]):not([type=radio]), select { height: 2.45rem; line-height: 1.4; }
+select { appearance: none; -webkit-appearance: none; padding-right: 1.8rem; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23646a73'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.6rem center; }
 input[readonly] { color: var(--muted); }
 fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.9rem 0.8rem; margin: 0; }
 legend { font-weight: 600; padding: 0 0.3rem; }
@@ -95,8 +109,8 @@ button.link { background: none; color: var(--accent); padding: 0; text-decoratio
 .actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: end; }
 .danger h2 { color: var(--bad); }
 
-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; display: block; overflow-x: auto; }
-thead, tbody { display: table; width: 100%; border-collapse: collapse; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+td { overflow-wrap: anywhere; }
 th, td { text-align: left; padding: 0.35rem 0.5rem 0.35rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 500; }
 table.rules input[size] { width: 6.5rem; }
@@ -111,3 +125,18 @@ canvas#spectrogram { width: 100%; height: 240px; background: var(--spectro-bg); 
 .events li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); display: flex; gap: 0.6rem; }
 .events time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .ev-motif { font-weight: 600; }
+.short { max-width: 28rem; }
+
+/* Coordinates field with its map button, and the map pop-up. */
+.with-button { display: flex; gap: 0.4rem; }
+.with-button input { flex: 1; }
+.with-button button { align-self: stretch; }
+.map-picker { width: min(960px, calc(100vw - 32px)); max-height: calc(100vh - 32px); border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0.8rem 1rem; }
+.map-picker::backdrop { background: rgba(0, 0, 0, 0.45); }
+.map-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; }
+.map-search { margin-bottom: 0.4rem; }
+.map-results { margin: 0 0 0.5rem; padding-left: 1.2rem; font-size: 0.85rem; }
+.map-results button.link { text-align: left; }
+.map { height: min(60vh, 520px); min-height: 320px; border-radius: 6px; }
+.map-foot { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: space-between; align-items: center; margin-top: 0.6rem; }
+.small { font-size: 0.8rem; }

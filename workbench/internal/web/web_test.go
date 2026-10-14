@@ -139,9 +139,27 @@ func TestMemberFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// An incomplete address is refused, not silently ignored.
+	if code, page, _ := r.post(r.browser(), "/login", url.Values{"email": {"admin@exampleorg"}}); code != 400 || !strings.Contains(page, "not a complete email address") {
+		t.Fatalf("incomplete address at login: %d", code)
+	}
+
 	// The master admin invites a member.
 	admin := r.loginAs("admin@example.org")
 	_, page, _ := r.get(admin, "/admin")
+	if code, p, _ := r.post(admin, "/admin/cap", url.Values{"csrf": {csrfOf(t, page)}, "cpu_cores": {"0"}}); code != 400 || !strings.Contains(p, "above 0") {
+		t.Fatalf("bad cap: %d", code)
+	}
+	if code, _, _ := r.post(admin, "/admin/cap", url.Values{"csrf": {csrfOf(t, page)}, "cpu_cores": {"1,5"}, "memory_mb": {"512"}}); code != http.StatusSeeOther {
+		t.Fatalf("cap: %d", code)
+	}
+	if c, _ := r.db.ServerCap(ctx); c.CPUCores != 1.5 || c.MemoryMB != 512 {
+		t.Fatalf("cap stored: %+v", c)
+	}
+	_, page, _ = r.get(admin, "/admin")
+	if !strings.Contains(page, "Set: 1.5 cores, 512 MB") {
+		t.Fatal("cap not shown")
+	}
 	code, page, _ := r.post(admin, "/admin/invitations", url.Values{"csrf": {csrfOf(t, page)}, "email": {"researcher@example.org"}})
 	if code != 200 || !strings.Contains(page, "Invitation sent") {
 		t.Fatalf("invite: %d", code)
@@ -181,6 +199,11 @@ func TestMemberFlow(t *testing.T) {
 		t.Fatalf("save without attestation: %d", code)
 	}
 	form.Set("attest", "on")
+	form.Set("coords", "49.4, 200")
+	if code, page, _ = r.post(member, "/account/streams/new", form); code != 400 || !strings.Contains(page, "decimal degrees") {
+		t.Fatalf("bad coordinates: %d", code)
+	}
+	form.Set("coords", "49,41234; 8,69121")
 	code, _, hdr := r.post(member, "/account/streams/new", form)
 	if code != http.StatusSeeOther {
 		t.Fatalf("save: %d", code)
@@ -190,6 +213,12 @@ func TestMemberFlow(t *testing.T) {
 		t.Fatalf("redirect to %q", analysisURL)
 	}
 
+	if st, _ := r.db.StreamBySlug(ctx, "garden-mic"); st.Texts.Lat == nil || *st.Texts.Lat != 49.41234 || *st.Texts.Lon != 8.69121 {
+		t.Fatalf("coordinates not stored: %+v", st.Texts)
+	}
+	if _, page, _ := r.get(member, "/account/streams/garden-mic"); !strings.Contains(page, `value="49.41234, 8.69121"`) || !strings.Contains(page, "map-picker") {
+		t.Fatal("coordinates or map not on the stream page")
+	}
 	// A second registration of the same address is pointed to the stream.
 	_, apage, _ := r.get(admin, "/account/streams/new")
 	if code, page, _ = r.post(admin, "/account/streams/new", url.Values{"csrf": {csrfOf(t, apage)}, "input": {input}, "action": {"probe"}}); code != http.StatusConflict || !strings.Contains(page, "registered by Researcher") {

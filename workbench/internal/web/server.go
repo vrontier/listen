@@ -4,15 +4,19 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"embed"
 	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -137,6 +141,7 @@ func (s *Server) routes() {
 
 	m.HandleFunc("GET /admin", s.admin(s.adminPage))
 	m.HandleFunc("POST /admin/invitations", s.admin(s.adminInvite))
+	m.HandleFunc("POST /admin/cap", s.admin(s.adminCap))
 	s.mux = m
 }
 
@@ -175,6 +180,7 @@ var funcs = template.FuncMap{
 		}
 		return fmt.Sprintf("%d B", n)
 	},
+	"cores": func(percent float64) string { return strconv.FormatFloat(math.Round(percent)/100, 'f', 2, 64) },
 	"hz": func(v float64) string {
 		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.1f", v), "0"), ".") + " Hz"
 	},
@@ -188,7 +194,24 @@ var funcs = template.FuncMap{
 	},
 }
 
+// staticVersion is a hash of the embedded static files. Pages refer to them
+// with it in the address, so a browser fetches them again after a deploy
+// instead of using a copy it cached before.
+var staticVersion = func() string {
+	h := sha256.New()
+	fs.WalkDir(staticFS, "static", func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			b, _ := staticFS.ReadFile(path)
+			h.Write([]byte(path))
+			h.Write(b)
+		}
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))[:12]
+}()
+
 func (s *Server) parseTemplates() error {
+	funcs["asset"] = func(name string) string { return "/static/" + name + "?v=" + staticVersion }
 	s.pages = map[string]*template.Template{}
 	names, err := fs.Glob(templateFS, "templates/*.html")
 	if err != nil {

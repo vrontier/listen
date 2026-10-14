@@ -1,9 +1,11 @@
 {{define "content"}}
-<section class="narrow">
+<section>
   <h1>Log in</h1>
-  <form method="post" action="/login/{{.Data.Token}}" class="stack">
+  <form method="post" action="/login/{{.Data.Token}}" class="stack" id="login-now">
     <input type="hidden" name="next" value="{{.Data.Next}}">
+    <p class="meta" id="login-wait" hidden>Logging you in…</p>
     <button autofocus>Log in now</button>
   </form>
 </section>
+<script src="{{asset "login.js"}}" defer></script>
 {{end}}

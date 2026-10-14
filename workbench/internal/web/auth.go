@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/mail"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen-workbench/internal/mail"
 )
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
@@ -51,8 +51,8 @@ func (s *Server) loginSend(w http.ResponseWriter, r *http.Request) {
 	}
 	email := strings.TrimSpace(r.PostFormValue("email"))
 	next := safeNext(r.PostFormValue("next"))
-	if _, err := mail.ParseAddress(email); err != nil || strings.ContainsAny(email, " <>") {
-		s.render(w, r, 400, "login", "Log in", loginData{Email: email, Next: next, Err: "That does not look like an email address."})
+	if !mail.ValidAddress(email) {
+		s.render(w, r, 400, "login", "Log in", loginData{Email: email, Next: next, Err: "That is not a complete email address. Please check it, for example the dot before the ending."})
 		return
 	}
 	u, err := s.db.UserByEmail(r.Context(), email)
@@ -64,6 +64,7 @@ func (s *Server) loginSend(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if recent {
+			log.Printf("login link not sent: member %d got one less than a minute ago", u.ID)
 			break
 		}
 		token, err := s.db.LoginLink(r.Context(), u.ID, loginLinkLife)
@@ -76,8 +77,15 @@ func (s *Server) loginSend(w http.ResponseWriter, r *http.Request) {
 			u.Name, s.cfg.SiteName, int(loginLinkLife.Minutes()), link)
 		if err := s.mail.Send(u.Email, "Your login link", body); err != nil {
 			log.Printf("login mail to member %d: %v", u.ID, err)
+		} else {
+			log.Printf("login mail sent to member %d", u.ID)
 		}
-	case err != nil && !isNotFound(err):
+	case err == nil:
+		log.Printf("login link not sent: member %d is suspended", u.ID)
+	case isNotFound(err):
+		// Not logged with the address: it may be anyone's.
+		log.Printf("login link not sent: no member has that address")
+	default:
 		s.fail(w, r, err)
 		return
 	}
