@@ -595,8 +595,8 @@ func TestComparison(t *testing.T) {
 	if !ok || len(g.Members) != 2 || g.Mode != engine.Continuous || g.Label != "rev-1" || g.Members[0].Lat == nil {
 		t.Fatalf("group in a run: %v %+v", ok, g)
 	}
-	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "compare.js") {
-		t.Fatal("running analysis page lacks the comparison")
+	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "compare.js") || !strings.Contains(page, `data-lat="50.12345" data-lon="10.54321"`) || !strings.Contains(page, "leaflet.js") {
+		t.Fatal("running analysis page lacks the comparison or its map")
 	}
 	if code, body, _ := r.get(member, aURL+"/compare/state"); code != 200 || !strings.Contains(body, `"group"`) {
 		t.Fatalf("compare state: %d %s", code, body)

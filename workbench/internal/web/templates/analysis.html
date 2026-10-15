@@ -62,7 +62,9 @@
     {{if .Comparing}}<span class="status conn">connecting…</span> <span class="compare-status meta"></span>{{end}}
   </div>
   {{if .Comparing}}
-  <ol class="lane-names" hidden>{{range .Sources}}{{if .Running}}<li data-stream="{{.Stream.EngineID}}">{{.Stream.Texts.Name}}</li>{{end}}{{end}}</ol>
+  <ol class="lane-names" hidden>{{range .Sources}}{{if .Running}}<li data-stream="{{.Stream.EngineID}}"{{with .Stream.Texts.Lat}} data-lat="{{.}}"{{end}}{{with .Stream.Texts.Lon}} data-lon="{{.}}"{{end}}>{{.Stream.Texts.Name}}</li>{{end}}{{end}}</ol>
+  <div class="compare-map" hidden></div>
+  <p class="compare-map-note meta small" hidden>Stations, the distance between each pair with the time a radio wave needs for it, and the night side of the earth (shaded), which matters for long paths at low frequencies. Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, loaded by your browser from openstreetmap.org.</p>
   <div class="compare-controls" role="radiogroup" aria-label="What the lanes show">
     <label class="check"><input type="radio" name="lane-metric" value="impulse_rate" checked> impulse rate</label>
     <label class="check"><input type="radio" name="lane-metric" value="level_db"> level</label>
@@ -72,6 +74,8 @@
   <h3>Correlation</h3>
   <table class="correlations"><thead><tr><th>Pair</th><th>r</th><th title="Positive: the second source hears the same later">Lag</th><th title="The same pair shifted 150 s apart: what chance alone gives">Baseline r</th><th>Above baseline</th></tr></thead><tbody><tr><td colspan="5" class="meta">The first correlation comes after five minutes of activity.</td></tr></tbody></table>
   <p class="meta">Lanes show each source's activity per second over the last ten minutes, on one time axis in UTC; gaps are seconds in which a source was not heard. Each lane is scaled to its own range. The times are wall time at the engine, so the sources are aligned to a few seconds, not to their stations' clocks: the lag of a correlation is mostly the difference of the streams' delays on their way here. The correlation compares the impulse rates of the last five minutes, at lags up to 30 s, and is worth something only well above its baseline, the same pair shifted 150 s apart.</p>
+  <link rel="stylesheet" href="{{asset "leaflet/leaflet.css"}}">
+  <script src="{{asset "leaflet/leaflet.js"}}" defer></script>
   <script src="{{asset "compare.js"}}" defer></script>
   {{else if not .Run}}
   <p class="note">The sources are compared during runs only.</p>

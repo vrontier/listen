@@ -139,6 +139,66 @@
     es.onerror = () => { statusEl.textContent = "reconnecting…"; statusEl.className = "status conn conn-reconnecting"; };
   }
 
+  // --- the map: stations, pairs, night ---
+
+  const RAD = Math.PI / 180;
+
+  // Great-circle distance in km.
+  function distance(a, b) {
+    const dLat = (b[0] - a[0]) * RAD, dLon = (b[1] - a[1]) * RAD;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * RAD) * Math.cos(b[0] * RAD) * Math.sin(dLon / 2) ** 2;
+    return 2 * 6371.0088 * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  // The night side of the earth at a time, as a polygon, after the usual
+  // low-precision solar position (as in the Leaflet.Terminator plugin).
+  function night(date) {
+    const jd = date.getTime() / 86400000 + 2440587.5, n = jd - 2451545.0;
+    const gst = (18.697374558 + 24.06570982441908 * n) % 24;
+    const L = (280.46 + 0.9856474 * n) % 360, g = ((357.528 + 0.9856003 * n) % 360) * RAD;
+    const lambda = (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * RAD;
+    const eps = (23.43929111 - (n / 36525) * (46.836769 / 3600)) * RAD;
+    let alpha = Math.atan(Math.cos(eps) * Math.tan(lambda)) / RAD;
+    const delta = Math.asin(Math.sin(eps) * Math.sin(lambda)) / RAD;
+    alpha += Math.floor(lambda / RAD / 90) * 90 - Math.floor(alpha / 90) * 90;
+    const pts = [];
+    for (let lng = -180; lng <= 180; lng += 0.5) {
+      const ha = ((gst + lng / 15) * 15 - alpha) * RAD;
+      pts.push([Math.atan(-Math.cos(ha) / Math.tan(delta * RAD)) / RAD, lng]);
+    }
+    const pole = delta < 0 ? 90 : -90;
+    pts.push([pole, 180], [pole, -180]);
+    return pts;
+  }
+
+  function drawMap() {
+    const box = root.querySelector(".compare-map");
+    const placed = Array.from(root.querySelectorAll(".lane-names li[data-lat][data-lon]"))
+      .map((li) => ({ name: li.textContent, at: [Number(li.dataset.lat), Number(li.dataset.lon)] }));
+    if (!box || !placed.length || typeof L === "undefined") return;
+    box.hidden = false;
+    root.querySelector(".compare-map-note").hidden = false;
+    const map = L.map(box, { worldCopyJump: true, scrollWheelZoom: false });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 12, referrerPolicy: "strict-origin-when-cross-origin",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+    let shade = L.polygon(night(new Date()), { stroke: false, fillColor: "#0d1117", fillOpacity: 0.25, interactive: false }).addTo(map);
+    setInterval(() => { shade.setLatLngs(night(new Date())); }, 60000);
+    for (const p of placed) L.circleMarker(p.at, { radius: 6, weight: 2 }).bindTooltip(p.name, { permanent: true, direction: "right" }).addTo(map);
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = i + 1; j < placed.length; j++) {
+        const km = distance(placed[i].at, placed[j].at);
+        const line = L.polyline([placed[i].at, placed[j].at], { weight: 1.5, dashArray: "4 4" }).addTo(map);
+        line.bindTooltip(Math.round(km) + " km · " + (km / 299.792458).toFixed(1) + " ms", { permanent: true, className: "pair-label", direction: "center" });
+      }
+    }
+    if (placed.length === 1) map.setView(placed[0].at, 5);
+    else map.fitBounds(L.latLngBounds(placed.map((p) => p.at)).pad(0.25));
+  }
+
+  try { drawMap(); } catch (e) { /* the lanes work without the map */ }
+
   for (const r of root.querySelectorAll('input[name="lane-metric"]')) {
     r.addEventListener("change", () => { metric = r.value; draw(); });
   }

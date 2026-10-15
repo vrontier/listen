@@ -159,3 +159,5 @@ details.block > fieldset { border: 0; padding: 0; margin: 0.5rem 0 0; }
 fieldset[disabled] { opacity: 0.75; }
 .trial-block { border-style: dashed; border-color: var(--warn); }
 .trial-block canvas.spectrogram { height: 120px; }
+.compare-map { height: 300px; border: 1px solid var(--line); border-radius: 4px; margin: 0.4rem 0; }
+.pair-label { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; font-size: 11px; white-space: nowrap; }

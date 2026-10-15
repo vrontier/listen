@@ -55,7 +55,8 @@ Why the layer below stays as it is:
 - **The page** has a section "Comparison" above the sources: one lane per source on one time axis in UTC, the last ten minutes per second, showing impulse rate, level or flux (each lane scaled to its own range, gaps where a source was not heard); a status line (how far behind, time source, absent sources); and a table of the latest correlations per pair with lag, baseline and whether the correlation stands clearly (0.2 or more) above its baseline. The page explains that wall time aligns only to a few seconds.
 - **Data set:** each run's data set has `comparison.csv` with a row per source and second of activity and a row per pair and minute of correlation; its `dataset.json` carries the correlations.
 - **The stand-in's made-up data:** all its streams hear one made-up "sky" (a slow swell and short bursts), each later by its own path delay of 4 to 18 s and with its own weight. The correlation therefore finds a lag of the difference of two delays, and the shifted baseline stays low. This tests the view; it says nothing about real stations.
-- **Not built:** the map with the stations and the day-night line, `clock` and `coincidence` (they need station time), and a group page for members who do not own all sources (sharing is not built).
+- **The map** (built 2026-10-15, proposed): in the comparison, the stations that have coordinates, a dashed line for each pair labelled with its great-circle distance and the time a radio wave needs for it (distance / c, e.g. "640 km · 2.1 ms": the largest delay a timing analysis may accept between the two), and the night side of the earth, shaded and moved every minute. Tiles come from openstreetmap.org, loaded by the browser, as for the map picker.
+- **Not built:** `clock` and `coincidence` (they need station time).
 
 ## Time
 
