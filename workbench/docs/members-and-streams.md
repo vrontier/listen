@@ -47,7 +47,8 @@ browser ──► web server ──► Workbench process ──control API──
    - "Audio may be played in the browser", off by default. Audio is allowed (**decided**, 2026-10-14); the owner switches it on per stream.
 2. **Probe.** On the Workbench's request the engine checks that the stream answers, delivers audio that decodes, and is not silent; it reports the sample rate, the level and the bit rate. The member sees the result at once. The sample rate becomes a property of the stream, the same for all its analyses (see [analyses-and-filters.md](analyses-and-filters.md)). A stream whose probe fails is not saved.
 3. **Draft first.** A new stream is in draft: it runs only while someone watches or a token reads, and is visible only to its owner and the members they invite.
-4. **Afterwards.** The owner can edit the texts, move the stream to production, pause or delete it. The engine reports a stream that has been offline for 24 hours; the Workbench pauses it and tells the owner.
+4. **No analysis is made.** **Decided** (2026-10-14): registering a source creates no analysis. The source's page offers "New analysis with this source"; see [design.md](design.md#analyses-and-sources).
+5. **Afterwards.** The owner can edit the texts, move the stream to production, pause or delete it. The engine reports a stream that has been offline for 24 hours; the Workbench pauses it and tells the owner.
 
 **Decided** (2026-10-14): a stream address exists once. If a second member registers an address that is already a stream, no second stream is made; the stream is shared (see [Sharing](#sharing)). **Proposed:** the second member is shown that the stream exists and who owns it, and can ask the owner to be invited. Recognising two spellings of one address (redirects, `http` and `https`, a trailing slash) is the Workbench's task and is **open** in its detail.
 
@@ -81,7 +82,7 @@ any state ──► suspended (master admin)
 
 ### Of an analysis
 
-**Decided** (2026-10-14): publication belongs to an analysis, not to a stream, since analyses are individual and a stream is shared (see question 21 in [design.md](design.md#questions-and-answers)).
+**Decided** (2026-10-14): publication belongs to an analysis, not to a stream, since analyses are individual and a stream is shared (see question 21 in [design.md](design.md#questions-and-answers)). An analysis has 1 to n sources ([design.md](design.md#analyses-and-sources)).
 
 | State | Who sees it |
 |---|---|
@@ -90,8 +91,8 @@ any state ──► suspended (master admin)
 | Withdrawn | as private; the public page answers that the work was withdrawn |
 
 - **Decided:** publishing takes effect at once, without review.
-- Publishing asks once more for the rights attestation and shows the page as visitors will see it. A research page carries the stream's name, place and credit.
-- **Proposed:** publishing an analysis of a stream someone else owns needs that owner's consent, given once per member.
+- Publishing asks once more for the rights attestation and shows the page as visitors will see it. A research page carries the name, place and credit of each of its sources.
+- **Proposed:** publishing an analysis that uses a source someone else owns needs that owner's consent, given once per member.
 - Withdrawing takes effect at once.
 - The Workbench process checks who is asking, on every data path: the session of a logged-in member, or a token. The engine is reachable on a local socket only and checks nothing.
 
@@ -201,9 +202,10 @@ No user-written code or expressions run on the server: filters and motif definit
 | Path | Content |
 |---|---|
 | `/login` | email link |
-| `/account` | own streams, analyses and tokens, with state |
-| `/account/streams/new`, `/account/streams/<slug>` | register and edit, invite members, move to production, pause, delete; who is connected |
-| `/account/streams/<slug>/analyses/<id>` | spectrogram, events, motifs, export; settings, filter rules, trial, revisions, memories |
+| `/sources` | own sources, with state |
+| `/sources/new`, `/sources/<slug>` | register and edit, invite members, move to production, pause, delete; who is connected; new analysis with this source |
+| `/analyses` | own analyses with their sources |
+| `/analyses/new`, `/analyses/<id>` | name, description and sources; per source: spectrogram, events, motifs, settings and filter rules, memories; from two sources the comparison; export, trial, revisions |
 | `/account/usage` | own CPU, RAM, bandwidth and disk against the caps |
 | `/account/tokens` | create and revoke tokens |
 | `/account/keys` | own API keys for the language-model interpretation |

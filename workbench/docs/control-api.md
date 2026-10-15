@@ -54,6 +54,7 @@ engine
     └── analysis a-0002
 ```
 
+- **Terms.** An "analysis" here is the engine's analysis of one stream. A Workbench analysis with n sources is put into the engine as n such analyses, one per source with its settings, all with the same identifier, and from two sources on as one group over them ([design.md](design.md#analyses-and-sources)).
 - **The Workbench holds the truth.** The engine keeps no configuration across a restart. It keeps the memories on disk, under the identifiers it was given.
 - **Every change is a `PUT` of the whole object**, and sending the same object twice changes nothing. The Workbench can therefore repeat any request it is unsure about.
 - **After a restart of either side** the Workbench lists what the engine has, puts what is missing or different, and deletes what should not be there. `GET /v1/engine` returns an `instance` value that changes with every start of the engine, so the Workbench can tell a restart from a short break in the connection.

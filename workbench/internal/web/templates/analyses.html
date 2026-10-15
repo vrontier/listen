@@ -1,0 +1,21 @@
+{{define "content"}}
+<div class="heading-row">
+  <h1>Analyses</h1>
+  <a class="button" href="/analyses/new">New analysis</a>
+</div>
+{{with .Data}}
+{{if not .Analyses}}
+  <p class="empty">No analyses yet. An analysis takes one or more of your <a href="/sources">sources</a>, with filters per source; from two sources on it compares them on one time axis.</p>
+{{end}}
+{{range .Analyses}}
+<article class="card">
+  <div class="heading-row">
+    <h2><a href="/analyses/{{.ID}}">{{.Name}}</a></h2>
+    <span class="state state-{{.State}}">{{.State}} · {{.Label}}</span>
+  </div>
+  {{if .Description}}<p>{{.Description}}</p>{{end}}
+  <p class="meta">{{len .Sources}} source{{if ne (len .Sources) 1}}s{{end}}: {{range $i, $s := .Sources}}{{if $i}}, {{end}}{{$s.Stream.Texts.Name}}{{end}}</p>
+</article>
+{{end}}
+{{end}}
+{{end}}

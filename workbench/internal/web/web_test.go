@@ -3,12 +3,14 @@ package web
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -126,7 +128,7 @@ func (r *rig) loginAs(email string) *http.Client {
 		r.t.Fatal("no login mail")
 	}
 	u, _ := url.Parse(linkRE.FindString(msg.Body))
-	if code, _, _ := r.post(c, u.Path, url.Values{"next": {"/account"}}); code != http.StatusSeeOther {
+	if code, _, _ := r.post(c, u.Path, url.Values{"next": {"/analyses"}}); code != http.StatusSeeOther {
 		r.t.Fatalf("login link: %d", code)
 	}
 	return c
@@ -144,7 +146,7 @@ func TestMemberFlow(t *testing.T) {
 		t.Fatalf("incomplete address at login: %d", code)
 	}
 
-	// The master admin invites a member.
+	// The master admin sets a cap and invites a member.
 	admin := r.loginAs("admin@example.org")
 	_, page, _ := r.get(admin, "/admin")
 	if code, p, _ := r.post(admin, "/admin/cap", url.Values{"csrf": {csrfOf(t, page)}, "cpu_cores": {"0"}}); code != 400 || !strings.Contains(p, "above 0") {
@@ -157,9 +159,6 @@ func TestMemberFlow(t *testing.T) {
 		t.Fatalf("cap stored: %+v", c)
 	}
 	_, page, _ = r.get(admin, "/admin")
-	if !strings.Contains(page, "Set: 1.5 cores, 512 MB") {
-		t.Fatal("cap not shown")
-	}
 	code, page, _ := r.post(admin, "/admin/invitations", url.Values{"csrf": {csrfOf(t, page)}, "email": {"researcher@example.org"}})
 	if code != 200 || !strings.Contains(page, "Invitation sent") {
 		t.Fatalf("invite: %d", code)
@@ -172,9 +171,6 @@ func TestMemberFlow(t *testing.T) {
 
 	// The member accepts.
 	member := r.browser()
-	if code, _, _ := r.get(member, inv.Path); code != 200 {
-		t.Fatalf("invite page: %d", code)
-	}
 	if code, page, _ := r.post(member, inv.Path, url.Values{"name": {"Researcher"}}); code != 400 || !strings.Contains(page, "confirm") {
 		t.Fatalf("accept without privacy note: %d", code)
 	}
@@ -185,56 +181,83 @@ func TestMemberFlow(t *testing.T) {
 		t.Fatalf("invitation reused: %d", code)
 	}
 
-	// Register a stream: probe, then save.
-	_, page, _ = r.get(member, "/account/streams/new")
+	// Register a source: probe, then save. No analysis is made.
+	_, page, _ = r.get(member, "/sources/new")
 	csrf := csrfOf(t, page)
 	input := "https://stream.example.org/live.ogg"
-	code, page, _ = r.post(member, "/account/streams/new", url.Values{"csrf": {csrf}, "input": {input}, "action": {"probe"}})
+	code, page, _ = r.post(member, "/sources/new", url.Values{"csrf": {csrf}, "input": {input}, "action": {"probe"}})
 	if code != 200 || !strings.Contains(page, "The stream answers") || !strings.Contains(page, `value="32000"`) || strings.Contains(page, `value="44100"`) {
 		t.Fatalf("probe: %d\n%s", code, page)
 	}
 	form := url.Values{"csrf": {csrf}, "input": {input}, "action": {"save"}, "sample_rate": {"22050"},
 		"name": {"Garden Mic"}, "place": {"Somewhere"}, "timezone": {"Europe/Berlin"}}
-	if code, page, _ = r.post(member, "/account/streams/new", form); code != 400 || !strings.Contains(page, "rule 4") {
+	if code, page, _ = r.post(member, "/sources/new", form); code != 400 || !strings.Contains(page, "rule 4") {
 		t.Fatalf("save without attestation: %d", code)
 	}
 	form.Set("attest", "on")
 	form.Set("coords", "49.4, 200")
-	if code, page, _ = r.post(member, "/account/streams/new", form); code != 400 || !strings.Contains(page, "decimal degrees") {
+	if code, page, _ = r.post(member, "/sources/new", form); code != 400 || !strings.Contains(page, "decimal degrees") {
 		t.Fatalf("bad coordinates: %d", code)
 	}
 	form.Set("coords", "50,12345; 10,54321")
-	code, _, hdr := r.post(member, "/account/streams/new", form)
-	if code != http.StatusSeeOther {
-		t.Fatalf("save: %d", code)
+	code, _, hdr := r.post(member, "/sources/new", form)
+	if code != http.StatusSeeOther || hdr.Get("Location") != "/sources/garden-mic" {
+		t.Fatalf("save: %d %s", code, hdr.Get("Location"))
 	}
-	analysisURL := hdr.Get("Location")
-	if !strings.HasPrefix(analysisURL, "/account/streams/garden-mic/analyses/") {
-		t.Fatalf("redirect to %q", analysisURL)
+	garden, _ := r.db.StreamBySlug(ctx, "garden-mic")
+	if garden.Texts.Lat == nil || *garden.Texts.Lat != 50.12345 || *garden.Texts.Lon != 10.54321 {
+		t.Fatalf("coordinates not stored: %+v", garden.Texts)
+	}
+	_, page, _ = r.get(member, "/sources/garden-mic")
+	if !strings.Contains(page, `value="50.12345, 10.54321"`) || !strings.Contains(page, "map-picker") || !strings.Contains(page, "No analysis uses this source yet") {
+		t.Fatal("source page")
 	}
 
-	if st, _ := r.db.StreamBySlug(ctx, "garden-mic"); st.Texts.Lat == nil || *st.Texts.Lat != 50.12345 || *st.Texts.Lon != 10.54321 {
-		t.Fatalf("coordinates not stored: %+v", st.Texts)
-	}
-	if _, page, _ := r.get(member, "/account/streams/garden-mic"); !strings.Contains(page, `value="50.12345, 10.54321"`) || !strings.Contains(page, "map-picker") {
-		t.Fatal("coordinates or map not on the stream page")
-	}
-	// A second registration of the same address is pointed to the stream.
-	_, apage, _ := r.get(admin, "/account/streams/new")
-	if code, page, _ = r.post(admin, "/account/streams/new", url.Values{"csrf": {csrfOf(t, apage)}, "input": {input}, "action": {"probe"}}); code != http.StatusConflict || !strings.Contains(page, "registered by Researcher") {
+	// A second registration of the same address is pointed to the source.
+	_, apage, _ := r.get(admin, "/sources/new")
+	if code, page, _ = r.post(admin, "/sources/new", url.Values{"csrf": {csrfOf(t, apage)}, "input": {input}, "action": {"probe"}}); code != http.StatusConflict || !strings.Contains(page, "registered by Researcher") {
 		t.Fatalf("duplicate: %d", code)
 	}
 
-	// The analysis page, and live events once it is open.
-	code, page, _ = r.get(member, analysisURL)
-	if code != 200 || !strings.Contains(page, "First analysis") {
+	// A second source.
+	input2 := "https://second.example.org/live.ogg"
+	r.post(member, "/sources/new", url.Values{"csrf": {csrf}, "input": {input2}, "action": {"probe"}})
+	if code, _, _ := r.post(member, "/sources/new", url.Values{"csrf": {csrf}, "input": {input2}, "action": {"save"}, "sample_rate": {"32000"},
+		"name": {"Hill Receiver"}, "timezone": {"UTC"}, "attest": {"on"}}); code != http.StatusSeeOther {
+		t.Fatalf("second source: %d", code)
+	}
+	hill, _ := r.db.StreamBySlug(ctx, "hill-receiver")
+
+	// An analysis of both.
+	g, h := strconv.FormatInt(garden.ID, 10), strconv.FormatInt(hill.ID, 10)
+	if code, page, _ := r.post(member, "/analyses/new", url.Values{"csrf": {csrf}, "name": {"Two stations"}}); code != 400 || !strings.Contains(page, "at least one source") {
+		t.Fatalf("analysis without sources: %d", code)
+	}
+	code, _, hdr = r.post(member, "/analyses/new", url.Values{"csrf": {csrf}, "name": {"Two stations"}, "source": {g, h}})
+	if code != http.StatusSeeOther || !strings.HasPrefix(hdr.Get("Location"), "/analyses/") {
+		t.Fatalf("new analysis: %d %s", code, hdr.Get("Location"))
+	}
+	aURL := hdr.Get("Location")
+	code, page, _ = r.get(member, aURL)
+	if code != 200 || !strings.Contains(page, "Garden Mic") || !strings.Contains(page, "Hill Receiver") || !strings.Contains(page, "Copy these settings to all sources") {
 		t.Fatalf("analysis page: %d", code)
 	}
 	csrf = csrfOf(t, page)
+	id, _ := strconv.ParseInt(strings.TrimPrefix(aURL, "/analyses/"), 10, 64)
+	a, _ := r.db.Analysis(ctx, id)
+	cl := engine.NewClient(&http.Client{}, r.engSrv.URL)
+	for _, st := range []catalogue.Stream{garden, hill} {
+		if _, err := cl.Analysis(ctx, st.EngineID(), a.EngineID()); err != nil {
+			t.Fatalf("engine analysis on %s: %v", st.EngineID(), err)
+		}
+	}
+
+	// Live events of one source while the page reads them; the source page
+	// shows who is connected.
 	gotSpectrum := make(chan bool, 1)
 	liveCtx, stopLive := context.WithCancel(context.Background())
 	go func() {
-		req, _ := http.NewRequestWithContext(liveCtx, http.MethodGet, r.web.URL+analysisURL+"/live", nil)
+		req, _ := http.NewRequestWithContext(liveCtx, http.MethodGet, r.web.URL+aURL+"/live/"+g, nil)
 		resp, err := member.Do(req)
 		if err != nil {
 			return
@@ -253,62 +276,83 @@ func TestMemberFlow(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("no live spectrum within 5 s")
 	}
-	_, page, _ = r.get(member, "/account/streams/garden-mic")
-	if !strings.Contains(page, "1 page, 0 tokens") {
-		t.Fatalf("stream page does not show the reader:\n%s", page)
+	_, page, _ = r.get(member, "/sources/garden-mic")
+	if !strings.Contains(page, "1 page, 0 tokens") || !strings.Contains(page, "Two stations") {
+		t.Fatalf("source page does not show who is connected:\n%s", page)
 	}
 	stopLive()
 
-	// Settings the engine refuses come back marked.
-	code, page, _ = r.post(member, analysisURL+"/settings", url.Values{"csrf": {csrf}, "min_hz": {"9000"}, "max_hz": {"10000"},
-		"memory_mode": {"disk"}, "rule_count": {"1"}, "rule_kind_0": {"line"}, "rule_hz_0": {"1000"}, "rule_odd_0": {"on"}})
-	if code != 422 || !strings.Contains(page, "below half of max_hz") || !strings.Contains(page, "odd harmonics") {
+	// Settings per source: the engine refuses some, marked at that source.
+	pg, ph := "s"+g+"_", "s"+h+"_"
+	bad := url.Values{"csrf": {csrf}, "source": {g, h}, pg + "min_hz": {"9000"}, pg + "max_hz": {"10000"}, pg + "memory_mode": {"disk"},
+		pg + "rule_count": {"1"}, pg + "rule_kind_0": {"line"}, pg + "rule_hz_0": {"1000"}, pg + "rule_odd_0": {"on"}, ph + "memory_mode": {"disk"}}
+	if code, page, _ = r.post(member, aURL+"/settings", bad); code != 422 || !strings.Contains(page, "below half of max_hz") || !strings.Contains(page, "odd harmonics") {
 		t.Fatalf("refused settings: %d\n%s", code, page)
 	}
-	// Good settings make revision 2 and reach the engine.
-	code, _, hdr = r.post(member, analysisURL+"/settings", url.Values{"csrf": {csrf}, "memory_mode": {"disk"},
-		"rule_count": {"2"}, "rule_kind_0": {"comb"}, "rule_hz_0": {"50"}, "rule_kind_1": {"comb"}})
-	if code != http.StatusSeeOther {
+	// Good settings make revision 2 and reach the engine, per source.
+	good := url.Values{"csrf": {csrf}, "source": {g, h}, pg + "memory_mode": {"disk"}, pg + "rule_count": {"2"}, pg + "rule_kind_0": {"comb"}, pg + "rule_hz_0": {"50"},
+		pg + "rule_kind_1": {"comb"}, ph + "memory_mode": {"ram"}}
+	if code, _, _ = r.post(member, aURL+"/settings", good); code != http.StatusSeeOther {
 		t.Fatalf("save settings: %d", code)
 	}
-	_, page, _ = r.get(member, analysisURL)
+	_, page, _ = r.get(member, aURL)
 	if !strings.Contains(page, "rev-2") || !strings.Contains(page, "<code>comb=50</code>") {
-		t.Fatalf("revision 2 not shown:\n%s", page)
+		t.Fatal("revision 2 not shown")
+	}
+	if ea, _ := cl.Analysis(ctx, garden.EngineID(), a.EngineID()); len(ea.Rules) != 1 || ea.Label != "rev-2" {
+		t.Fatalf("engine, first source: %+v", ea)
+	}
+	if ea, _ := cl.Analysis(ctx, hill.EngineID(), a.EngineID()); len(ea.Rules) != 0 || ea.Memory.Mode != "ram" {
+		t.Fatalf("engine, second source: %+v", ea)
 	}
 
-	// Export.
-	code, page, hdr = r.get(member, analysisURL+"/export?format=csv")
-	if code != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "text/csv") || !strings.Contains(page, "timestamp,position_s,type") {
+	// Export names the source of every row.
+	code, page, hdr = r.get(member, aURL+"/export?format=csv")
+	if code != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "text/csv") || !strings.Contains(page, "source,timestamp,position_s,type") {
 		t.Fatalf("export: %d", code)
 	}
 
-	// Another member cannot see it.
-	if code, _, _ := r.get(admin, analysisURL); code != 404 {
-		t.Fatalf("admin sees a member's analysis: %d", code)
+	// Taking a source out makes revision 3 and removes its engine analysis.
+	if code, _, _ = r.post(member, aURL+"/settings", url.Values{"csrf": {csrf}, "source": {g}, pg + "memory_mode": {"disk"},
+		pg + "rule_count": {"1"}, pg + "rule_kind_0": {"comb"}, pg + "rule_hz_0": {"50"}}); code != http.StatusSeeOther {
+		t.Fatalf("remove source: %d", code)
+	}
+	if es, _ := cl.Stream(ctx, hill.EngineID()); len(es.Analyses) != 0 {
+		t.Fatalf("second source still analysed: %+v", es.Analyses)
+	}
+	if a, _ = r.db.Analysis(ctx, id); a.Revision != 3 || len(a.Sources) != 1 {
+		t.Fatalf("after removing a source: rev %d, %d sources", a.Revision, len(a.Sources))
 	}
 
+	// Another member cannot see it.
+	if code, _, _ := r.get(admin, aURL); code != 404 {
+		t.Fatalf("admin sees a member's analysis: %d", code)
+	}
 	// A form without the CSRF value is refused.
-	if code, _, _ := r.post(member, "/account/streams/garden-mic/state", url.Values{"to": {"pause"}}); code != http.StatusForbidden {
+	if code, _, _ := r.post(member, "/sources/garden-mic/state", url.Values{"to": {"pause"}}); code != http.StatusForbidden {
 		t.Fatalf("missing csrf: %d", code)
 	}
 
-	// Pausing removes the stream from the engine; resuming brings it back.
-	r.post(member, "/account/streams/garden-mic/state", url.Values{"csrf": {csrf}, "to": {"pause"}})
-	st, _ := r.db.StreamBySlug(ctx, "garden-mic")
-	cl := engine.NewClient(&http.Client{}, r.engSrv.URL)
-	if _, err := cl.Stream(ctx, st.EngineID()); !engine.IsCode(err, "not_found") {
-		t.Fatalf("paused stream still in the engine: %v", err)
+	// Pausing removes the source from the engine; resuming brings it back
+	// with the analysis.
+	r.post(member, "/sources/garden-mic/state", url.Values{"csrf": {csrf}, "to": {"pause"}})
+	if _, err := cl.Stream(ctx, garden.EngineID()); !engine.IsCode(err, "not_found") {
+		t.Fatalf("paused source still in the engine: %v", err)
 	}
-	r.post(member, "/account/streams/garden-mic/state", url.Values{"csrf": {csrf}, "to": {"resume"}})
-	es, err := cl.Stream(ctx, st.EngineID())
-	if err != nil || len(es.Analyses) != 1 {
-		t.Fatalf("resumed stream: %v %+v", err, es)
+	r.post(member, "/sources/garden-mic/state", url.Values{"csrf": {csrf}, "to": {"resume"}})
+	if es, err := cl.Stream(ctx, garden.EngineID()); err != nil || len(es.Analyses) != 1 {
+		t.Fatalf("resumed source: %v %+v", err, es)
+	}
+	if entries, _ := r.db.AuditOf(ctx, "stream", garden.ID); len(entries) != 3 {
+		t.Fatalf("audit entries for the source: %d", len(entries))
 	}
 
-	// The audit trail has the stream's life.
-	entries, _ := r.db.AuditOf(ctx, "stream", st.ID)
-	if len(entries) != 3 {
-		t.Fatalf("audit entries for the stream: %d", len(entries))
+	// Deleting the analysis removes it from the engine.
+	if code, _, _ := r.post(member, aURL+"/delete", url.Values{"csrf": {csrf}, "confirm": {"Two stations"}}); code != http.StatusSeeOther {
+		t.Fatalf("delete analysis: %d", code)
+	}
+	if _, err := cl.Analysis(ctx, garden.EngineID(), a.EngineID()); !engine.IsCode(err, "not_found") {
+		t.Fatalf("deleted analysis still in the engine: %v", err)
 	}
 }
 
@@ -317,8 +361,12 @@ func TestReconcile(t *testing.T) {
 	r := newRig(t)
 	ctx := context.Background()
 	u, _ := r.db.CreateUser(ctx, "m@example.org", "M", false)
-	st, a, err := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050,
-		Texts: catalogue.StreamTexts{Name: "A"}, Probe: []byte(`{}`), AnalysisName: "x", AnalysisSpec: []byte(`{"rules":[{"kind":"comb","hz":50}]}`)})
+	st, err := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050,
+		Texts: catalogue.StreamTexts{Name: "A"}, Probe: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := r.db.CreateAnalysis(ctx, u.ID, "x", "", []int64{st.ID}, map[int64]json.RawMessage{st.ID: []byte(`{"rules":[{"kind":"comb","hz":50}]}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

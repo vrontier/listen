@@ -165,11 +165,11 @@ Deployment is not a reason either way. A Go binary needs a one-time root step on
 |---|---|---|
 | Public presentation of research | Pages that show ongoing work: the stream, the researcher's analysis, their notes | decided: the member publishes at once, no review; proposed: an analysis is what is published; open: page design |
 | Member area | Log in, manage streams, filters, motifs and tokens through forms | decided: comes first, kept narrow (question 5); an analysis page shows the spectrogram, the events, the motifs and an export (question 13); detail proposed in [members-and-streams.md](members-and-streams.md) |
-| Streams | Register a stream, probe it, run it on demand in draft and always on in production, share it with invited members | decided in outline (questions 1 to 3); detail proposed, same document |
+| Sources | Register a stream, probe it, run it on demand in draft and always on in production, share it with invited members; see who is connected | decided in outline (questions 1 to 3); detail proposed, same document. Called "Sources" in the menu (decided 2026-10-14) |
 | Filters and motifs | Define what an analysis ignores and what it looks for; a shared library; a trial mode | filters: rule syntax exists in the listener; library and trial mode decided (questions 9, 16); motifs: drafted as "defined motifs" in the Observatory's spec |
 | Data stream by token | The analysis events of one's own analyses | decided: SSE, follows the member area; proposed: token in the `Authorization` header (question 14) |
 | MCP by token | The same data and the motif memory for AI assistants | decided: an HTTP endpoint in the Workbench process, after the data stream; proposed: the same token header |
-| Groups | Several stream analyses aligned on one time axis and compared: activity side by side, station clocks, impulses shared between stations | decided: a second layer over the analyses of single streams, usable with one's own streams; proposed in [groups.md](groups.md) |
+| Analyses | A member's analysis of 1 to n sources: settings and filter rules per source; from two sources, the sources aligned on one time axis and compared (activity side by side, station clocks, impulses shared between stations) | decided, see [Analyses and sources](#analyses-and-sources); the comparison is proposed in [groups.md](groups.md) |
 
 What exists today that these build on:
 
@@ -178,6 +178,19 @@ What exists today that these build on:
 - Filter rules exist as the listener's `-ignore` option.
 - One listener process runs exactly one analysis of one stream.
 - ffmpeg opens the connection to the stream and reconnects by itself. The listener does not see the HTTP exchange.
+
+## Analyses and sources
+
+**Decided** (2026-10-14). An analysis is the member's own object, and it uses 1 to n sources. It is not an element of a source.
+
+- **The menu** has "Sources" (the registered streams) and "Analyses".
+- **A source** is registered, probed, described, located, switched between draft and production, paused and deleted. Its page shows who is connected: which members' analyses use it and how many pages and tokens are reading. Registering a source creates no analysis; its page offers "New analysis with this source".
+- **An analysis** has a name, a description and its sources. **Settings are kept per source inside the analysis:** range, sensitivity, filter rules and memory, because interference belongs to a receiver (one station's mains run at 50 Hz, another's at 60 Hz). A button copies one source's settings to all the others, for sources that share their interference.
+- **One revision number covers the whole analysis:** its sources and all their settings together, so that a result can be traced to exactly one configuration.
+- **From two sources on**, the analysis also compares them on one time axis: the analyses drafted in [groups.md](groups.md).
+- **In the engine nothing changes.** The Workbench puts an analysis with n sources into the engine as n engine analyses, one per source with that source's settings, and from two sources on as one engine group over them. The control API keeps its terms: "analysis" there is the engine's analysis of one stream, "group" the engine's comparison of several.
+
+This replaces the earlier drafts in which an analysis was made under a stream, and "groups" as a separate object in the Workbench.
 
 ## What the engine must learn first
 
@@ -313,10 +326,11 @@ Answered by the maintainer on 2026-10-14; **decided**.
 
 ### Raised by groups
 
-These are **open**; the detail is in [groups.md](groups.md#open).
+The detail is in [groups.md](groups.md#open).
 
 22. **The name:** "group", "comparison" or "study"?
-23. **The first goal:** side-by-side activity first (possible on wall time), or straight to the coincidence analysis of VLF stations (needs station time)?
-24. **Where the group service runs:** inside the engine process or as a separate process fed by it. The engine session's choice; the control API does not depend on it.
+    - **Decided** (2026-10-14): none of them. It is an analysis with several sources; see [Analyses and sources](#analyses-and-sources). "Group" remains the engine's term.
+23. **The first goal** (open): side-by-side activity first (possible on wall time), or straight to the coincidence analysis of VLF stations (needs station time)?
+24. **Where the group service runs** (open): inside the engine process or as a separate process fed by it. The engine session's choice; the control API does not depend on it.
 
 Further questions that concern accounts, streams and limits are in [members-and-streams.md](members-and-streams.md#questions-and-answers).

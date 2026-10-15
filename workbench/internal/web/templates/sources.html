@@ -1,23 +1,20 @@
 {{define "content"}}
 <div class="heading-row">
-  <h1>Your streams</h1>
-  <a class="button" href="/account/streams/new">Register a stream</a>
+  <h1>Sources</h1>
+  <a class="button" href="/sources/new">Register a source</a>
 </div>
 {{with .Data}}
 {{if not .Streams}}
-  <p class="empty">No streams yet. Register a stream you run, or one whose operator has agreed to its analysis here.</p>
+  <p class="empty">No sources yet. Register a stream you run, or one whose operator has agreed to its analysis here.</p>
 {{end}}
 {{range .Streams}}
 <article class="card">
   <div class="heading-row">
-    <h2><a href="/account/streams/{{.Slug}}">{{.Texts.Name}}</a></h2>
+    <h2><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></h2>
     <span class="state state-{{.State}}">{{.State}}{{if .AlwaysOn}}, always on{{end}}</span>
   </div>
   <p class="meta">{{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: <span class="conn conn-{{.Engine.State}}">{{.Engine.State}}</span>{{else}}not in the engine{{end}}</p>
-  <ul class="plain">
-    {{$slug := .Slug}}
-    {{range .Analyses}}<li><a href="/account/streams/{{$slug}}/analyses/{{.ID}}">{{.Name}}</a> <span class="meta">{{.Label}} · {{.State}}</span></li>{{end}}
-  </ul>
+  <p class="meta">{{if .Analyses}}Used by {{range $i, $a := .Analyses}}{{if $i}}, {{end}}{{$a.Name}} ({{$a.OwnerName}}){{end}}.{{else}}No analysis uses it yet.{{end}}</p>
 </article>
 {{end}}
 {{end}}

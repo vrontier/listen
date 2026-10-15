@@ -126,18 +126,26 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /invite/{token}", s.inviteForm)
 	m.HandleFunc("POST /invite/{token}", s.inviteAccept)
 
-	m.HandleFunc("GET /account", s.member(s.account))
-	m.HandleFunc("GET /account/streams/new", s.member(s.streamNewForm))
-	m.HandleFunc("POST /account/streams/new", s.member(s.streamNew))
-	m.HandleFunc("GET /account/streams/{slug}", s.member(s.streamPage))
-	m.HandleFunc("POST /account/streams/{slug}", s.member(s.streamEdit))
-	m.HandleFunc("POST /account/streams/{slug}/state", s.member(s.streamState))
-	m.HandleFunc("POST /account/streams/{slug}/delete", s.member(s.streamDelete))
-	m.HandleFunc("GET /account/streams/{slug}/analyses/{id}", s.member(s.analysisPage))
-	m.HandleFunc("POST /account/streams/{slug}/analyses/{id}/settings", s.member(s.analysisSettings))
-	m.HandleFunc("GET /account/streams/{slug}/analyses/{id}/live", s.member(s.analysisLive))
-	m.HandleFunc("GET /account/streams/{slug}/analyses/{id}/data/{what...}", s.member(s.analysisProxy))
-	m.HandleFunc("GET /account/streams/{slug}/analyses/{id}/export", s.member(s.analysisExport))
+	m.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/analyses", http.StatusSeeOther) })
+
+	m.HandleFunc("GET /sources", s.member(s.sources))
+	m.HandleFunc("GET /sources/new", s.member(s.streamNewForm))
+	m.HandleFunc("POST /sources/new", s.member(s.streamNew))
+	m.HandleFunc("GET /sources/{slug}", s.member(s.streamPage))
+	m.HandleFunc("POST /sources/{slug}", s.member(s.streamEdit))
+	m.HandleFunc("POST /sources/{slug}/state", s.member(s.streamState))
+	m.HandleFunc("POST /sources/{slug}/delete", s.member(s.streamDelete))
+
+	m.HandleFunc("GET /analyses", s.member(s.analyses))
+	m.HandleFunc("GET /analyses/new", s.member(s.analysisNewForm))
+	m.HandleFunc("POST /analyses/new", s.member(s.analysisNew))
+	m.HandleFunc("GET /analyses/{id}", s.member(s.analysisPage))
+	m.HandleFunc("POST /analyses/{id}", s.member(s.analysisTexts))
+	m.HandleFunc("POST /analyses/{id}/settings", s.member(s.analysisSettings))
+	m.HandleFunc("POST /analyses/{id}/delete", s.member(s.analysisDelete))
+	m.HandleFunc("GET /analyses/{id}/live/{source}", s.member(s.analysisLive))
+	m.HandleFunc("GET /analyses/{id}/data/{source}/{what...}", s.member(s.analysisProxy))
+	m.HandleFunc("GET /analyses/{id}/export", s.member(s.analysisExport))
 
 	m.HandleFunc("GET /admin", s.admin(s.adminPage))
 	m.HandleFunc("POST /admin/invitations", s.admin(s.adminInvite))
@@ -338,7 +346,7 @@ func (s *Server) member(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r, ok := s.loadSession(r)
 		if !ok {
-			if r.Method == http.MethodGet && !strings.HasSuffix(r.URL.Path, "/live") && !strings.Contains(r.URL.Path, "/data/") {
+			if r.Method == http.MethodGet && !strings.Contains(r.URL.Path, "/live/") && !strings.Contains(r.URL.Path, "/data/") {
 				http.Redirect(w, r, "/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusSeeOther)
 				return
 			}

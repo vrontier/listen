@@ -123,6 +123,7 @@ An analysis page states whether filters are applied and lists them in words and 
 
 **Proposed:**
 
+- **Decided** (2026-10-14): an analysis has 1 to n sources and keeps range, sensitivity, rules and memory per source, with a button that copies one source's settings to the others ([design.md](design.md#analyses-and-sources)). In the engine each source of an analysis is one analysis in the sense of this document.
 - A researcher edits rules in a form: kind, frequency, odd or all harmonics, tolerance, drift. The form writes the syntax above; no expressions or code are accepted.
 - The engine checks every rule before it is saved. The Workbench keeps no copy of the rule syntax of its own; see [design.md](design.md#processes).
 - Saving changed rules starts a fresh motif memory (see Limits). **Decided** (2026-10-14): there is a trial mode that leaves the memory alone. How it runs is proposed in [design.md](design.md#questions-and-answers), question 16.

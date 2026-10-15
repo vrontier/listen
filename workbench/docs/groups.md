@@ -1,12 +1,16 @@
-# Groups: analysing several streams together
+# Analyses with several sources
 
 Status: draft (2026-10-14). Nothing here is built.
 
-Each statement is marked **decided**, **proposed** or **open**, as in [design.md](design.md). This document takes the group design drafted for Listening Observatory (its `docs/group-analysis-spec.md`, "station time, groups and the analysis service", 2026-10-12) into the Workbench. Where the two differ, the difference is named.
+Each statement is marked **decided**, **proposed** or **open**, as in [design.md](design.md).
+
+**Decided** (2026-10-14): in the Workbench this is not a separate object. It is an analysis with two or more sources ([design.md](design.md#analyses-and-sources)). Inside the engine the comparison is a **group**, the term the control API and the Observatory's draft use; this document uses "group" only for that engine side.
+
+This document takes the group design drafted for Listening Observatory (its `docs/group-analysis-spec.md`, "station time, groups and the analysis service", 2026-10-12) into the Workbench. Where the two differ, the difference is named.
 
 ## Two layers
 
-**Decided** (2026-10-14): analysing several streams together is a second layer on top of the analyses of single streams, not a replacement for them. A member can combine streams they registered themselves; sharing is not needed for that.
+**Decided** (2026-10-14): comparing several sources is a second layer on top of the analysis of each single source, not a replacement for it. A member can combine sources they registered themselves; sharing is not needed for that.
 
 ```text
 stream A ──► analysis of A (own range, rules, memory) ──┐
@@ -23,26 +27,23 @@ Why the layer below stays as it is:
 
 | Term | Meaning |
 |---|---|
-| Group | A member's named set of stream analyses that are analysed together. |
-| Group member | One stream analysis in a group. The Observatory's draft says "member"; this document says "group member", because "member" is a person here. |
+| Analysis | In the Workbench: a member's analysis of 1 to n sources, with settings per source. |
+| Group | In the engine: the comparison of the engine analyses that make up a Workbench analysis with two or more sources. |
+| Group member | One engine analysis in a group, that is one source of the Workbench analysis. The Observatory's draft says "member"; here "member" is a person. |
 | Station time | The time at which the receiving station recorded a sample, carried in the stream. |
 | Wall time | The engine host's clock when the audio arrives: later than station time by the path delay, which differs per stream. |
 | Watermark | The time up to which every present group member has been heard. Group analyses work only on time before it. |
 | Group analysis | Code in the engine that turns the aligned events of a group into results. |
 
-The name "group" is **proposed**; "comparison" and "study" were also mentioned.
+## In the Workbench
 
-## What a group is in the Workbench
+**Decided** (2026-10-14): an analysis is the member's object with 1 to n sources; settings are kept per source; one revision number covers the whole analysis ([design.md](design.md#analyses-and-sources)). **Proposed**, for two or more sources:
 
-**Proposed.**
-
-- A group belongs to one member, like an analysis. It has a name, a description, its group members and the group analyses switched on.
-- A group member is a stream analysis, not a stream: what a group sees depends on the range and rules of that analysis, and a stream may have several analyses. Creating a group lists the streams the member may use; for a stream without an analysis of theirs, the Workbench creates one with default settings.
-- A group may contain at most 8 group members at first. The cost of a group grows with the pairs it compares (28 pairs for 8).
-- Group members need coordinates for the timing analyses. They come from the stream (the coordinates field added on 2026-10-14). A group cannot switch on a timing analysis while one of its streams has none.
-- A group has the states of an analysis: private, published, withdrawn. Publishing a group needs the consent of the owner of every stream in it, and the operators' agreement to a combined view (see [Rights](#rights)).
-- Changes to a group (group members, analyses switched on) are recorded in the audit trail, like changes to analyses.
-- A group's cost is counted against its member's cap, as an analysis is (see [members-and-streams.md](members-and-streams.md#resources-and-caps)).
+- The comparing analyses to run (`activity`, later `clock`, `coincidence`) are part of the analysis's settings and of its revision.
+- An analysis may have at most 8 sources at first. The cost of a comparison grows with the pairs it compares (28 pairs for 8).
+- Timing analyses need coordinates. They come from the sources (the coordinates field added on 2026-10-14). A timing analysis cannot be switched on while one of the sources has none.
+- Publishing needs the consent of the owner of every source in it, and the operators' agreement to a combined view (see [Rights](#rights)).
+- The comparison's cost is counted against the member's cap, with the rest of the analysis (see [members-and-streams.md](members-and-streams.md#resources-and-caps)).
 
 ## Time
 
@@ -106,14 +107,14 @@ The Observatory's draft makes the further work conditional on a test: `activity`
 **Proposed.** The engine steps are listed in [design.md](design.md#what-the-engine-must-learn-first).
 
 1. Specify groups in the control API (this document and [control-api.md](control-api.md#groups)).
-2. Build the group pages in the Workbench against the stand-in, which makes up group results.
+2. Analyses with 1 to n sources in the Workbench (decided 2026-10-14). Then the comparison view, against the stand-in, which makes up group results.
 3. In the engine, after pieces A and B: the group service with `activity` on wall time. Then the premise test.
 4. Station time and impulse times in the engine, then `clock` and `coincidence`, if the premise test was positive.
 
 ## Open
 
-1. **The name.** "Group" is proposed; "comparison" and "study" were mentioned.
+1. **The name.** **Decided** (2026-10-14): an analysis with several sources; "group" only inside the engine.
 2. **The first goal.** Side-by-side activity first (possible on wall time), or straight to the VLF coincidence analysis (needs station time)?
-3. **Group members of other members' analyses.** A group could use another member's analysis of a shared stream instead of making its own. Proposed: not at first; a group uses its member's own analyses only, which keeps its results traceable to settings the member controls.
+3. **Sources of other members.** With sharing, an analysis can use a source someone else registered; its settings for that source are still its own. Settings another member made for the same source are not reused, which keeps a result traceable to settings the analysis's member controls.
 4. **Does a relay re-encode?** If a relay re-encodes the stations' streams, the timestamps are the relay's, not the stations'. A question for the relay's operator, carried over from the Observatory's draft.
 5. **A narrator for a group** ("all three stations grew louder after dusk") was asked in the Observatory's draft. Not proposed for the first version.

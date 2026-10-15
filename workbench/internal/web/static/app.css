@@ -120,7 +120,7 @@ table.audit td:last-child { max-width: 28rem; }
 .live-head { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; align-items: baseline; margin-bottom: 0.5rem; }
 .spectro { display: flex; gap: 0.4rem; }
 .axis { display: flex; flex-direction: column; justify-content: space-between; font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
-canvas#spectrogram { width: 100%; height: 240px; background: var(--spectro-bg); border-radius: 4px; image-rendering: pixelated; min-width: 0; }
+canvas.spectrogram { width: 100%; height: 200px; background: var(--spectro-bg); border-radius: 4px; image-rendering: pixelated; min-width: 0; }
 .events { list-style: none; padding: 0; margin: 0; max-height: 22rem; overflow-y: auto; font-size: 0.88rem; }
 .events li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); display: flex; gap: 0.6rem; }
 .events time { color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -140,3 +140,7 @@ canvas#spectrogram { width: 100%; height: 240px; background: var(--spectro-bg); 
 .map { height: min(60vh, 520px); min-height: 320px; border-radius: 6px; }
 .map-foot { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: space-between; align-items: center; margin-top: 0.6rem; }
 .small { font-size: 0.8rem; }
+.live-title { font-size: 1.05rem; margin: 0; }
+.source-settings { margin-top: 0.4rem; }
+.source-settings h3 { margin-top: 0.9rem; }
+.wide-form { max-width: 760px; }

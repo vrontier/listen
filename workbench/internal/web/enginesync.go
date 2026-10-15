@@ -154,11 +154,11 @@ func wanted(st catalogue.Stream) (engine.StreamSpec, bool) {
 	return spec, true
 }
 
-// analysisBody is what is sent for an analysis: its stored settings with
-// the revision as label.
-func analysisBody(a catalogue.Analysis) json.RawMessage {
+// analysisBody is what is sent to the engine for one source of an analysis:
+// that source's settings, with the revision as label.
+func analysisBody(src catalogue.AnalysisSource, a catalogue.Analysis) json.RawMessage {
 	var spec map[string]any
-	if json.Unmarshal(a.Spec, &spec) != nil || spec == nil {
+	if json.Unmarshal(src.Spec, &spec) != nil || spec == nil {
 		spec = map[string]any{}
 	}
 	spec["label"] = a.Label()
@@ -184,14 +184,18 @@ func (s *engineSync) push(ctx context.Context, st catalogue.Stream) error {
 	s.mu.Lock()
 	s.streams[es.ID] = es
 	s.mu.Unlock()
-	analyses, err := s.db.AnalysesOf(ctx, st.ID)
+	analyses, err := s.db.AnalysesUsing(ctx, st.ID)
 	if err != nil {
 		return err
 	}
 	keep := map[string]bool{}
 	for _, a := range analyses {
+		src, ok := a.Source(st.ID)
+		if !ok {
+			continue
+		}
 		keep[a.EngineID()] = true
-		if _, err := s.eng.PutAnalysis(ctx, st.EngineID(), a.EngineID(), analysisBody(a)); err != nil {
+		if _, err := s.eng.PutAnalysis(ctx, st.EngineID(), a.EngineID(), analysisBody(src, a)); err != nil {
 			return fmt.Errorf("analysis %s: %w", a.EngineID(), err)
 		}
 	}

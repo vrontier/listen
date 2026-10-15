@@ -77,15 +77,22 @@ CREATE TABLE IF NOT EXISTS streams (
 	updated       TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS analyses (
-	id        INTEGER PRIMARY KEY AUTOINCREMENT,
-	stream_id INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
-	owner_id  INTEGER NOT NULL REFERENCES users(id),
-	name      TEXT NOT NULL,
-	state     TEXT NOT NULL DEFAULT 'private',
-	revision  INTEGER NOT NULL DEFAULT 1,
-	created   TEXT NOT NULL,
-	updated   TEXT NOT NULL
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	owner_id    INTEGER NOT NULL REFERENCES users(id),
+	name        TEXT NOT NULL,
+	description TEXT NOT NULL DEFAULT '',
+	state       TEXT NOT NULL DEFAULT 'private',
+	revision    INTEGER NOT NULL DEFAULT 1,
+	created     TEXT NOT NULL,
+	updated     TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS analysis_sources (
+	analysis_id INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+	stream_id   INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+	position    INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (analysis_id, stream_id)
+);
+CREATE INDEX IF NOT EXISTS analysis_sources_stream ON analysis_sources(stream_id);
 CREATE TABLE IF NOT EXISTS revisions (
 	analysis_id INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
 	revision    INTEGER NOT NULL,
@@ -160,7 +167,54 @@ func migrate(db *sql.DB) error {
 			}
 		}
 	}
-	return nil
+	return migrateAnalyses(db)
+}
+
+// migrateAnalyses turns analyses made under one stream (until 2026-10-14)
+// into analyses with sources: each becomes an analysis with that one
+// source, keeping its identifier, so the engine finds its memories again.
+// Its revisions become {"sources": {"<stream id>": <the old settings>}}, and
+// one still called "First analysis" takes its source's name.
+func migrateAnalyses(db *sql.DB) error {
+	var old int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('analyses') WHERE name = 'stream_id'`).Scan(&old); err != nil || old == 0 {
+		return err
+	}
+	if _, err := db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer db.Exec(`PRAGMA foreign_keys = ON`)
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		`INSERT OR IGNORE INTO analysis_sources (analysis_id, stream_id, position) SELECT id, stream_id, 0 FROM analyses`,
+		// The analysis made with every stream was called "First analysis";
+		// in a list of analyses it is named after its source instead.
+		`UPDATE analyses SET name = (SELECT s.name FROM streams s WHERE s.id = analyses.stream_id) WHERE name = 'First analysis'`,
+		`UPDATE revisions SET spec = json_object('sources', json_object(
+			CAST((SELECT stream_id FROM analyses a WHERE a.id = revisions.analysis_id) AS TEXT), json(spec)))`,
+		`CREATE TABLE analyses_new (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			owner_id    INTEGER NOT NULL REFERENCES users(id),
+			name        TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			state       TEXT NOT NULL DEFAULT 'private',
+			revision    INTEGER NOT NULL DEFAULT 1,
+			created     TEXT NOT NULL,
+			updated     TEXT NOT NULL)`,
+		`INSERT INTO analyses_new (id, owner_id, name, state, revision, created, updated)
+			SELECT id, owner_id, name, state, revision, created, updated FROM analyses`,
+		`DROP TABLE analyses`,
+		`ALTER TABLE analyses_new RENAME TO analyses`,
+	} {
+		if _, err := tx.Exec(q); err != nil {
+			return fmt.Errorf("%w: %.60s", err, q)
+		}
+	}
+	return tx.Commit()
 }
 
 // stamp formats t the way every time column is stored.

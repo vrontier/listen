@@ -1,6 +1,6 @@
 {{define "content"}}
 <section class="narrow wide">
-<h1>Register a stream</h1>
+<h1>Register a source</h1>
 {{$csrf := .CSRF}}
 {{with .Data}}
 {{if .Existing}}
@@ -8,7 +8,7 @@
     <p><strong>{{.Existing.Texts.Name}}</strong> is this address, registered by {{.Existing.OwnerName}}. Streams are shared: a stream exists once, and its owner can invite others to add their own analyses. Inviting is not built yet; please ask the owner directly for now.</p>
   </div>
 {{end}}
-<form method="post" action="/account/streams/new" class="stack">
+<form method="post" action="/sources/new" class="stack">
   <input type="hidden" name="csrf" value="{{$csrf}}">
   <label>Stream address <small>http or https, the address an audio player would open</small>
     <input name="input" value="{{.Input}}" required placeholder="https://stream.example.org/live.mp3" {{if .Probe}}{{if .Probe.OK}}readonly{{end}}{{end}}>

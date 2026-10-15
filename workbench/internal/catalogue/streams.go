@@ -52,33 +52,6 @@ type StreamTexts struct {
 // own key, never a name a member can change (control-api.md, Identifiers).
 func (s Stream) EngineID() string { return fmt.Sprintf("s-%04d", s.ID) }
 
-// Analysis is one member's analysis of a stream.
-type Analysis struct {
-	ID       int64
-	StreamID int64
-	OwnerID  int64
-	Name     string
-	State    string
-	Revision int
-	Spec     json.RawMessage // the analysis as sent to the engine
-	Created  time.Time
-	Updated  time.Time
-}
-
-func (a Analysis) EngineID() string { return fmt.Sprintf("a-%04d", a.ID) }
-
-// Label is what the engine returns with the analysis's events, so that a
-// result can be traced to its revision.
-func (a Analysis) Label() string { return fmt.Sprintf("rev-%d", a.Revision) }
-
-// Revision is one saved version of an analysis's settings.
-type Revision struct {
-	Revision  int
-	Spec      json.RawMessage
-	Created   time.Time
-	CreatedBy string
-}
-
 // NewStream is what the registration form delivers.
 type NewStream struct {
 	OwnerID      int64
@@ -87,14 +60,12 @@ type NewStream struct {
 	Texts        StreamTexts
 	AudioAllowed bool
 	Probe        json.RawMessage
-	AnalysisName string
-	AnalysisSpec json.RawMessage
 }
 
-// CreateStream registers a stream with its owner's first analysis.
-func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, Analysis, error) {
+// CreateStream registers a stream. It makes no analysis.
+func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, error) {
 	now := d.now()
-	var sid, aid int64
+	var sid int64
 	err := d.tx(ctx, func(tx *sql.Tx) error {
 		slug, err := freeSlug(ctx, tx, n.Texts.Name)
 		if err != nil {
@@ -113,21 +84,12 @@ func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, Analysis, e
 		}
 		sid, _ = res.LastInsertId()
 		after, _ := json.Marshal(map[string]any{"input": n.Input, "sample_rate": n.SampleRate, "texts": n.Texts, "audio_allowed": n.AudioAllowed})
-		if err := audit(ctx, tx, now, n.OwnerID, "stream", sid, "create", "", string(after)); err != nil {
-			return err
-		}
-		aid, err = createAnalysis(ctx, tx, now, sid, n.OwnerID, n.AnalysisName, n.AnalysisSpec)
-		return err
+		return audit(ctx, tx, now, n.OwnerID, "stream", sid, "create", "", string(after))
 	})
 	if err != nil {
-		return Stream{}, Analysis{}, err
+		return Stream{}, err
 	}
-	s, err := d.Stream(ctx, sid)
-	if err != nil {
-		return Stream{}, Analysis{}, err
-	}
-	a, err := d.Analysis(ctx, aid)
-	return s, a, err
+	return d.Stream(ctx, sid)
 }
 
 // ErrDuplicateInput: a stream with this address exists already. Streams
@@ -293,99 +255,4 @@ func (d *DB) DeleteStream(ctx context.Context, id, by int64) error {
 		before, _ := json.Marshal(map[string]any{"input": old.Input, "sample_rate": old.SampleRate, "texts": old.Texts})
 		return audit(ctx, tx, now, by, "stream", id, "delete", string(before), "")
 	})
-}
-
-func createAnalysis(ctx context.Context, tx *sql.Tx, now time.Time, streamID, ownerID int64, name string, spec json.RawMessage) (int64, error) {
-	res, err := tx.ExecContext(ctx, `INSERT INTO analyses (stream_id, owner_id, name, created, updated) VALUES (?, ?, ?, ?, ?)`,
-		streamID, ownerID, name, stamp(now), stamp(now))
-	if err != nil {
-		return 0, err
-	}
-	id, _ := res.LastInsertId()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO revisions (analysis_id, revision, spec, created, created_by) VALUES (?, 1, ?, ?, ?)`,
-		id, string(spec), stamp(now), ownerID); err != nil {
-		return 0, err
-	}
-	return id, audit(ctx, tx, now, ownerID, "analysis", id, "create", "", string(spec))
-}
-
-const analysisCols = `a.id, a.stream_id, a.owner_id, a.name, a.state, a.revision, r.spec, a.created, a.updated`
-const analysisFrom = ` FROM analyses a JOIN revisions r ON r.analysis_id = a.id AND r.revision = a.revision `
-
-func scanAnalysis(row interface{ Scan(...any) error }) (Analysis, error) {
-	var a Analysis
-	var spec, created, updated string
-	err := row.Scan(&a.ID, &a.StreamID, &a.OwnerID, &a.Name, &a.State, &a.Revision, &spec, &created, &updated)
-	a.Spec = json.RawMessage(spec)
-	a.Created, a.Updated = parseStamp(created), parseStamp(updated)
-	return a, err
-}
-
-func (d *DB) Analysis(ctx context.Context, id int64) (Analysis, error) {
-	a, err := scanAnalysis(d.db.QueryRowContext(ctx, `SELECT `+analysisCols+analysisFrom+`WHERE a.id = ?`, id))
-	return a, notFound(err)
-}
-
-// AnalysesOf lists the analyses of a stream.
-func (d *DB) AnalysesOf(ctx context.Context, streamID int64) ([]Analysis, error) {
-	rows, err := d.db.QueryContext(ctx, `SELECT `+analysisCols+analysisFrom+`WHERE a.stream_id = ? ORDER BY a.id`, streamID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Analysis
-	for rows.Next() {
-		a, err := scanAnalysis(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, a)
-	}
-	return out, rows.Err()
-}
-
-// SaveRevision stores new settings for an analysis as its next revision.
-func (d *DB) SaveRevision(ctx context.Context, id, by int64, spec json.RawMessage) (Analysis, error) {
-	now := d.now()
-	err := d.tx(ctx, func(tx *sql.Tx) error {
-		var rev int
-		var old string
-		err := tx.QueryRowContext(ctx, `SELECT a.revision, r.spec`+analysisFrom+`WHERE a.id = ?`, id).Scan(&rev, &old)
-		if err != nil {
-			return notFound(err)
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO revisions (analysis_id, revision, spec, created, created_by) VALUES (?, ?, ?, ?, ?)`,
-			id, rev+1, string(spec), stamp(now), by); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE analyses SET revision = ?, updated = ? WHERE id = ?`, rev+1, stamp(now), id); err != nil {
-			return err
-		}
-		return audit(ctx, tx, now, by, "analysis", id, "change", old, string(spec))
-	})
-	if err != nil {
-		return Analysis{}, err
-	}
-	return d.Analysis(ctx, id)
-}
-
-// Revisions lists an analysis's revisions, newest first.
-func (d *DB) Revisions(ctx context.Context, id int64) ([]Revision, error) {
-	rows, err := d.db.QueryContext(ctx, `SELECT r.revision, r.spec, r.created, u.name FROM revisions r JOIN users u ON u.id = r.created_by
-		WHERE r.analysis_id = ? ORDER BY r.revision DESC`, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Revision
-	for rows.Next() {
-		var r Revision
-		var spec, created string
-		if err := rows.Scan(&r.Revision, &spec, &created, &r.CreatedBy); err != nil {
-			return nil, err
-		}
-		r.Spec, r.Created = json.RawMessage(spec), parseStamp(created)
-		out = append(out, r)
-	}
-	return out, rows.Err()
 }
