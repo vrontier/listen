@@ -37,14 +37,14 @@
 {{if gt (len .Sources) 1}}
 <p class="note">Comparing the sources on one time axis (activity side by side, later station clocks and shared impulses) comes with the engine's group analyses. Until then the sources are shown one below the other, each on its own clock.</p>
 {{end}}
-<p class="meta">Spectrograms show the analysed range, newest on the right. Dots mark the spectral peaks left after the filter rules; the bands themselves are never filtered. Motifs are what a source's memory has found to recur; a memory starts afresh when that source's range or rules change.</p>
+<p class="meta">Times are UTC. Spectrograms show the analysed range, newest on the right. Dots mark the spectral peaks left after the filter rules; the bands themselves are never filtered. Motifs are what a source's memory has found to recur; a memory starts afresh when that source's range or rules change.</p>
 <script src="{{asset "analysis.js"}}" defer></script>
 
 <section>
   <h2>Export</h2>
   <form method="get" action="/analyses/{{.Analysis.ID}}/export" class="inline-form">
-    <label>From <input type="datetime-local" name="from"></label>
-    <label>To <input type="datetime-local" name="to"></label>
+    <label>From, UTC <input type="datetime-local" name="from"></label>
+    <label>To, UTC <input type="datetime-local" name="to"></label>
     <label>Format <select name="format"><option value="csv">CSV</option><option value="json">JSON with motifs</option></select></label>
     <button class="secondary">Download</button>
   </form>
@@ -117,10 +117,10 @@
 
 <div class="grid">
 <section>
-  <h2>Name and description</h2>
+  <h2>Title and description</h2>
   <form method="post" action="/analyses/{{.Analysis.ID}}" class="stack">
     <input type="hidden" name="csrf" value="{{$csrf}}">
-    <label>Name {{with index .Errs "name"}}<span class="field-error">{{.}}</span>{{end}}<input name="name" value="{{.Name}}" required maxlength="80"></label>
+    <label>Title {{with index .Errs "name"}}<span class="field-error">{{.}}</span>{{end}}<input name="name" value="{{.Name}}" required maxlength="80"></label>
     <label>Description {{with index .Errs "description"}}<span class="field-error">{{.}}</span>{{end}}<textarea name="description" rows="3" maxlength="2000">{{.Description}}</textarea></label>
     <button>Save</button>
   </form>
@@ -152,7 +152,7 @@
   <p>Deleting removes the analysis and its memories at every source. The sources stay. The change log keeps a record.</p>
   <form method="post" action="/analyses/{{.Analysis.ID}}/delete" class="inline-form">
     <input type="hidden" name="csrf" value="{{$csrf}}">
-    <label>Type the name to confirm <input name="confirm" autocomplete="off"></label>
+    <label>Type the title to confirm <input name="confirm" autocomplete="off"></label>
     <button class="danger">Delete</button>
   </form>
 </section>

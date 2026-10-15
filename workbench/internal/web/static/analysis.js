@@ -19,8 +19,10 @@
     return hz >= 1000 ? (hz / 1000).toFixed(hz >= 10000 ? 0 : 1) + " kHz" : Math.round(hz) + " Hz";
   }
 
+  // Times are shown in UTC, to the millisecond the engine stamps.
   function time(ts) {
-    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const d = new Date(ts);
+    return isNaN(d) ? "" : d.toISOString().slice(11, 23);
   }
 
   function describe(e) {
@@ -141,7 +143,7 @@
       es.addEventListener("signal.spectrum", (m) => drawSpectrum(JSON.parse(m.data).payload));
       es.addEventListener("signal.frame", (m) => {
         const e = JSON.parse(m.data);
-        clockEl.textContent = time(e.timestamp) + (e.time_source ? " (" + e.time_source + " time)" : "");
+        clockEl.textContent = time(e.timestamp) + " UTC" + (e.time_source ? " (" + e.time_source + " time)" : "");
         levelEl.textContent = "level " + e.payload.level_db + " dB";
         if (lastSeq && e.sequence > lastSeq + 40) levelEl.textContent += " · some events were missed";
         lastSeq = e.sequence;

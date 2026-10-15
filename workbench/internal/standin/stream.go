@@ -1,6 +1,7 @@
 package standin
 
 import (
+	"hash/fnv"
 	"math"
 	"math/rand/v2"
 	"time"
@@ -32,7 +33,21 @@ type stream struct {
 func newStream(e *Engine, id, input string, rate int) *stream {
 	now := time.Now().UTC()
 	s := &stream{e: e, id: id, input: input, sampleRate: rate, state: "idle", since: now, analyses: map[string]*analysis{}}
-	s.scene.rng = rand.New(rand.NewPCG(uint64(len(input)), uint64(rate)))
+	// Each stream gets its own made-up scene, the same one every time the
+	// stand-in starts, so that sources do not all look alike.
+	h := fnv.New64a()
+	h.Write([]byte(id + " " + input))
+	seed := h.Sum64()
+	sc := &s.scene
+	sc.rng = rand.New(rand.NewPCG(seed, uint64(rate)))
+	sc.mains = 50
+	if sc.rng.IntN(2) == 1 {
+		sc.mains = 60
+	}
+	sc.wanderHz = 2000 + 2500*sc.rng.Float64()
+	sc.whistleHz = 1200 + 3000*sc.rng.Float64()
+	sc.levelDB = -40 + 16*sc.rng.Float64()
+	sc.nextClick = sc.rng.Float64() * 6
 	return s
 }
 
@@ -128,9 +143,14 @@ type component struct {
 
 // scene is what the made-up stream sounds like at the moment: mains hum
 // with harmonics, a slowly wandering tone, a whistle that comes and goes,
-// and now and then a click.
+// and now and then a click. Mains frequency, tones and level differ per
+// stream.
 type scene struct {
 	rng        *rand.Rand
+	mains      float64
+	wanderHz   float64
+	whistleHz  float64
+	levelDB    float64
 	comps      []component
 	transient  bool
 	whistleOn  bool
@@ -141,17 +161,17 @@ type scene struct {
 func (sc *scene) advance(t, nyquist float64) {
 	sc.comps = sc.comps[:0]
 	for h := 1; h <= 20; h++ {
-		hz := 50 * float64(h)
+		hz := sc.mains * float64(h)
 		sc.comps = append(sc.comps, component{hz: hz, amp: 0.7 / math.Sqrt(float64(h)), group: "mains"})
 	}
-	wander := 3150 + 40*math.Sin(t/37)
+	wander := sc.wanderHz + 40*math.Sin(t/37)
 	sc.comps = append(sc.comps, component{hz: wander, amp: 0.45, group: "wander"}, component{hz: 2 * wander, amp: 0.2, group: "wander"})
 	if t >= sc.whistleEnd {
 		sc.whistleOn = !sc.whistleOn
 		sc.whistleEnd = t + 12 + sc.rng.Float64()*25
 	}
 	if sc.whistleOn {
-		sc.comps = append(sc.comps, component{hz: 2400 + 3*math.Sin(t), amp: 0.55, group: "whistle"})
+		sc.comps = append(sc.comps, component{hz: sc.whistleHz + 3*math.Sin(t), amp: 0.55, group: "whistle"})
 	}
 	kept := sc.comps[:0]
 	for _, c := range sc.comps {
@@ -162,7 +182,7 @@ func (sc *scene) advance(t, nyquist float64) {
 	sc.comps = kept
 	sc.transient = false
 	if t >= sc.nextClick {
-		sc.transient = sc.nextClick > 0
+		sc.transient = t > 0
 		sc.nextClick = t + 3 + sc.rng.Float64()*9
 	}
 }

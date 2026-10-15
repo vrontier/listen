@@ -330,7 +330,7 @@ func (a *analysis) step(s *stream, t time.Time, status bool) {
 	if len(groups) > 0 {
 		harmonicity = math.Min(1, 0.25*float64(len(groups))+0.1*sc.rng.Float64())
 	}
-	level := -32 + 4*sc.rng.Float64()
+	level := sc.levelDB + 4*sc.rng.Float64()
 	if sc.transient {
 		level += 9
 	}

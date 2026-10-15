@@ -205,7 +205,7 @@ No user-written code or expressions run on the server: filters and motif definit
 | `/sources` | own sources, with state |
 | `/sources/new`, `/sources/<slug>` | register and edit, invite members, move to production, pause, delete; who is connected; new analysis with this source |
 | `/analyses` | own analyses with their sources |
-| `/analyses/new`, `/analyses/<id>` | name, description and sources; per source: spectrogram, events, motifs, settings and filter rules, memories; from two sources the comparison; export, trial, revisions |
+| `/analyses/new`, `/analyses/<id>` | title, description and sources; per source: spectrogram, events, motifs, settings and filter rules, memories; from two sources the comparison; export, trial, revisions |
 | `/account/usage` | own CPU, RAM, bandwidth and disk against the caps |
 | `/account/tokens` | create and revoke tokens |
 | `/account/keys` | own API keys for the language-model interpretation |

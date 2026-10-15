@@ -606,7 +606,7 @@ func (s *Server) analysisDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostFormValue("confirm") != a.Name {
-		s.redirect(w, r, analysisPath(a), "Not deleted: type the analysis's name exactly to confirm.")
+		s.redirect(w, r, analysisPath(a), "Not deleted: type the analysis's title exactly to confirm.")
 		return
 	}
 	if err := s.db.DeleteAnalysis(r.Context(), a.ID, sess.User.ID); err != nil {
@@ -761,7 +761,7 @@ func (s *Server) analysisExport(w http.ResponseWriter, r *http.Request) {
 	from, to := now.Add(-24*time.Hour), now
 	parse := func(v string) (time.Time, bool) {
 		for _, layout := range []string{time.RFC3339, "2006-01-02T15:04", "2006-01-02"} {
-			if t, err := time.ParseInLocation(layout, v, time.Local); err == nil {
+			if t, err := time.ParseInLocation(layout, v, time.UTC); err == nil {
 				return t.UTC(), true
 			}
 		}
