@@ -157,3 +157,5 @@ details.block { margin-top: 0.8rem; border-top: 1px solid var(--line); padding-t
 details.block > summary { cursor: pointer; font-weight: 500; }
 details.block > fieldset { border: 0; padding: 0; margin: 0.5rem 0 0; }
 fieldset[disabled] { opacity: 0.75; }
+.trial-block { border-style: dashed; border-color: var(--warn); }
+.trial-block canvas.spectrogram { height: 120px; }

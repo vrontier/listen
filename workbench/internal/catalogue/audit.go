@@ -53,3 +53,11 @@ func (d *DB) AuditOf(ctx context.Context, object string, id int64) ([]AuditEntry
 func (d *DB) AuditAll(ctx context.Context) ([]AuditEntry, error) {
 	return d.queryAudit(ctx, ``)
 }
+
+// Note records an entry that goes with no other change, such as a trial
+// started or ended.
+func (d *DB) Note(ctx context.Context, by int64, object string, objectID int64, action, after string) error {
+	return d.tx(ctx, func(tx *sql.Tx) error {
+		return audit(ctx, tx, d.now(), by, object, objectID, action, "", after)
+	})
+}

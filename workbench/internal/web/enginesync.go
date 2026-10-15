@@ -31,6 +31,7 @@ type engineSync struct {
 	sent     map[string]string // group id → the body last put
 
 	previews map[int64]time.Time // analysis → end of its preview
+	trials   map[int64]trial     // analysis → its trial, during a run
 	held     map[int64]int       // analysis → holders keeping it in the engine
 
 	// onState, if set, is told every change of a stream's state; "removed"
@@ -40,7 +41,7 @@ type engineSync struct {
 
 func newEngineSync(eng *engine.Client, db *catalogue.DB) *engineSync {
 	return &engineSync{eng: eng, db: db, problem: "not yet connected to the engine", streams: map[string]engine.Stream{}, sent: map[string]string{},
-		previews: map[int64]time.Time{}, held: map[int64]int{}}
+		previews: map[int64]time.Time{}, trials: map[int64]trial{}, held: map[int64]int{}}
 }
 
 func (s *engineSync) status() (ready bool, problem string, info engine.Info) {
@@ -220,6 +221,74 @@ func (s *engineSync) endedPreviews() []int64 {
 	return out
 }
 
+// A trial runs changed settings next to a run (design.md, question 16):
+// one more engine analysis per source, t-NNNN, learning in memory only. It
+// does not touch the run or its data set.
+type trial struct {
+	Started  time.Time
+	Until    time.Time
+	Settings map[int64]json.RawMessage // by stream
+}
+
+const trialLength = time.Hour
+
+func trialID(a catalogue.Analysis) string { return fmt.Sprintf("t-%04d", a.ID) }
+
+func (s *engineSync) startTrial(id int64, settings map[int64]json.RawMessage) trial {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	t := trial{Started: now, Until: now.Add(trialLength), Settings: settings}
+	s.trials[id] = t
+	return t
+}
+
+func (s *engineSync) endTrial(id int64) (trial, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.trials[id]
+	delete(s.trials, id)
+	return t, ok
+}
+
+// trialOf returns the analysis's trial, if one goes on.
+func (s *engineSync) trialOf(id int64) (trial, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.trials[id]
+	if ok && !time.Now().Before(t.Until) {
+		return trial{}, false
+	}
+	return t, ok
+}
+
+// endedTrials removes the trials past their hour and returns their
+// analyses.
+func (s *engineSync) endedTrials() []int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []int64
+	for id, t := range s.trials {
+		if !time.Now().Before(t.Until) {
+			delete(s.trials, id)
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// trialBody is a source's settings in a trial: learning in memory only.
+func trialBody(raw json.RawMessage) json.RawMessage {
+	var spec map[string]any
+	if json.Unmarshal(raw, &spec) != nil || spec == nil {
+		spec = map[string]any{}
+	}
+	spec["memory"] = map[string]any{"mode": engine.MemoryRAM}
+	spec["label"] = "trial"
+	b, _ := json.Marshal(spec)
+	return b
+}
+
 // hold keeps an analysis in the engine outside a run, until release.
 func (s *engineSync) hold(id int64) {
 	s.mu.Lock()
@@ -306,6 +375,14 @@ func (s *engineSync) push(ctx context.Context, st catalogue.Stream) error {
 			keep[a.EngineID()] = true
 			if _, err := s.eng.PutAnalysis(ctx, st.EngineID(), a.EngineID(), analysisBody(src, a)); err != nil {
 				return fmt.Errorf("analysis %s: %w", a.EngineID(), err)
+			}
+		}
+		if t, ok := s.trialOf(a.ID); ok && inRun {
+			if raw, ok := t.Settings[st.ID]; ok {
+				keep[trialID(a)] = true
+				if _, err := s.eng.PutAnalysis(ctx, st.EngineID(), trialID(a), trialBody(raw)); err != nil {
+					return fmt.Errorf("trial %s: %w", trialID(a), err)
+				}
 			}
 		}
 		if _, ok := s.preview(a.ID); ok && !inRun {

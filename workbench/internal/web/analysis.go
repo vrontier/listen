@@ -90,8 +90,11 @@ type sourceView struct {
 	Stream    catalogue.Stream
 	Prefix    string // of its form fields
 	Form      settingsForm
-	Running   bool // the stream is in a state that connects
-	Live      bool // and the page shows it live: in a run or a preview
+	Running   bool   // the stream is in a state that connects
+	Live      bool   // and the page shows it live: in a run or a preview
+	TrialLive bool   // a trial runs next to the run on this source
+	TrialPath string // of its live data, …/trial/live/<source>
+	TrialData string // …/trial/data/<source>/
 	Engine    *engine.Analysis
 	EngineErr string
 	Memories  []engine.Memory
@@ -115,6 +118,7 @@ type analysisData struct {
 	Groups      bool            // the engine has groups
 	Comparing   bool            // in a run, two or more sources run, and are compared
 	Preview     time.Time       // end of the preview going on, if any
+	Trial       *trial          // the trial next to the run, if any
 	LastRun     *runView        // the latest run that ended
 	Revisions   []catalogue.Revision
 	Runs        []runView
@@ -330,6 +334,9 @@ func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisDa
 	if previewing && !inRun {
 		d.Preview = preview
 	}
+	if t, ok := s.trialOf(r, a); ok {
+		d.Trial = &t
+	}
 	chosen := map[int64]bool{}
 	for _, src := range a.Sources {
 		chosen[src.Stream.ID] = true
@@ -337,6 +344,15 @@ func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisDa
 		v := sourceView{Stream: src.Stream, Prefix: prefixOf(src.Stream.ID), Form: formFromSpec(src.Spec), Running: running(src.Stream),
 			LivePath: base + "/live/" + sid, DataPath: base + "/data/" + sid + "/"}
 		v.Live = v.Running && (inRun || !d.Preview.IsZero())
+		if d.Trial != nil {
+			// The form shows what is on trial, to be changed further.
+			if raw, ok := d.Trial.Settings[src.Stream.ID]; ok {
+				v.Form = formFromSpec(raw)
+				v.TrialLive = v.Running
+				v.TrialPath = base + "/trial/live/" + sid
+				v.TrialData = base + "/trial/data/" + sid + "/"
+			}
+		}
 		if v.Running && inRun {
 			ea, err := s.eng.Analysis(r.Context(), src.Stream.EngineID(), a.EngineID())
 			if err != nil {
@@ -563,45 +579,10 @@ func (s *Server) analysisSettings(w http.ResponseWriter, r *http.Request) {
 			compare = catalogue.DefaultCompare
 		}
 	}
-	forms := map[int64]settingsForm{}
-	settings := map[int64]json.RawMessage{}
-	var warns []string
-	for _, id := range ids {
-		src, inAnalysis := a.Source(id)
-		if !inAnalysis {
-			settings[id] = defaultSettings // a source that joins starts with the defaults
-			continue
-		}
-		prefix := prefixOf(id)
-		form, spec, rows, ferrs := readSettings(r, prefix)
-		forms[id] = form
-		for k, v := range ferrs {
-			errs[k] = v
-		}
-		if len(ferrs) > 0 {
-			continue
-		}
-		if !ready {
-			errs[prefix+"rules"] = "cannot be checked now: " + problem
-			continue
-		}
-		v, err := s.eng.Validate(r.Context(), engine.ValidateRequest{SampleRate: src.Stream.SampleRate, AnalysisSpec: spec})
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		for _, x := range v.Warnings {
-			warns = append(warns, src.Stream.Texts.Name+": "+x.Message)
-		}
-		if !v.Valid {
-			for _, e := range v.Errors {
-				if f := formField(prefix, e.Path, rows); errs[f] == "" {
-					errs[f] = e.Message
-				}
-			}
-			continue
-		}
-		settings[id], _ = json.Marshal(spec)
+	forms, settings, warns, err := s.checkSettings(r, a, ids, errs, ready, problem)
+	if err != nil {
+		s.fail(w, r, err)
+		return
 	}
 	if len(errs) > 0 {
 		d, err := s.analysisData(r, a)
@@ -648,6 +629,53 @@ func (s *Server) analysisSettings(w http.ResponseWriter, r *http.Request) {
 		flash += " The engine has not taken all of it yet; it will be sent again."
 	}
 	s.redirect(w, r, analysisPath(a), flash)
+}
+
+// checkSettings reads each source's settings from the form and has the
+// engine check them at that source's rate. Problems go into errs, under the
+// form's field names. A source that joins the analysis starts with the
+// defaults.
+func (s *Server) checkSettings(r *http.Request, a catalogue.Analysis, ids []int64, errs map[string]string, ready bool, problem string) (map[int64]settingsForm, map[int64]json.RawMessage, []string, error) {
+	forms := map[int64]settingsForm{}
+	settings := map[int64]json.RawMessage{}
+	var warns []string
+	for _, id := range ids {
+		src, inAnalysis := a.Source(id)
+		if !inAnalysis {
+			settings[id] = defaultSettings
+			continue
+		}
+		prefix := prefixOf(id)
+		form, spec, rows, ferrs := readSettings(r, prefix)
+		forms[id] = form
+		for k, v := range ferrs {
+			errs[k] = v
+		}
+		if len(ferrs) > 0 {
+			continue
+		}
+		if !ready {
+			errs[prefix+"rules"] = "cannot be checked now: " + problem
+			continue
+		}
+		v, err := s.eng.Validate(r.Context(), engine.ValidateRequest{SampleRate: src.Stream.SampleRate, AnalysisSpec: spec})
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		for _, x := range v.Warnings {
+			warns = append(warns, src.Stream.Texts.Name+": "+x.Message)
+		}
+		if !v.Valid {
+			for _, e := range v.Errors {
+				if f := formField(prefix, e.Path, rows); errs[f] == "" {
+					errs[f] = e.Message
+				}
+			}
+			continue
+		}
+		settings[id], _ = json.Marshal(spec)
+	}
+	return forms, settings, warns, nil
 }
 
 // sameRevision reports whether sources and settings are what the analysis
@@ -742,9 +770,17 @@ func (s *Server) analysisLive(w http.ResponseWriter, r *http.Request) {
 }
 
 // liveID is the engine analysis a page reads of a source: the analysis
-// during a run, its preview during a preview, none otherwise.
+// during a run, its preview during a preview, none otherwise; under
+// …/trial/… the trial next to the run.
 func (s *Server) liveID(r *http.Request, a catalogue.Analysis, src catalogue.AnalysisSource) (string, bool) {
 	if !running(src.Stream) {
+		return "", false
+	}
+	if strings.Contains(r.URL.Path, "/trial/") {
+		t, ok := s.trialOf(r, a)
+		if _, has := t.Settings[src.Stream.ID]; ok && has {
+			return trialID(a), true
+		}
 		return "", false
 	}
 	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); inRun {

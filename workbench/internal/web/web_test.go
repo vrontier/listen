@@ -328,7 +328,7 @@ func TestMemberFlow(t *testing.T) {
 	if a, _ = r.db.Analysis(ctx, id); a.Revision != 1 {
 		t.Fatalf("saved during a run: rev %d", a.Revision)
 	}
-	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "fixed while the run lasts") || !strings.Contains(page, `data-prefix="`+pg+`" disabled`) {
+	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "fixed while the run lasts") || !strings.Contains(page, "Try these settings in a trial") || strings.Contains(page, ">Save as revision") {
 		t.Fatal("settings not shown as fixed during a run")
 	}
 

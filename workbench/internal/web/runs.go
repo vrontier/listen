@@ -155,6 +155,7 @@ func (s *Server) analysisRunStop(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.sync.endTrial(a.ID)
 	s.data.refresh(r.Context()) // freezes the data set, then lets the sources go
 	if s.data.dir == "" {
 		s.pushSources(r, a.Sources)
@@ -193,9 +194,10 @@ func (s *Server) endRuns(ctx context.Context) {
 	}
 }
 
-// endPreviews ends the previews past their ten minutes.
+// endPreviews ends the previews past their ten minutes and the trials past
+// their hour.
 func (s *Server) endPreviews(ctx context.Context) {
-	for _, id := range s.sync.endedPreviews() {
+	for _, id := range append(s.sync.endedPreviews(), s.sync.endedTrials()...) {
 		if a, err := s.db.Analysis(ctx, id); err == nil {
 			s.pushAll(ctx, a.Sources)
 		}

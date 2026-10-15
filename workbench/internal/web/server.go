@@ -178,6 +178,11 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /analyses/{id}/data/{source}/{what...}", s.member(s.analysisProxy))
 	m.HandleFunc("POST /analyses/{id}/preview", s.member(s.analysisPreviewStart))
 	m.HandleFunc("POST /analyses/{id}/preview/end", s.member(s.analysisPreviewEnd))
+	m.HandleFunc("POST /analyses/{id}/trial", s.member(s.analysisTrialStart))
+	m.HandleFunc("POST /analyses/{id}/trial/end", s.member(s.analysisTrialEnd))
+	m.HandleFunc("POST /analyses/{id}/trial/keep", s.member(s.analysisTrialKeep))
+	m.HandleFunc("GET /analyses/{id}/trial/live/{source}", s.member(s.analysisLive))
+	m.HandleFunc("GET /analyses/{id}/trial/data/{source}/{what...}", s.member(s.analysisProxy))
 	m.HandleFunc("GET /analyses/{id}/compare/live", s.member(s.analysisCompareLive))
 	m.HandleFunc("GET /analyses/{id}/compare/state", s.member(s.analysisCompareState))
 
