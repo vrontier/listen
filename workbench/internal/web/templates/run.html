@@ -1,0 +1,59 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+{{with .Data}}
+{{$d := .}}
+<p class="crumbs"><a href="/runs">Runs</a> · <a href="/analyses/{{.Analysis.ID}}">{{.Analysis.Name}}</a></p>
+<div class="heading-row">
+  <h1>{{.Analysis.Name}}, run {{.Run.Number}}</h1>
+  <span class="state">{{if .Run.Active}}running{{else}}ended{{end}} · data set {{.Run.Dataset}}</span>
+</div>
+{{if or (eq .Run.Dataset "recording") (eq .Run.Dataset "freezing")}}<meta http-equiv="refresh" content="{{if .Run.Active}}60{{else}}3{{end}}">{{end}}
+
+<table class="facts">
+  <tr><th>Started</th><td>{{when .Run.Started}} by {{.Run.StartedBy}}</td></tr>
+  <tr><th>{{if .Run.Active}}Until{{else}}Ended{{end}}</th><td>{{if .Run.Active}}{{if .Run.Ends.IsZero}}it is stopped{{else}}{{when .Run.Ends}}{{end}}{{else if not .Run.Stopped.IsZero}}{{when .Run.Stopped}}{{if .Run.StoppedBy}}, stopped by {{.Run.StoppedBy}}{{else}}, as planned{{end}}{{else}}{{when .Run.Ends}}, as planned{{end}}</td></tr>
+  <tr><th>Length</th><td>{{.Run.Duration}}{{if .Run.Active}} so far{{end}}</td></tr>
+  <tr><th>Revisions</th><td>rev-{{.Run.Revision}}{{if ne .Run.RevTo .Run.Revision}} to rev-{{.Run.RevTo}}{{end}}</td></tr>
+</table>
+
+<section>
+  <h2>Data set</h2>
+  {{if eq .Run.Dataset "recording"}}
+  <p>Recording. The data set is put together when the run ends.</p>
+  {{else if eq .Run.Dataset "freezing"}}
+  <p>Being put together. This page reloads until it is ready.</p>
+  {{else if eq .Run.Dataset "failed"}}
+  <p class="note warn-note">The data set could not be put together: {{.Run.DatasetNote}}</p>
+  {{else if eq .Run.Dataset "deleted"}}
+  <p class="meta">Deleted.</p>
+  {{else if eq .Run.Dataset "none"}}
+  <p class="meta">None: {{.Run.DatasetNote}}.</p>
+  {{else}}
+  <table>
+    <thead><tr><th>File</th><th>Size, compressed</th><th>Content</th></tr></thead>
+    <tbody>{{range .Files}}<tr><td><a href="/runs/{{$d.Run.ID}}/{{.Name}}">{{.Name}}</a></td><td>{{bytes .Bytes}}</td><td class="meta">{{.About}}</td></tr>{{end}}</tbody>
+  </table>
+  <p class="meta">Times are UTC, wall time at the engine. Data sets count against your disk quota: {{bytes .Used}} of {{bytes .Quota}} used.</p>
+
+  <h3>What it holds</h3>
+  <table>
+    <thead><tr><th>Source</th><th>Events</th><th>Transients</th><th>Resonances</th><th>Motifs found or returned</th><th>Motifs at the end</th></tr></thead>
+    <tbody>{{range .Summary.Sources}}<tr><td>{{.Name}}</td><td>{{.Total}}</td><td>{{index .Events "event.transient"}}</td><td>{{index .Events "event.resonance"}}</td><td>{{add (index .Events "motif.detected") (index .Events "motif.returned")}}</td><td>{{.Motifs}}</td></tr>{{end}}</tbody>
+  </table>
+  {{with .Summary.Comparison}}
+  <p>Comparison: {{.Seconds}} seconds of activity, {{.Correlations}} correlations.</p>
+  {{end}}
+  {{if .Pairs}}
+  <table>
+    <thead><tr><th>Pair, last correlation</th><th>r</th><th>Lag</th><th>Baseline r</th></tr></thead>
+    <tbody>{{range .Pairs}}<tr><td>{{.A}} – {{.B}}</td><td>{{with .R}}{{printf "%.2f" .}}{{else}}—{{end}}</td><td>{{with .LagS}}{{printf "%+.0f s" .}}{{else}}—{{end}}</td><td>{{with .BaselineR}}{{printf "%.2f" .}}{{else}}—{{end}}</td></tr>{{end}}</tbody>
+  </table>
+  {{end}}
+  <form method="post" action="/runs/{{.Run.ID}}/delete" class="inline-form danger-inline">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <button class="danger">Delete the data set</button>
+  </form>
+  {{end}}
+</section>
+{{end}}
+{{end}}

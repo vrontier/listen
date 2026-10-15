@@ -41,8 +41,9 @@ const (
 
 // Config is what the Workbench is started with.
 type Config struct {
-	BaseURL  string // as visitors reach it, e.g. http://low.home.arpa
-	SiteName string
+	BaseURL    string // as visitors reach it, e.g. http://low.home.arpa
+	SiteName   string
+	DatasetDir string // where runs' data sets are kept; empty: none are
 }
 
 // Server is the Workbench's web side.
@@ -53,6 +54,7 @@ type Server struct {
 	mail   mail.Sender
 	sync   *engineSync
 	live   *fanout
+	data   *datasets
 	pages  map[string]*template.Template
 	mux    *http.ServeMux
 	secure bool
@@ -78,6 +80,7 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 		secure: strings.HasPrefix(cfg.BaseURL, "https://"),
 		probes: map[string]probeEntry{},
 	}
+	s.data = newDatasets(s, cfg.DatasetDir)
 	if err := s.parseTemplates(); err != nil {
 		return nil, err
 	}
@@ -89,6 +92,7 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 // sessions until ctx ends.
 func (s *Server) Start(ctx context.Context) {
 	go s.sync.run(ctx)
+	go s.data.refresh(ctx) // runs that went on, or ended, while the Workbench was down
 	go func() {
 		t := time.NewTicker(30 * time.Second)
 		defer t.Stop()
@@ -98,6 +102,8 @@ func (s *Server) Start(ctx context.Context) {
 				return
 			case <-t.C:
 				s.endRuns(ctx)
+				s.endPreviews(ctx)
+				s.data.refresh(ctx)
 			}
 		}
 	}()
@@ -160,9 +166,13 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /analyses/{id}/stop", s.member(s.analysisRunStop))
 	m.HandleFunc("GET /runs", s.member(s.runsPage))
 	m.HandleFunc("POST /runs", s.member(s.runsStart))
+	m.HandleFunc("GET /runs/{run}", s.member(s.runPage))
+	m.HandleFunc("GET /runs/{run}/{file}", s.member(s.runFile))
+	m.HandleFunc("POST /runs/{run}/delete", s.member(s.runDatasetDelete))
 	m.HandleFunc("GET /analyses/{id}/live/{source}", s.member(s.analysisLive))
 	m.HandleFunc("GET /analyses/{id}/data/{source}/{what...}", s.member(s.analysisProxy))
-	m.HandleFunc("GET /analyses/{id}/export", s.member(s.analysisExport))
+	m.HandleFunc("POST /analyses/{id}/preview", s.member(s.analysisPreviewStart))
+	m.HandleFunc("POST /analyses/{id}/preview/end", s.member(s.analysisPreviewEnd))
 	m.HandleFunc("GET /analyses/{id}/compare/live", s.member(s.analysisCompareLive))
 	m.HandleFunc("GET /analyses/{id}/compare/state", s.member(s.analysisCompareState))
 
@@ -175,6 +185,7 @@ func (s *Server) routes() {
 // --- templates ---
 
 var funcs = template.FuncMap{
+	"clock": func(t time.Time) string { return t.UTC().Format("15:04:05") },
 	"when": func(t time.Time) string {
 		if t.IsZero() {
 			return "—"

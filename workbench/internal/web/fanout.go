@@ -113,6 +113,10 @@ type Readers struct {
 	Programs int
 }
 
+func (n Readers) add(m Readers) Readers {
+	return Readers{People: n.People + m.People, Programs: n.Programs + m.Programs}
+}
+
 func (f *fanout) readers(stream, analysis string) Readers {
 	f.mu.Lock()
 	defer f.mu.Unlock()

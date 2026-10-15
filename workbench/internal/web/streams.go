@@ -358,7 +358,7 @@ func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, e
 			state = "running"
 		}
 		d.Consumers = append(d.Consumers, consumer{Analysis: a, Owner: a.OwnerName,
-			Readers: s.live.readers(st.EngineID(), a.EngineID()), State: state, Mine: a.OwnerID == sess.User.ID})
+			Readers: s.live.readers(st.EngineID(), a.EngineID()).add(s.live.readers(st.EngineID(), previewID(a))), State: state, Mine: a.OwnerID == sess.User.ID})
 	}
 	d.Audit, err = s.db.AuditOf(r.Context(), "stream", st.ID)
 	return d, err
@@ -418,12 +418,12 @@ func (s *Server) streamState(w http.ResponseWriter, r *http.Request) {
 	var flash string
 	switch r.PostFormValue("to") {
 	case "draft":
-		state, always, flash = catalogue.StreamDraft, false, "Back in draft: the stream connects only while someone watches."
+		state, always, flash = catalogue.StreamDraft, false, "Back in draft."
 	case "production":
 		state, always = catalogue.StreamProduction, r.PostFormValue("always_on") == "on"
 		flash = "In production."
 		if always {
-			flash = "In production, always on: the stream stays connected."
+			flash = "In production. \"Always on\" has no effect at the moment: sources connect only for runs and previews."
 		}
 	case "pause":
 		state, flash = catalogue.StreamPaused, "Paused. The stream is disconnected; its memories are kept."

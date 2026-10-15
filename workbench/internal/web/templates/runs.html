@@ -9,15 +9,15 @@
   <h2>Running now</h2>
   {{if .Active}}
   <table>
-    <thead><tr><th>Analysis</th><th>#</th><th>Since</th><th>Until</th><th>So far</th><th>Revisions</th><th>Export so far</th><th></th></tr></thead>
+    <thead><tr><th>Analysis</th><th>#</th><th>Since</th><th>Until</th><th>So far</th><th>Revisions</th><th>Data set</th><th></th></tr></thead>
     <tbody>{{range .Active}}<tr>
       <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
-      <td>{{.Number}}</td>
+      <td><a href="/runs/{{.ID}}">{{.Number}}</a></td>
       <td>{{when .Started}}</td>
       <td>{{if .Ends.IsZero}}until stopped{{else}}{{when .Ends}}{{end}}</td>
       <td>{{.Duration}}</td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
-      <td>{{template "run-export" .}}</td>
+      <td>{{template "dataset-link" .}}</td>
       <td><form method="post" action="/analyses/{{.AnalysisID}}/stop" class="inline-form">
         <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="back" value="runs">
         <button class="secondary">Stop</button>
@@ -43,21 +43,19 @@
   <h2>Finished</h2>
   {{if .Finished}}
   <table>
-    <thead><tr><th>Analysis</th><th>#</th><th>Started</th><th>Ended</th><th>Length</th><th>Revisions</th><th>By</th><th>Export</th></tr></thead>
+    <thead><tr><th>Analysis</th><th>#</th><th>Started</th><th>Ended</th><th>Length</th><th>Revisions</th><th>By</th><th>Data set</th></tr></thead>
     <tbody>{{range .Finished}}<tr>
       <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
-      <td>{{.Number}}</td>
+      <td><a href="/runs/{{.ID}}">{{.Number}}</a></td>
       <td>{{when .Started}}</td>
       <td>{{when .Stopped}}{{if .StoppedBy}} <span class="meta">stopped by {{.StoppedBy}}</span>{{else}} <span class="meta">as planned</span>{{end}}</td>
       <td>{{.Duration}}</td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
       <td>{{.StartedBy}}</td>
-      <td>{{template "run-export" .}}</td>
+      <td>{{template "dataset-link" .}}</td>
     </tr>{{end}}</tbody>
   </table>
   {{else}}<p class="meta">No finished runs yet.</p>{{end}}
 </section>
 {{end}}
 {{end}}
-
-{{define "run-export"}}{{if .TooLong}}<span class="meta">longer than 31 days: export in parts on the analysis</span>{{else}}<a href="/analyses/{{.AnalysisID}}/export?{{.Export}}&amp;format=csv">CSV</a> · <a href="/analyses/{{.AnalysisID}}/export?{{.Export}}&amp;format=json">JSON</a>{{if .Comparing}} · <a href="/analyses/{{.AnalysisID}}/export?{{.Export}}&amp;format=compare-csv">comparison</a>{{end}}{{end}}{{end}}

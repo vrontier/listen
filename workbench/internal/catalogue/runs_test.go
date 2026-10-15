@@ -3,6 +3,7 @@ package catalogue
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -80,5 +81,37 @@ func TestRuns(t *testing.T) {
 	}
 	if n != 4 {
 		t.Fatalf("run entries in the audit trail: %d", n)
+	}
+}
+
+// Runs made before data sets get the columns; those already ended have no
+// data set, one going on records.
+func TestMigrateRuns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "runs.db")
+	d, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	u, _ := d.CreateUser(ctx, "m@example.org", "M", false)
+	a, _ := d.CreateAnalysis(ctx, u.ID, "x", "", nil, nil)
+	b, _ := d.CreateAnalysis(ctx, u.ID, "y", "", nil, nil)
+	d.StartRun(ctx, a.ID, u.ID, time.Time{})
+	d.StopRun(ctx, a.ID, u.ID)
+	d.StartRun(ctx, b.ID, u.ID, time.Time{})
+	for _, c := range []string{"dataset", "dataset_bytes", "dataset_note", "summary"} {
+		if _, err := d.db.Exec(`ALTER TABLE runs DROP COLUMN ` + c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.Close()
+	if d, err = Open(path); err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ra, _ := d.Runs(ctx, a.ID)
+	rb, _ := d.Runs(ctx, b.ID)
+	if ra[0].Dataset != DatasetNone || rb[0].Dataset != DatasetRecording {
+		t.Fatalf("after the migration: %q %q", ra[0].Dataset, rb[0].Dataset)
 	}
 }

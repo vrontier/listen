@@ -29,10 +29,14 @@ type engineSync struct {
 
 	groupsMu sync.Mutex        // one group sync at a time
 	sent     map[string]string // group id → the body last put
+
+	previews map[int64]time.Time // analysis → end of its preview
+	held     map[int64]int       // analysis → holders keeping it in the engine
 }
 
 func newEngineSync(eng *engine.Client, db *catalogue.DB) *engineSync {
-	return &engineSync{eng: eng, db: db, problem: "not yet connected to the engine", streams: map[string]engine.Stream{}, sent: map[string]string{}}
+	return &engineSync{eng: eng, db: db, problem: "not yet connected to the engine", streams: map[string]engine.Stream{}, sent: map[string]string{},
+		previews: map[int64]time.Time{}, held: map[int64]int{}}
 }
 
 func (s *engineSync) status() (ready bool, problem string, info engine.Info) {
@@ -152,13 +156,95 @@ func wanted(st catalogue.Stream, inRun bool) (engine.StreamSpec, bool) {
 			spec.Mode = engine.Continuous
 		}
 	case catalogue.StreamProduction:
-		if st.AlwaysOn || inRun {
+		// "Always on" has had no effect since sources connect only for
+		// runs and previews (design.md, Runs); whether it goes is open.
+		if inRun {
 			spec.Mode = engine.Continuous
 		}
 	default:
 		return spec, false // paused or suspended: not in the engine
 	}
 	return spec, true
+}
+
+// An analysis is in the engine only while it is in a run, or while its data
+// set is being frozen (held); a preview is a second engine analysis that
+// keeps nothing (design.md, Runs).
+
+// previewID is the engine identifier of an analysis's preview.
+func previewID(a catalogue.Analysis) string { return fmt.Sprintf("p-%04d", a.ID) }
+
+// startPreview lets the analysis's preview run until the given time.
+func (s *engineSync) startPreview(id int64, until time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.previews[id] = until
+}
+
+func (s *engineSync) endPreview(id int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.previews, id)
+}
+
+// preview reports until when the analysis's preview runs, if it does.
+func (s *engineSync) preview(id int64) (time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	until, ok := s.previews[id]
+	if ok && !time.Now().Before(until) {
+		return time.Time{}, false
+	}
+	return until, ok
+}
+
+// endedPreviews removes the previews past their end and returns their
+// analyses.
+func (s *engineSync) endedPreviews() []int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []int64
+	for id, until := range s.previews {
+		if !time.Now().Before(until) {
+			delete(s.previews, id)
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// hold keeps an analysis in the engine outside a run, until release.
+func (s *engineSync) hold(id int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.held[id]++
+}
+
+func (s *engineSync) release(id int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.held[id]--; s.held[id] <= 0 {
+		delete(s.held, id)
+	}
+}
+
+func (s *engineSync) isHeld(id int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.held[id] > 0
+}
+
+// previewBody is a preview's settings: the source's, learning in memory
+// only, so that nothing of it is kept.
+func previewBody(src catalogue.AnalysisSource) json.RawMessage {
+	var spec map[string]any
+	if json.Unmarshal(src.Spec, &spec) != nil || spec == nil {
+		spec = map[string]any{}
+	}
+	spec["memory"] = map[string]any{"mode": engine.MemoryRAM}
+	spec["label"] = "preview"
+	b, _ := json.Marshal(spec)
+	return b
 }
 
 // analysisBody is what is sent to the engine for one source of an analysis:
@@ -205,9 +291,21 @@ func (s *engineSync) push(ctx context.Context, st catalogue.Stream) error {
 		if !ok {
 			continue
 		}
-		keep[a.EngineID()] = true
-		if _, err := s.eng.PutAnalysis(ctx, st.EngineID(), a.EngineID(), analysisBody(src, a)); err != nil {
-			return fmt.Errorf("analysis %s: %w", a.EngineID(), err)
+		_, inRun, err := s.db.ActiveRun(ctx, a.ID)
+		if err != nil {
+			return err
+		}
+		if inRun || s.isHeld(a.ID) {
+			keep[a.EngineID()] = true
+			if _, err := s.eng.PutAnalysis(ctx, st.EngineID(), a.EngineID(), analysisBody(src, a)); err != nil {
+				return fmt.Errorf("analysis %s: %w", a.EngineID(), err)
+			}
+		}
+		if _, ok := s.preview(a.ID); ok && !inRun {
+			keep[previewID(a)] = true
+			if _, err := s.eng.PutAnalysis(ctx, st.EngineID(), previewID(a), previewBody(src)); err != nil {
+				return fmt.Errorf("preview %s: %w", previewID(a), err)
+			}
 		}
 	}
 	for _, id := range es.Analyses {
@@ -336,9 +434,12 @@ func (s *engineSync) groupSpec(ctx context.Context, a catalogue.Analysis) (engin
 	if len(spec.Members) < 2 {
 		return spec, false, nil
 	}
+	// The comparison runs only during a run: its members are the run's
+	// engine analyses, which exist only then.
 	_, inRun, err := s.db.ActiveRun(ctx, a.ID)
-	if inRun {
-		spec.Mode = engine.Continuous
+	if !inRun && !s.isHeld(a.ID) {
+		return spec, false, err
 	}
+	spec.Mode = engine.Continuous
 	return spec, true, err
 }

@@ -17,7 +17,7 @@
   {{else}}
     <p>Not in the engine{{if eq .Stream.State "paused"}}: the stream is paused{{end}}.</p>
   {{end}}
-  <p class="meta">{{if eq .Stream.State "draft"}}In draft the source connects only while someone watches an analysis that uses it, or a token reads one.{{else if eq .Stream.State "production"}}{{if .Stream.AlwaysOn}}Always on: connected as long as it has an analysis.{{else}}In production, on demand.{{end}}{{end}}</p>
+  <p class="meta">{{if or (eq .Stream.State "draft") (eq .Stream.State "production")}}The source connects only while an analysis that uses it is in a run or a preview.{{end}}</p>
 
   <p><a class="button" href="/analyses/new?source={{.Stream.Slug}}">New analysis with this source</a></p>
   <h3>Who is connected</h3>
@@ -41,11 +41,11 @@
     {{else}}
       {{if eq .Stream.State "draft"}}
       <form method="post" action="/sources/{{.Stream.Slug}}/state" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}">
-        <label class="check"><input type="checkbox" name="always_on"> always on</label>
+        <label class="check"><input type="checkbox" name="always_on"> always on <span class="meta">(no effect at the moment)</span></label>
         <button name="to" value="production">Move to production</button></form>
       {{else}}
       <form method="post" action="/sources/{{.Stream.Slug}}/state" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}">
-        <label class="check"><input type="checkbox" name="always_on" {{if .Stream.AlwaysOn}}checked{{end}}> always on</label>
+        <label class="check"><input type="checkbox" name="always_on" {{if .Stream.AlwaysOn}}checked{{end}}> always on <span class="meta">(no effect at the moment)</span></label>
         <button name="to" value="production">Apply</button></form>
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="draft" class="secondary">Back to draft</button></form>
       {{end}}

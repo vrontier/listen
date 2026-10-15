@@ -207,8 +207,8 @@ func (c *Client) GroupData(ctx context.Context, id, sub string, q url.Values) (j
 }
 
 // SubscribeGroup opens a group's live events.
-func (c *Client) SubscribeGroup(ctx context.Context, id string, fn func(SSE)) error {
-	return c.follow(ctx, groupPath(id)+"/events", fn)
+func (c *Client) SubscribeGroup(ctx context.Context, id string, fn func(SSE), types ...string) error {
+	return c.follow(ctx, groupPath(id)+"/events"+typesQuery(types), fn)
 }
 
 // SSE is one event read from an event stream.
@@ -219,9 +219,17 @@ type SSE struct {
 }
 
 // Subscribe opens an analysis's live events. Each event is handed to fn
-// until ctx ends or the engine closes the stream.
-func (c *Client) Subscribe(ctx context.Context, stream, analysis string, fn func(SSE)) error {
-	return c.follow(ctx, analysisPath(stream, analysis)+"/events", fn)
+// until ctx ends or the engine closes the stream. Types, if given, limit
+// the events to those types.
+func (c *Client) Subscribe(ctx context.Context, stream, analysis string, fn func(SSE), types ...string) error {
+	return c.follow(ctx, analysisPath(stream, analysis)+"/events"+typesQuery(types), fn)
+}
+
+func typesQuery(types []string) string {
+	if len(types) == 0 {
+		return ""
+	}
+	return "?types=" + url.QueryEscape(strings.Join(types, ","))
 }
 
 // Changes follows GET /v1/events.

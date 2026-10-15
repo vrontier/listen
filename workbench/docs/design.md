@@ -194,21 +194,30 @@ This replaces the earlier drafts in which an analysis was made under a stream, a
 
 ## Runs
 
-**Decided** (2026-10-15): a member starts and stops an analysis as a **run**.
+**Decided** (2026-10-15): a member starts and stops an analysis as a **run**, and each run produces a **data set**.
 
-- **A run keeps the analysis's sources connected** from its start until it is stopped or reaches its planned end, whether or not anyone has a page open. This adds a third reason for a source in draft to run, next to an open page and a reading token (question 2).
-- **A source's state says how far along the source is** (draft, production, paused). Whether it runs is decided by what uses it: a run, an open page, a token, or "always on" in production.
+- **A source connects only while an analysis that uses it is in a run or a preview.** An open page alone no longer connects it. This replaces "a stream in draft runs only while a member watches or a token reads" (question 2, decided 2026-10-14); how tokens fit in is to be settled with them.
+- **The live view** of an analysis (spectrograms, events, motifs, comparison) is shown only during its run or a preview.
+- **A source's state says how far along the source is** (draft, production, paused), not whether it runs.
 - **Start and stop.** A run is started with a planned length or "until stopped", and can be stopped at any time.
-- **Runs are listed** on the analysis page, each with its start and end, the revisions in force during it, who started and stopped it, and an export of its period.
-- **A menu "Runs"** (decided 2026-10-15) manages them across analyses: what is running now, with a stop button; starting a run of any analysis; and the finished runs with their exports.
+- **A data set per run.** What a run finds is recorded while it runs and kept as a fixed data set when it ends. Stopping a run leads to its page with the data set; the analysis page and the Runs list link to it.
+- **A preview** shows an analysis live for ten minutes and records nothing.
+- **A menu "Runs"** manages runs across analyses: what is running now, with a stop button; starting a run of any analysis; the finished runs with their data sets.
 
 **Proposed** (built against the stand-in on 2026-10-15):
 
 - **One run at a time** per analysis. The lengths offered are 1 hour, 6 hours, 24 hours (preselected), 3 days, 7 days and until stopped. Three days or more covers the premise test of [groups.md](groups.md#the-premise-test).
-- **Settings may change during a run.** Saving makes a new revision as usual; the run goes on, and its list entry shows the range of revisions ("rev-1 to rev-3"). Every event carries its revision, so the parts can be told apart in the export.
+- **The analysis is in the engine only during a run.** The engine runs every analysis of a connected stream, so an analysis left in it would learn and store whenever anything connects the stream. Outside a run it is taken out without deleting its memories, and the next run continues them. Consequences: outside a run the settings show no "in use" values from the engine, the memories are listed only during a run, and the comparison exists only during a run.
+- **The data set is recorded by the Workbench**, not read from the engine afterwards: one subscription per source (events without the frames and spectra, which come ten a second) and one for the comparison (activity per second, correlations), written to files as they arrive. This does not depend on the memory mode (a source on "learn but keep nothing" still has its events in the data set), covers every revision of the run, and survives engine restarts. After a Workbench restart the recording catches up from the engine's history and drops what it already has.
+- **When the run ends** the recording is frozen, compressed, into three files: `dataset.json` (the run, the settings of every revision in force during it, each source's events and its motifs at the end, the comparison's correlations), `events.csv` (all sources, a column naming the source) and `comparison.csv` (a row per source and second of activity, a row per pair and minute of correlation). The run's page shows what it holds (events per source and type, motifs, the last correlations) and offers the files uncompressed. The free-period export is gone; data sets replace it.
+- **Data sets count against the member's disk quota** of 0.5 GB (decided 2026-10-14). The run page shows the use; a data set can be deleted. Not enforced yet. How large a day is has not been measured.
+- **Runs from before data sets** have none, and say so.
+- **A preview** is a second, temporary engine analysis per source (`p-NNNN` next to `a-NNNN`) with the source's settings and the memory mode `ram`: it learns motifs in memory and forgets them, and the analysis's own memory is not touched. It ends after ten minutes or by the button; starting a run ends it. There is no comparison in a preview. This is the mechanism the trial mode needs too ([control-api.md](control-api.md#open), point 3).
+- **"Always on"** for sources in production has no effect since this change; the source page says so. **Open:** whether it goes.
+- **Settings may change during a run.** Saving makes a new revision as usual; the run goes on, and its list entry shows the range of revisions ("rev-1 to rev-3"). Every event carries its revision, so the parts can be told apart in the data set.
 - **A paused source does not run**, even in a run; the analysis page says so. Pausing stays the owner's way to stop a stream for everyone.
-- **A run ends at its planned end on its own**, checked every 30 seconds; the audit trail records start, stop and end.
-- **In the engine** a run needs nothing new: a stream that an analysis in a run uses is put into the engine with `mode` `continuous` instead of `on_demand` ([control-api.md](control-api.md#streams)). When the last run using it ends, it goes back to `on_demand`.
+- **A run ends at its planned end on its own**, checked every 30 seconds; the audit trail records start, stop, end and the deletion of a data set.
+- **In the engine** a run needs nothing new: the analysis is put in, and the stream is put with `mode` `continuous` instead of `on_demand` ([control-api.md](control-api.md#streams)). When the run ends, the analysis is taken out once the data set is made, and the stream goes back to `on_demand`.
 - **Caps.** A run reserves its sources' and analyses' cost for its length, as in [Resources and caps](members-and-streams.md#resources-and-caps). Starting a run whose reservation would exceed a cap is refused. Not enforced yet, like the caps themselves.
 - **Open:** whether a run should end by itself when a source has been offline for a long time, and whether a member is told by mail when a run ends.
 
@@ -286,7 +295,7 @@ Answers are the maintainer's of 2026-10-14 and are **decided**. Where an answer 
 1. **Whose streams?** Members' own streams only at first, or the Observatory's streams too?
    - **Decided:** members' streams. Members set up and configure new streams themselves. The Observatory's streams and production setup stay outside the Workbench.
 2. **On demand or continuous?** Learned motifs need continuous listening.
-   - **Decided:** a stream in draft runs only while a member watches or a token reads. A stream in production may run always on. **Added** (decided 2026-10-15): a stream in draft also runs while an analysis using it is in a run; see [Runs](#runs). The Workbench monitors how many streams run and what bandwidth and compute they need, shows each member their own use, and enforces a cap for the server and a cap per member, both set by the master admin.
+   - **Decided:** a stream in draft runs only while a member watches or a token reads. A stream in production may run always on. **Replaced** (decided 2026-10-15): a source connects only while an analysis using it is in a run or a preview; see [Runs](#runs). The Workbench monitors how many streams run and what bandwidth and compute they need, shows each member their own use, and enforces a cap for the server and a cap per member, both set by the master admin.
    - Detail, **proposed:** [members-and-streams.md](members-and-streams.md#states), [Resources and caps](members-and-streams.md#resources-and-caps).
 3. **Who may add an analysis to someone else's stream, and what is published?**
    - **Decided:** the shared model. A stream is shared, its analyses are individual. Once connected, a stream goes offline only when all its consumers have stopped. A stream always shows who is connected to it.
@@ -319,7 +328,7 @@ Answers are the maintainer's of 2026-10-14 and are **decided**. Where an answer 
     - **Decided:** nobody. There is no hierarchy; the member decides.
 13. What does a private analysis page show?
     - **Decided:** the spectrogram, the list of events, the motifs and an export.
-    - **Proposed:** the export gives the events and the motifs of a chosen period as CSV and as JSON, with the analysis's settings and rules revision in the file.
+    - **Proposed:** the export gives the events and the motifs of a chosen period as CSV and as JSON, with the analysis's settings and rules revision in the file. **Replaced** (2026-10-15): the export is each run's data set; see [Runs](#runs).
 14. How is a token passed to the data stream?
     - Asked back: how do private APIs solve this? Almost all take the token in a request header: `Authorization: Bearer <token>` (GitHub, Stripe, OpenAI), or a header of their own (Anthropic uses `x-api-key`). Many give tokens a recognisable prefix (`ghp_` at GitHub, `sk_live_` at Stripe) so that leaked tokens can be found by secret scanning. A token in the address is avoided because addresses end up in server logs, proxies and browser histories. Browsers cannot set headers on an `EventSource`, which is why a browser page uses its session cookie. The MCP specification's authorisation for HTTP endpoints builds on OAuth 2.1, which also ends in a bearer token in the `Authorization` header.
     - **Proposed:** the `Authorization: Bearer` header with a token prefixed `low_` for programs and MCP clients; the session cookie for browser pages; never the address. OAuth only if an assistant the members use cannot be given a static header (to be checked when MCP is built).

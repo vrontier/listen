@@ -1,11 +1,16 @@
 package web
 
 import (
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -34,12 +39,9 @@ var runLengths = []struct {
 // runView is one run as the analysis page lists it.
 type runView struct {
 	catalogue.Run
-	Active    bool
-	Comparing bool   // the run's analysis compares its sources now
-	RevTo     int    // the last revision in force during the run
-	Export    string // query of the export for the run's period
-	TooLong   bool   // longer than an export can cover
-	Duration  string
+	Active   bool
+	RevTo    int // the last revision in force during the run
+	Duration string
 }
 
 func (s *Server) runViews(ctx context.Context, a catalogue.Analysis, revs []catalogue.Revision) ([]runView, error) {
@@ -58,17 +60,17 @@ func viewRuns(runs []catalogue.Run, revsOf func(int64) []catalogue.Revision) []r
 		revs := revsOf(r.AnalysisID)
 		v := runView{Run: r, Active: r.Active(now), RevTo: r.Revision}
 		end := r.Stopped
-		if v.Active {
+		switch {
+		case v.Active:
 			end = now
+		case end.IsZero():
+			end = r.Ends // ended at its planned end, not yet closed
 		}
 		for _, rev := range revs {
 			if rev.Revision > v.RevTo && rev.Created.Before(end) {
 				v.RevTo = rev.Revision
 			}
 		}
-		q := url.Values{"from": {r.Started.Format(time.RFC3339)}, "to": {end.Add(time.Second).Format(time.RFC3339)}}
-		v.Export = q.Encode()
-		v.TooLong = end.Sub(r.Started) > 31*24*time.Hour
 		v.Duration = roundDuration(end.Sub(r.Started))
 		out = append(out, v)
 	}
@@ -127,7 +129,8 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request, a catalogue.An
 		s.fail(w, r, err)
 		return
 	}
-	flash := "Run of " + a.Name + " started. Its sources stay connected until it ends, whether or not a page is open."
+	s.sync.endPreview(a.ID)
+	flash := "Run of " + a.Name + " started. Its sources stay connected until it ends, whether or not a page is open; what it finds goes into its data set."
 	if err := s.pushSources(r, a.Sources); err != nil {
 		flash += " The engine has not taken it yet; it will be sent again."
 	}
@@ -140,17 +143,26 @@ func (s *Server) analysisRunStop(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.db.StopRun(r.Context(), a.ID, sess.User.ID); err != nil {
-		if errors.Is(err, catalogue.ErrNoRun) {
+	run, active, err := s.db.ActiveRun(r.Context(), a.ID)
+	if err == nil && active {
+		err = s.db.StopRun(r.Context(), a.ID, sess.User.ID)
+	}
+	if err != nil || !active {
+		if !active || errors.Is(err, catalogue.ErrNoRun) {
 			s.redirect(w, r, backTo(r, analysisPath(a)), a.Name+" was not running.")
 			return
 		}
 		s.fail(w, r, err)
 		return
 	}
-	s.pushSources(r, a.Sources)
-	s.redirect(w, r, backTo(r, analysisPath(a)), "Run of "+a.Name+" stopped. Sources in draft now connect only while a page of theirs is open.")
+	s.data.refresh(r.Context()) // freezes the data set, then lets the sources go
+	if s.data.dir == "" {
+		s.pushSources(r, a.Sources)
+	}
+	s.redirect(w, r, runPath(run.ID), "Run stopped. Its data set is being put together.")
 }
+
+func runPath(id int64) string { return "/runs/" + strconv.FormatInt(id, 10) }
 
 // endRuns closes the runs that reached their planned end, and lets their
 // sources go back to what their state asks.
@@ -177,7 +189,193 @@ func (s *Server) endRuns(ctx context.Context) {
 	}
 	if len(ids) > 0 {
 		s.syncGroups(ctx)
+		s.data.refresh(ctx)
 	}
+}
+
+// endPreviews ends the previews past their ten minutes.
+func (s *Server) endPreviews(ctx context.Context) {
+	for _, id := range s.sync.endedPreviews() {
+		if a, err := s.db.Analysis(ctx, id); err == nil {
+			s.pushAll(ctx, a.Sources)
+		}
+	}
+}
+
+const previewLength = 10 * time.Minute
+
+func (s *Server) analysisPreviewStart(w http.ResponseWriter, r *http.Request) {
+	a, ok := s.ownAnalysis(w, r)
+	if !ok {
+		return
+	}
+	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); inRun {
+		s.redirect(w, r, analysisPath(a), "The analysis is running; its live view is on.")
+		return
+	}
+	s.sync.startPreview(a.ID, time.Now().Add(previewLength))
+	flash := "Preview for ten minutes. Nothing of it is recorded."
+	if err := s.pushSources(r, a.Sources); err != nil {
+		flash += " The engine has not taken it yet; it will be sent again."
+	}
+	s.redirect(w, r, analysisPath(a), flash)
+}
+
+func (s *Server) analysisPreviewEnd(w http.ResponseWriter, r *http.Request) {
+	a, ok := s.ownAnalysis(w, r)
+	if !ok {
+		return
+	}
+	s.sync.endPreview(a.ID)
+	s.pushSources(r, a.Sources)
+	s.redirect(w, r, analysisPath(a), "Preview ended.")
+}
+
+// --- a run's page and its data set ---
+
+// ownRun finds the run named in the path among the member's.
+func (s *Server) ownRun(w http.ResponseWriter, r *http.Request) (catalogue.Run, catalogue.Analysis, bool) {
+	sess, _ := sessionFrom(r)
+	id, _ := strconv.ParseInt(r.PathValue("run"), 10, 64)
+	run, err := s.db.Run(r.Context(), id)
+	if err == nil {
+		var a catalogue.Analysis
+		if a, err = s.db.Analysis(r.Context(), run.AnalysisID); err == nil && a.OwnerID == sess.User.ID {
+			return run, a, true
+		}
+	}
+	if err != nil && !isNotFound(err) {
+		s.fail(w, r, err)
+	} else {
+		s.notFound(w, r)
+	}
+	return run, catalogue.Analysis{}, false
+}
+
+type runPageData struct {
+	Run      runView
+	Analysis catalogue.Analysis
+	Summary  datasetSummary
+	Pairs    []pairSummary
+	Files    []runFileView
+	Used     int64 // the member's data sets together
+	Quota    int64
+}
+
+type runFileView struct {
+	Name  string
+	Bytes int64
+	About string
+}
+
+type pairSummary struct {
+	A, B      string
+	R         *float64
+	LagS      *float64
+	BaselineR *float64
+}
+
+// diskQuota is a member's disk quota (decided 2026-10-14), against which
+// data sets count.
+const diskQuota = 512 << 20
+
+func (s *Server) runPage(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	run, a, ok := s.ownRun(w, r)
+	if !ok {
+		return
+	}
+	revs, err := s.db.Revisions(r.Context(), a.ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d := runPageData{Run: viewRuns([]catalogue.Run{run}, func(int64) []catalogue.Revision { return revs })[0], Analysis: a, Quota: diskQuota}
+	json.Unmarshal(run.Summary, &d.Summary)
+	names := map[string]string{}
+	for _, src := range a.Sources {
+		names[src.Stream.EngineID()] = src.Stream.Texts.Name
+	}
+	if c := d.Summary.Comparison; c != nil {
+		for _, raw := range c.Last {
+			var p struct {
+				A, B      string
+				R         *float64 `json:"r"`
+				LagS      *float64 `json:"lag_s"`
+				BaselineR *float64 `json:"baseline_r"`
+			}
+			json.Unmarshal(raw, &p)
+			p.A, p.B = or(names[p.A], p.A), or(names[p.B], p.B)
+			d.Pairs = append(d.Pairs, pairSummary{p.A, p.B, p.R, p.LagS, p.BaselineR})
+		}
+	}
+	about := map[string]string{
+		fileJSON:    "everything: the run, the settings of each revision, each source's events and motifs, the comparison's correlations",
+		fileEvents:  "the events of all sources, a column naming the source",
+		fileCompare: "the comparison: a row per source and second of activity, a row per pair and minute of correlation",
+	}
+	for _, f := range []string{fileJSON, fileEvents, fileCompare} {
+		if n, ok := d.Summary.Files[f]; ok {
+			d.Files = append(d.Files, runFileView{Name: f, Bytes: n, About: about[f]})
+		}
+	}
+	d.Used, _ = s.db.DatasetBytesOf(r.Context(), sess.User.ID)
+	title := fmt.Sprintf("%s, run %d", a.Name, run.Number)
+	s.render(w, r, 200, "run", title, d)
+}
+
+func or(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// runFile sends one file of a data set, uncompressed.
+func (s *Server) runFile(w http.ResponseWriter, r *http.Request) {
+	run, a, ok := s.ownRun(w, r)
+	if !ok {
+		return
+	}
+	name := r.PathValue("file")
+	ctype := map[string]string{fileJSON: "application/json", fileEvents: "text/csv; charset=utf-8", fileCompare: "text/csv; charset=utf-8"}[name]
+	if ctype == "" || run.Dataset != catalogue.DatasetReady {
+		s.notFound(w, r)
+		return
+	}
+	f, err := os.Open(filepath.Join(s.data.runDir(run.ID), name+".gz"))
+	if err != nil {
+		s.notFound(w, r)
+		return
+	}
+	defer f.Close()
+	zr, err := gzip.NewReader(f)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	download := fmt.Sprintf("%s-run-%d-%s", catalogue.Slugify(a.Name), run.Number, name)
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+download+`"`)
+	io.Copy(w, zr)
+}
+
+func (s *Server) runDatasetDelete(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	run, _, ok := s.ownRun(w, r)
+	if !ok {
+		return
+	}
+	if run.Dataset != catalogue.DatasetReady && run.Dataset != catalogue.DatasetFailed {
+		s.redirect(w, r, runPath(run.ID), "Only a finished data set can be deleted.")
+		return
+	}
+	if err := s.db.DeleteDataset(r.Context(), run.ID, sess.User.ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	os.RemoveAll(s.data.runDir(run.ID))
+	s.redirect(w, r, runPath(run.ID), "Data set deleted.")
 }
 
 // syncGroups puts the engine's groups in step; a failure is logged, and the
@@ -211,18 +409,15 @@ func (s *Server) runsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	revs := map[int64][]catalogue.Revision{}
-	comparing := map[int64]bool{}
 	for _, a := range as {
 		if revs[a.ID], err = s.db.Revisions(ctx, a.ID); err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		comparing[a.ID] = s.compares(a)
 	}
 	d := runsData{RunLengths: runLengths}
 	running := map[int64]bool{}
 	for _, v := range viewRuns(runs, func(id int64) []catalogue.Revision { return revs[id] }) {
-		v.Comparing = comparing[v.AnalysisID]
 		if v.Active {
 			d.Active = append(d.Active, v)
 			running[v.AnalysisID] = true

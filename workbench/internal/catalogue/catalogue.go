@@ -109,7 +109,11 @@ CREATE TABLE IF NOT EXISTS runs (
 	ends        TEXT,                        -- planned end; NULL: until stopped
 	stopped     TEXT,                        -- NULL while it runs
 	stopped_by  INTEGER REFERENCES users(id), -- NULL when it ended at its planned end
-	revision    INTEGER NOT NULL             -- the analysis's revision at the start
+	revision    INTEGER NOT NULL,            -- the analysis's revision at the start
+	dataset       TEXT NOT NULL DEFAULT 'recording', -- recording, freezing, ready, failed, deleted, none
+	dataset_bytes INTEGER NOT NULL DEFAULT 0,
+	dataset_note  TEXT NOT NULL DEFAULT '',
+	summary       TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS runs_analysis ON runs(analysis_id);
 CREATE TABLE IF NOT EXISTS audit (
@@ -178,7 +182,31 @@ func migrate(db *sql.DB) error {
 			}
 		}
 	}
-	return migrateAnalyses(db)
+	if err := migrateAnalyses(db); err != nil {
+		return err
+	}
+	return migrateRuns(db)
+}
+
+// migrateRuns adds the data set columns to runs made before 2026-10-15
+// evening. Runs already ended then have no data set.
+func migrateRuns(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('runs') WHERE name = 'dataset'`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	for _, q := range []string{
+		`ALTER TABLE runs ADD COLUMN dataset TEXT NOT NULL DEFAULT 'recording'`,
+		`ALTER TABLE runs ADD COLUMN dataset_bytes INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE runs ADD COLUMN dataset_note TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE runs ADD COLUMN summary TEXT NOT NULL DEFAULT '{}'`,
+		`UPDATE runs SET dataset = 'none', dataset_note = 'made before runs kept data sets' WHERE stopped IS NOT NULL OR (ends IS NOT NULL AND ends <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // migrateAnalyses turns analyses made under one stream (until 2026-10-14)

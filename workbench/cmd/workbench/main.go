@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -35,6 +36,7 @@ func main() {
 	var (
 		addr    = flag.String("addr", "127.0.0.1:8090", "HTTP listen address (behind the web server)")
 		dbPath  = flag.String("db", "workbench.db", "catalogue database file")
+		dataDir = flag.String("datasets", "", "directory of the runs' data sets (default: \"datasets\" next to the database)")
 		engAddr = flag.String("engine", env("LOW_ENGINE", "/run/listen-engine/control.sock"),
 			"the engine's control API: a Unix socket path, or http://127.0.0.1:port for development [env LOW_ENGINE]")
 		baseURL  = flag.String("base-url", env("LOW_BASE_URL", "http://low.home.arpa"), "address of the Workbench as members reach it, for links in mails [env LOW_BASE_URL]")
@@ -69,7 +71,13 @@ func main() {
 		log.Printf("no mail server set: login links and invitations are written to this log")
 	}
 
-	srv, err := web.New(web.Config{BaseURL: *baseURL}, db, engine.Dial(*engAddr), sender)
+	if *dataDir == "" {
+		*dataDir = filepath.Join(filepath.Dir(*dbPath), "datasets")
+	}
+	if err := os.MkdirAll(*dataDir, 0o750); err != nil {
+		log.Fatal(err)
+	}
+	srv, err := web.New(web.Config{BaseURL: *baseURL, DatasetDir: *dataDir}, db, engine.Dial(*engAddr), sender)
 	if err != nil {
 		log.Fatal(err)
 	}

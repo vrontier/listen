@@ -54,3 +54,4 @@
 <script src="{{asset "leaflet/leaflet.js"}}" defer></script>
 <script src="{{asset "mappicker.js"}}" defer></script>
 {{end}}
+{{define "dataset-link"}}{{if eq .Dataset "ready"}}<a href="/runs/{{.ID}}">data set</a> <span class="meta">{{bytes .DatasetBytes}}</span>{{else if eq .Dataset "recording"}}<a href="/runs/{{.ID}}">recording</a>{{else if eq .Dataset "freezing"}}<a href="/runs/{{.ID}}">being put together</a>{{else if eq .Dataset "failed"}}<a href="/runs/{{.ID}}">failed</a>{{else if eq .Dataset "deleted"}}<span class="meta">deleted</span>{{else}}<span class="meta">none</span>{{end}}{{end}}

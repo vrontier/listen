@@ -44,7 +44,7 @@ func newRig(t *testing.T) *rig {
 	r := &rig{t: t, db: db, mail: m, eng: e, engSrv: es}
 	ws := httptest.NewUnstartedServer(nil)
 	ws.Start()
-	r.srv, err = New(Config{BaseURL: ws.URL}, db, engine.NewClient(&http.Client{}, es.URL), m)
+	r.srv, err = New(Config{BaseURL: ws.URL, DatasetDir: t.TempDir()}, db, engine.NewClient(&http.Client{}, es.URL), m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,10 +247,44 @@ func TestMemberFlow(t *testing.T) {
 	id, _ := strconv.ParseInt(strings.TrimPrefix(aURL, "/analyses/"), 10, 64)
 	a, _ := r.db.Analysis(ctx, id)
 	cl := engine.NewClient(&http.Client{}, r.engSrv.URL)
+	// Outside a run the analysis is not in the engine, and there is no live
+	// view.
+	for _, st := range []catalogue.Stream{garden, hill} {
+		if _, err := cl.Analysis(ctx, st.EngineID(), a.EngineID()); !engine.IsCode(err, "not_found") {
+			t.Fatalf("engine analysis on %s before a run: %v", st.EngineID(), err)
+		}
+	}
+	if code, _, _ := r.get(member, aURL+"/live/"+g); code != http.StatusConflict {
+		t.Fatalf("live view outside a run: %d", code)
+	}
+	if strings.Contains(page, `class="spectrogram"`) || !strings.Contains(page, "Preview for 10 minutes") {
+		t.Fatal("analysis page outside a run")
+	}
+	// A preview is a second engine analysis that keeps nothing.
+	if code, _, _ := r.post(member, aURL+"/preview", url.Values{"csrf": {csrf}}); code != http.StatusSeeOther {
+		t.Fatalf("preview: %d", code)
+	}
+	pid := "p-" + a.EngineID()[2:]
+	if ea, err := cl.Analysis(ctx, garden.EngineID(), pid); err != nil || ea.Memory.Mode != "ram" {
+		t.Fatalf("preview in the engine: %v %+v", err, ea)
+	}
+	if _, err := cl.Analysis(ctx, garden.EngineID(), a.EngineID()); !engine.IsCode(err, "not_found") {
+		t.Fatalf("the analysis itself during a preview: %v", err)
+	}
+	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "Nothing is recorded") || !strings.Contains(page, `class="spectrogram"`) {
+		t.Fatal("analysis page during a preview")
+	}
+	// A run ends the preview and puts the analysis into the engine.
+	if code, _, _ := r.post(member, aURL+"/run", url.Values{"csrf": {csrf}, "length": {"0"}}); code != http.StatusSeeOther {
+		t.Fatalf("start: %d", code)
+	}
 	for _, st := range []catalogue.Stream{garden, hill} {
 		if _, err := cl.Analysis(ctx, st.EngineID(), a.EngineID()); err != nil {
-			t.Fatalf("engine analysis on %s: %v", st.EngineID(), err)
+			t.Fatalf("engine analysis on %s in a run: %v", st.EngineID(), err)
 		}
+	}
+	if _, err := cl.Analysis(ctx, garden.EngineID(), pid); !engine.IsCode(err, "not_found") {
+		t.Fatalf("preview kept in a run: %v", err)
 	}
 
 	// Live events of one source while the page reads them; the source page
@@ -307,12 +341,6 @@ func TestMemberFlow(t *testing.T) {
 		t.Fatalf("engine, second source: %+v", ea)
 	}
 
-	// Export names the source of every row.
-	code, page, hdr = r.get(member, aURL+"/export?format=csv")
-	if code != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "text/csv") || !strings.Contains(page, "source,timestamp,position_s,type") {
-		t.Fatalf("export: %d", code)
-	}
-
 	// Taking a source out makes revision 3 and removes its engine analysis.
 	if code, _, _ = r.post(member, aURL+"/settings", url.Values{"csrf": {csrf}, "source": {g}, pg + "memory_mode": {"disk"},
 		pg + "rule_count": {"1"}, pg + "rule_kind_0": {"comb"}, pg + "rule_hz_0": {"50"}}); code != http.StatusSeeOther {
@@ -346,6 +374,31 @@ func TestMemberFlow(t *testing.T) {
 	}
 	if entries, _ := r.db.AuditOf(ctx, "stream", garden.ID); len(entries) != 3 {
 		t.Fatalf("audit entries for the source: %d", len(entries))
+	}
+
+	// Stopping the run freezes its data set; then the analysis leaves the
+	// engine.
+	code, _, hdr = r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}})
+	if code != http.StatusSeeOther || !strings.HasPrefix(hdr.Get("Location"), "/runs/") {
+		t.Fatalf("stop: %d %s", code, hdr.Get("Location"))
+	}
+	r.srv.data.busy.Wait()
+	runURL := hdr.Get("Location")
+	if _, page, _ = r.get(member, runURL); !strings.Contains(page, `href="`+runURL+`/events.csv"`) || !strings.Contains(page, "Delete the data set") {
+		t.Fatalf("run page without its data set:\n%s", page)
+	}
+	code, page, hdr = r.get(member, runURL+"/events.csv")
+	if code != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "text/csv") || !strings.Contains(page, "source,timestamp,position_s,type") {
+		t.Fatalf("events of the run: %d", code)
+	}
+	if code, page, _ = r.get(member, runURL+"/dataset.json"); code != 200 || !json.Valid([]byte(page)) || !strings.Contains(page, `"revisions"`) {
+		t.Fatalf("data set JSON: %d %s", code, page)
+	}
+	if code, _, _ = r.get(admin, runURL); code != 404 {
+		t.Fatalf("admin sees a member's run: %d", code)
+	}
+	if _, err := cl.Analysis(ctx, garden.EngineID(), a.EngineID()); !engine.IsCode(err, "not_found") {
+		t.Fatalf("analysis kept in the engine after the run: %v", err)
 	}
 
 	// Deleting the analysis removes it from the engine.
@@ -411,11 +464,12 @@ func TestRunKeepsSourceConnected(t *testing.T) {
 	if code, _, _ := r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}}); code != http.StatusSeeOther {
 		t.Fatalf("stop: %d", code)
 	}
+	r.srv.data.busy.Wait()
 	if m := mode(); m != engine.OnDemand {
 		t.Fatalf("draft source after the run: %s", m)
 	}
 	_, page, _ = r.get(member, aURL)
-	if !strings.Contains(page, "Start a run") || !strings.Contains(page, "stopped by M") || !strings.Contains(page, "format=csv") {
+	if !strings.Contains(page, "Start a run") || !strings.Contains(page, "stopped by M") || !strings.Contains(page, ">data set</a>") {
 		t.Fatal("stopped run not listed")
 	}
 
@@ -431,7 +485,7 @@ func TestRunKeepsSourceConnected(t *testing.T) {
 	if !strings.Contains(page, "until stopped") || !strings.Contains(page, `name="back" value="runs"`) || !strings.Contains(page, "All your analyses are running") {
 		t.Fatal("runs page while running")
 	}
-	if code, _, hdr := r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}, "back": {"runs"}}); code != http.StatusSeeOther || hdr.Get("Location") != "/runs" {
+	if code, _, hdr := r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}, "back": {"runs"}}); code != http.StatusSeeOther || !strings.HasPrefix(hdr.Get("Location"), "/runs/") {
 		t.Fatalf("stop from the runs page: %d %s", code, hdr.Get("Location"))
 	}
 	other, _ := r.db.CreateUser(ctx, "o@example.org", "O", false)
@@ -491,19 +545,15 @@ func TestComparison(t *testing.T) {
 		}
 		return engine.Group{}, false
 	}
-	g, ok := group()
-	if !ok || len(g.Members) != 2 || g.Mode != engine.OnDemand || g.Label != "rev-1" || g.Members[0].Lat == nil {
-		t.Fatalf("group: %v %+v", ok, g)
+	if _, ok := group(); ok {
+		t.Fatal("group outside a run")
 	}
 
 	member := r.loginAs("m@example.org")
 	aURL := "/analyses/" + strconv.FormatInt(a.ID, 10)
 	_, page, _ := r.get(member, aURL)
-	if !strings.Contains(page, "compare.js") || !strings.Contains(page, `name="compare" value="activity" checked`) || !strings.Contains(page, "needs station time") {
-		t.Fatal("analysis page lacks the comparison")
-	}
-	if code, body, _ := r.get(member, aURL+"/compare/state"); code != 200 || !strings.Contains(body, `"group"`) {
-		t.Fatalf("compare state: %d %s", code, body)
+	if strings.Contains(page, "compare.js") || !strings.Contains(page, `name="compare" value="activity" checked`) || !strings.Contains(page, "needs station time") {
+		t.Fatal("analysis page outside a run")
 	}
 	csrf := csrfOf(t, page)
 	p0, p1 := prefixOf(ids[0]), prefixOf(ids[1])
@@ -518,16 +568,19 @@ func TestComparison(t *testing.T) {
 		t.Fatalf("no comparison chosen: %d", code)
 	}
 
-	// A run keeps the group going without a page.
+	// A run compares the sources, without a page open.
 	if code, _, _ := r.post(member, aURL+"/run", url.Values{"csrf": {csrf}, "length": {"1h"}}); code != http.StatusSeeOther {
 		t.Fatalf("start: %d", code)
 	}
-	if g, _ := group(); g.Mode != engine.Continuous {
-		t.Fatalf("group in a run: %s", g.Mode)
+	g, ok := group()
+	if !ok || len(g.Members) != 2 || g.Mode != engine.Continuous || g.Label != "rev-1" || g.Members[0].Lat == nil {
+		t.Fatalf("group in a run: %v %+v", ok, g)
 	}
-	r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}})
-	if g, _ := group(); g.Mode != engine.OnDemand {
-		t.Fatalf("group after the run: %s", g.Mode)
+	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "compare.js") {
+		t.Fatal("running analysis page lacks the comparison")
+	}
+	if code, body, _ := r.get(member, aURL+"/compare/state"); code != 200 || !strings.Contains(body, `"group"`) {
+		t.Fatalf("compare state: %d %s", code, body)
 	}
 
 	// Pausing one source leaves one running: the group goes, and the page
@@ -542,6 +595,20 @@ func TestComparison(t *testing.T) {
 	r.post(member, "/sources/"+streams[1].Slug+"/state", url.Values{"csrf": {csrf}, "to": {"resume"}})
 	if _, ok := group(); !ok {
 		t.Fatal("group not back after resuming")
+	}
+
+	// The end of the run ends the comparison, once the data set is made.
+	r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}})
+	r.srv.data.busy.Wait()
+	if _, ok := group(); ok {
+		t.Fatal("group kept after the run")
+	}
+	runs, _ := r.db.Runs(ctx, a.ID)
+	if len(runs) != 1 || runs[0].Dataset != catalogue.DatasetReady {
+		t.Fatalf("data set: %+v", runs)
+	}
+	if code, page, _ := r.get(member, "/runs/"+strconv.FormatInt(runs[0].ID, 10)+"/comparison.csv"); code != 200 || !strings.Contains(page, "type,timestamp,source,other_source") {
+		t.Fatalf("comparison of the run: %d", code)
 	}
 
 	// Taking a source out ends the comparison.
@@ -575,6 +642,9 @@ func TestReconcile(t *testing.T) {
 	cl := engine.NewClient(&http.Client{}, r.engSrv.URL)
 	// Something the catalogue does not know.
 	cl.PutStream(ctx, "s-9999", engine.StreamSpec{Input: "https://other.example.org/x", SampleRate: 22050})
+	if _, err := r.db.StartRun(ctx, a.ID, u.ID, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
 	if err := r.srv.sync.reconcile(ctx); err != nil {
 		t.Fatal(err)
 	}

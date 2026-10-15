@@ -71,10 +71,10 @@ func (a Analysis) Source(streamID int64) (AnalysisSource, bool) {
 
 // Revision is one saved version of an analysis's sources and settings.
 type Revision struct {
-	Revision  int
-	Spec      json.RawMessage
-	Created   time.Time
-	CreatedBy string
+	Revision  int             `json:"revision"`
+	Spec      json.RawMessage `json:"spec"`
+	Created   time.Time       `json:"created"`
+	CreatedBy string          `json:"created_by"`
 }
 
 func key(streamID int64) string { return strconv.FormatInt(streamID, 10) }

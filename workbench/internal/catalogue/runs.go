@@ -22,7 +22,25 @@ type Run struct {
 	Stopped      time.Time // zero while it runs
 	StoppedBy    string    // empty when it ended at its planned end
 	Revision     int       // the analysis's revision at the start
+
+	// The data set the run produced (design.md, Runs): recording while it
+	// runs, freezing at its end, then ready (or failed); deleted by its
+	// member; none for runs from before data sets.
+	Dataset      string
+	DatasetBytes int64
+	DatasetNote  string
+	Summary      json.RawMessage
 }
+
+// Data set states.
+const (
+	DatasetRecording = "recording"
+	DatasetFreezing  = "freezing"
+	DatasetReady     = "ready"
+	DatasetFailed    = "failed"
+	DatasetDeleted   = "deleted"
+	DatasetNone      = "none"
+)
 
 // Active reports whether the run is going on at t.
 func (r Run) Active(t time.Time) bool {
@@ -37,15 +55,18 @@ var ErrNoRun = errors.New("the analysis is not running")
 
 const runSelect = `SELECT r.id, r.analysis_id, an.name,
 	(SELECT count(*) FROM runs x WHERE x.analysis_id = r.analysis_id AND x.id <= r.id),
-	r.started, su.name, coalesce(r.ends, ''), coalesce(r.stopped, ''), coalesce(tu.name, ''), r.revision
+	r.started, su.name, coalesce(r.ends, ''), coalesce(r.stopped, ''), coalesce(tu.name, ''), r.revision,
+	r.dataset, r.dataset_bytes, r.dataset_note, r.summary
 	FROM runs r JOIN analyses an ON an.id = r.analysis_id JOIN users su ON su.id = r.started_by LEFT JOIN users tu ON tu.id = r.stopped_by `
 
 func scanRun(row interface{ Scan(...any) error }) (Run, error) {
 	var r Run
-	var started, ends, stopped string
-	if err := row.Scan(&r.ID, &r.AnalysisID, &r.AnalysisName, &r.Number, &started, &r.StartedBy, &ends, &stopped, &r.StoppedBy, &r.Revision); err != nil {
+	var started, ends, stopped, summary string
+	if err := row.Scan(&r.ID, &r.AnalysisID, &r.AnalysisName, &r.Number, &started, &r.StartedBy, &ends, &stopped, &r.StoppedBy, &r.Revision,
+		&r.Dataset, &r.DatasetBytes, &r.DatasetNote, &summary); err != nil {
 		return r, notFound(err)
 	}
+	r.Summary = json.RawMessage(summary)
 	r.Started, r.Ends, r.Stopped = parseStamp(started), parseStamp(ends), parseStamp(stopped)
 	return r, nil
 }
@@ -207,4 +228,55 @@ func closeEnded(ctx context.Context, tx *sql.Tx, now time.Time) error {
 		}
 	}
 	return nil
+}
+
+// Run returns one run.
+func (d *DB) Run(ctx context.Context, id int64) (Run, error) {
+	return scanRun(d.db.QueryRowContext(ctx, runSelect+`WHERE r.id = ?`, id))
+}
+
+// ActiveRuns lists the runs going on now, of every member.
+func (d *DB) ActiveRuns(ctx context.Context) ([]Run, error) {
+	return d.queryRuns(ctx, `WHERE `+activeWhere+` ORDER BY r.id`, stamp(d.now()))
+}
+
+// UnfrozenRuns lists ended runs whose data set is not finished: they ended
+// while the Workbench was down, or it stopped while freezing.
+func (d *DB) UnfrozenRuns(ctx context.Context) ([]Run, error) {
+	return d.queryRuns(ctx, `WHERE r.dataset IN ('recording', 'freezing') AND NOT (`+activeWhere+`) ORDER BY r.id`, stamp(d.now()))
+}
+
+// SetDataset records the state of a run's data set.
+func (d *DB) SetDataset(ctx context.Context, runID int64, state string, bytes int64, note string, summary json.RawMessage) error {
+	if summary == nil {
+		summary = json.RawMessage(`{}`)
+	}
+	_, err := d.db.ExecContext(ctx, `UPDATE runs SET dataset = ?, dataset_bytes = ?, dataset_note = ?, summary = ? WHERE id = ?`,
+		state, bytes, note, string(summary), runID)
+	return err
+}
+
+// DeleteDataset marks a run's data set deleted; the caller removes its
+// files. The run stays in the list.
+func (d *DB) DeleteDataset(ctx context.Context, runID, by int64) error {
+	now := d.now()
+	return d.tx(ctx, func(tx *sql.Tx) error {
+		var analysis, bytes int64
+		if err := tx.QueryRowContext(ctx, `SELECT analysis_id, dataset_bytes FROM runs WHERE id = ?`, runID).Scan(&analysis, &bytes); err != nil {
+			return notFound(err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE runs SET dataset = 'deleted', dataset_bytes = 0 WHERE id = ?`, runID); err != nil {
+			return err
+		}
+		before, _ := json.Marshal(map[string]any{"run": runID, "bytes": bytes})
+		return audit(ctx, tx, now, by, "analysis", analysis, "data set delete", string(before), "")
+	})
+}
+
+// DatasetBytesOf adds up the data sets of a member's analyses, which count
+// against their disk quota.
+func (d *DB) DatasetBytesOf(ctx context.Context, userID int64) (int64, error) {
+	var n int64
+	err := d.db.QueryRowContext(ctx, `SELECT coalesce(sum(r.dataset_bytes), 0) FROM runs r JOIN analyses an ON an.id = r.analysis_id WHERE an.owner_id = ?`, userID).Scan(&n)
+	return n, err
 }
