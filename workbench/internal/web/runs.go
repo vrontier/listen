@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/vrontier/listen-workbench/internal/catalogue"
@@ -116,6 +117,15 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request, a catalogue.An
 		s.redirect(w, r, back, "Not started: choose how long the run should last.")
 		return
 	}
+	offline := 0
+	if r.PostFormValue("offline_stop") == "on" {
+		n, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("offline_min")))
+		if err != nil || n < 1 || n > 1440 {
+			s.redirect(w, r, back, "Not started: give the minutes a source may send nothing, from 1 to 1440.")
+			return
+		}
+		offline = n
+	}
 	if why, err := s.capRefusal(r.Context(), sess.User.ID, a, true); err != nil || why != "" {
 		if err != nil {
 			s.fail(w, r, err)
@@ -128,7 +138,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request, a catalogue.An
 	if length > 0 {
 		ends = time.Now().UTC().Add(length)
 	}
-	if _, err := s.db.StartRun(r.Context(), a.ID, sess.User.ID, ends); err != nil {
+	if _, err := s.db.StartRunWith(r.Context(), a.ID, sess.User.ID, ends, offline); err != nil {
 		if errors.Is(err, catalogue.ErrRunActive) {
 			s.redirect(w, r, back, a.Name+" is already running.")
 			return

@@ -74,7 +74,8 @@ type newStreamData struct {
 	Input      string
 	Texts      textsForm
 	Audio      bool
-	Attest     bool
+	Attest     string // catalogue.AttestOwn or AttestOperator
+	Operator   string
 	Probe      *engine.ProbeResult
 	Rates      []int
 	SampleRate int
@@ -204,21 +205,26 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)
 	d := newStreamData{
 		Input: strings.TrimSpace(r.PostFormValue("input")), Texts: readTexts(r),
-		Audio: r.PostFormValue("audio") == "on", Attest: r.PostFormValue("attest") == "on",
-		Errs: map[string]string{},
+		Audio: r.PostFormValue("audio") == "on", Attest: r.PostFormValue("attest"),
+		Operator: strings.TrimSpace(r.PostFormValue("operator")),
+		Errs:     map[string]string{},
 	}
 	d.SampleRate, _ = strconv.Atoi(r.PostFormValue("sample_rate"))
-	if u, err := url.Parse(d.Input); err != nil || u.Scheme != "http" && u.Scheme != "https" || u.Host == "" || len(d.Input) > 500 {
+	input, ok := normalInput(d.Input)
+	if !ok {
 		d.Errs["input"] = "an http or https address of an audio stream"
 		d.Err = "Please check the stream's address."
 		s.render(w, r, 400, "source-new", "Register a source", d)
 		return
 	}
-	if existing, err := s.db.StreamByInput(r.Context(), d.Input); err == nil {
-		d.Existing = &existing
-		d.Err = "This stream is registered already."
-		s.render(w, r, 409, "source-new", "Register a source", d)
-		return
+	d.Input = input
+	for _, in := range []string{input, otherScheme(input)} {
+		if existing, err := s.db.StreamByInput(r.Context(), in); err == nil {
+			d.Existing = &existing
+			d.Err = "This stream is registered already."
+			s.render(w, r, 409, "source-new", "Register a source", d)
+			return
+		}
 	}
 
 	key := strconv.FormatInt(sess.User.ID, 10) + "\x00" + d.Input
@@ -279,7 +285,14 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	if !rateOK {
 		d.Errs["sample_rate"] = "choose one of the rates offered"
 	}
-	if !d.Attest {
+	switch d.Attest {
+	case catalogue.AttestOwn:
+		d.Operator = ""
+	case catalogue.AttestOperator:
+		if n := utf8.RuneCountInString(d.Operator); n < 3 || n > 200 {
+			d.Errs["operator"] = "the operator's name, and an email address or web page to reach them, up to 200 characters"
+		}
+	default:
 		d.Errs["attest"] = "required: rule 4 of the Workbench"
 	}
 	if len(d.Errs) > 0 {
@@ -290,7 +303,7 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	probe, _ := json.Marshal(p.result)
 	st, err := s.db.CreateStream(r.Context(), catalogue.NewStream{
 		OwnerID: sess.User.ID, Input: d.Input, SampleRate: d.SampleRate, Texts: d.Texts.StreamTexts, AudioAllowed: d.Audio,
-		Probe: probe,
+		Attestation: d.Attest, Operator: d.Operator, Probe: probe,
 	})
 	if errors.Is(err, catalogue.ErrDuplicateInput) {
 		d.Err = "This stream was registered a moment ago by someone else."
@@ -573,4 +586,42 @@ func (s *Server) streamUnshare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.redirect(w, r, "/sources/"+st.Slug, flash)
+}
+
+// normalInput writes a stream address the one way it is stored, so that
+// the obvious other spellings of a registered stream are recognised
+// (members-and-streams.md, Registering a stream): scheme and host in lower
+// case, no default port, no trailing slash, no fragment, which is never
+// sent to the server. Redirects are not followed. ok is false for anything
+// but an http or https address.
+func normalInput(s string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(s))
+	if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil || len(s) > 500 {
+		return "", false
+	}
+	u.Scheme = strings.ToLower(u.Scheme)
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", false
+	}
+	host, port := strings.ToLower(u.Hostname()), u.Port()
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	if port == "" || u.Scheme == "http" && port == "80" || u.Scheme == "https" && port == "443" {
+		u.Host = host
+	} else {
+		u.Host = host + ":" + port
+	}
+	u.Fragment, u.RawFragment = "", ""
+	u.Path = strings.TrimRight(u.Path, "/")
+	u.RawPath = strings.TrimRight(u.RawPath, "/")
+	return u.String(), true
+}
+
+// otherScheme is the same address over the other of http and https.
+func otherScheme(input string) string {
+	if rest, ok := strings.CutPrefix(input, "https://"); ok {
+		return "http://" + rest
+	}
+	return "https://" + strings.TrimPrefix(input, "http://")
 }

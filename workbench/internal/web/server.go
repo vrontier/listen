@@ -23,7 +23,9 @@ import (
 
 	"github.com/vrontier/listen-workbench/internal/catalogue"
 	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen-workbench/internal/llm"
 	"github.com/vrontier/listen-workbench/internal/mail"
+	"github.com/vrontier/listen-workbench/internal/secret"
 )
 
 //go:embed templates/*.html
@@ -44,6 +46,10 @@ type Config struct {
 	BaseURL    string // as visitors reach it, e.g. http://low.home.arpa
 	SiteName   string
 	DatasetDir string // where runs' data sets are kept; empty: none are
+	// Seal keeps members' language-model keys; nil: none can be saved.
+	Seal *secret.Box
+	// LLM checks a language-model key with its provider.
+	LLM *llm.Checker
 }
 
 // Server is the Workbench's web side.
@@ -60,6 +66,10 @@ type Server struct {
 	mux    *http.ServeMux
 	secure bool
 
+	keyChecks checkLimit
+	visitors  visitors
+	heard     heard
+
 	probesMu sync.Mutex
 	probes   map[string]probeEntry // "user\x00input"
 }
@@ -75,6 +85,9 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 		cfg.SiteName = "Listening Observatory Workbench"
 	}
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
+	if cfg.LLM == nil {
+		cfg.LLM = &llm.Checker{}
+	}
 	s := &Server{
 		cfg: cfg, db: db, eng: eng, mail: m,
 		sync: newEngineSync(eng, db), live: newFanout(eng),
@@ -110,6 +123,8 @@ func (s *Server) Start(ctx context.Context) {
 				return
 			case <-t.C:
 				s.endRuns(ctx)
+				s.watchRuns(ctx)
+				s.tellRunEnds(ctx)
 				s.endPreviews(ctx)
 				s.data.refresh(ctx)
 				s.measureMemories(ctx)
@@ -183,6 +198,10 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /account/tokens", s.member(s.tokensPage))
 	m.HandleFunc("POST /account/tokens", s.member(s.tokenCreate))
 	m.HandleFunc("POST /account/tokens/{token}/revoke", s.member(s.tokenRevoke))
+	m.HandleFunc("GET /account/keys", s.member(s.keysPage))
+	m.HandleFunc("POST /account/keys/{provider}", s.member(s.keySave))
+	m.HandleFunc("POST /account/keys/{provider}/check", s.member(s.keyCheck))
+	m.HandleFunc("POST /account/keys/{provider}/delete", s.member(s.keyDelete))
 
 	stream := func(h http.HandlerFunc) http.HandlerFunc { return s.bearer(catalogue.ScopeStream, h) }
 	m.HandleFunc("GET /api/v1/analyses", stream(s.apiAnalyses))
@@ -237,6 +256,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /admin/analyses/{id}/withdraw", s.admin(s.adminWithdraw))
 	m.HandleFunc("POST /admin/invitations", s.admin(s.adminInvite))
 	m.HandleFunc("POST /admin/cap", s.admin(s.adminCap))
+	m.HandleFunc("POST /admin/readers", s.admin(s.adminReaders))
 	m.HandleFunc("POST /admin/member-cap", s.admin(s.adminMemberCap))
 	m.HandleFunc("POST /admin/members/{user}/cap", s.admin(s.adminOneCap))
 	s.mux = m
@@ -291,6 +311,7 @@ var funcs = template.FuncMap{
 		}
 		return *t
 	},
+	"publicCoord": publicCoordText,
 }
 
 // staticVersion is a hash of the embedded static files. Pages refer to them

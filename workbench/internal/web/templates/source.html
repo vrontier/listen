@@ -74,7 +74,7 @@
     <label class="check"><input type="checkbox" name="audio" {{if .Stream.AudioAllowed}}checked{{end}}> Audio may be played in the browser</label>
     <button>Save</button>
   </form>
-  <p class="meta">Address: <code>{{.Stream.Input}}</code><br>Checked: {{.Probe.Codec}}, {{.Probe.SampleRate}} Hz, {{.Probe.BitrateKbps}} kbit/s. The address and the sample rate cannot be changed.</p>
+  <p class="meta">Address: <code>{{.Stream.Input}}</code><br>{{if eq .Stream.Attestation "own"}}Run by {{.Stream.OwnerName}}, as stated {{when .Stream.Attested}}.<br>{{else if eq .Stream.Attestation "operator"}}Run by {{.Stream.Operator}}, who agreed to its analysis here, as {{.Stream.OwnerName}} stated {{when .Stream.Attested}}.<br>{{end}}Checked: {{.Probe.Codec}}, {{.Probe.SampleRate}} Hz, {{.Probe.BitrateKbps}} kbit/s. The address and the sample rate cannot be changed.</p>
   {{end}}
 </section>
 </div>

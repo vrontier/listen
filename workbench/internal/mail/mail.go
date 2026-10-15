@@ -83,3 +83,16 @@ func (m *Memory) Last(to string) (Message, bool) {
 	}
 	return Message{}, false
 }
+
+// Count is the number of messages to an address.
+func (m *Memory) Count(to string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, s := range m.Sent {
+		if strings.EqualFold(s.To, to) {
+			n++
+		}
+	}
+	return n
+}

@@ -18,6 +18,7 @@
       <a href="/library">Library</a>
       <a href="/account/usage">Usage</a>
       <a href="/account/tokens">Tokens</a>
+      <a href="/account/keys">Keys</a>
       {{if .User.Admin}}<a href="/admin">Admin</a>{{end}}
       <span class="who">{{.User.Name}}</span>
       <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link">Log out</button></form>
@@ -73,7 +74,7 @@
   {{range .Sources}}
   <article class="card">
     <h3>{{.Stream.Texts.Name}}</h3>
-    <p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz{{if ne .Stream.OwnerID $.Analysis.OwnerID}} · run by {{.Stream.OwnerName}}{{end}}</p>
+    <p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{if and .Stream.Texts.Lat .Stream.Texts.Lon}}near {{publicCoord .Stream.Texts.Lat}}, {{publicCoord .Stream.Texts.Lon}} · {{end}}{{.Stream.SampleRate}} Hz{{if ne .Stream.OwnerID $.Analysis.OwnerID}} · run by {{.Stream.OwnerName}}{{end}}</p>
     {{if .Stream.Texts.Description}}<p>{{.Stream.Texts.Description}}</p>{{end}}
     {{if or .Stream.Texts.Credit .Stream.Texts.CreditURL}}<p class="meta">Credit: {{.Stream.Texts.Credit}}{{with .Stream.Texts.CreditURL}} · <a href="{{.}}" rel="noopener nofollow">{{.}}</a>{{end}}</p>{{end}}
     <p>Analysed: {{.Settings}}. {{if .Rules}}Filter rules, which remove spectral peaks at known interference before resonances and motifs are derived from them:{{else}}No filter rules: nothing is left out.{{end}}</p>
@@ -95,3 +96,5 @@
   {{else}}<p class="meta">No run has finished yet.</p>{{end}}
 </section>
 {{end}}
+{{define "run-options"}}<label class="check"><input type="checkbox" name="offline_stop" checked> Stop when a source sends nothing for</label> <input name="offline_min" value="15" inputmode="numeric" size="3" aria-label="minutes a source may send nothing"> min{{end}}
+{{define "run-options-note"}}<p class="meta small">A run's analysis is off once a source stops sending, so the run stops then, with a note in its data set. A run whose sources all send nothing for 15 minutes always stops. You get a mail whenever a run ends without your stopping it.</p>{{end}}

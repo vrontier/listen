@@ -47,3 +47,4 @@ deploy/local.mk
 
 # Local MCP servers; they name hosts
 .mcp.json
+.playwright-mcp/

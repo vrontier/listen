@@ -12,7 +12,7 @@
 {{with .Run}}
   <form method="post" action="/analyses/{{$d.Analysis.ID}}/stop" class="inline-form">
     <input type="hidden" name="csrf" value="{{$csrf}}">
-    <span class="run-on">Run {{.Number}} since {{when .Started}}, {{if .Ends.IsZero}}until stopped{{else}}until {{when .Ends}}{{end}}.</span>
+    <span class="run-on">Run {{.Number}} since {{when .Started}}, {{if .Ends.IsZero}}until stopped{{else}}until {{when .Ends}}{{end}}{{if .OfflineStop}}, or until a source sends nothing for {{.OfflineStop}} min{{end}}.</span>
     <button class="secondary">Stop the run</button>
   </form>
   <p class="meta">The sources stay connected while the run lasts, whether or not this page is open. What it finds goes into the run's data set.{{range $d.Sources}}{{if not .Running}} {{.Stream.Texts.Name}} is {{.Stream.State}} and does not run.{{end}}{{end}}</p>
@@ -28,6 +28,7 @@
   <form method="post" action="/analyses/{{$d.Analysis.ID}}/run" class="inline-form">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <label>Run <select name="length">{{range $d.RunLengths}}<option value="{{.Value}}" {{if eq .Value "24h"}}selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+    {{template "run-options"}}
     <button>Start a run</button>
   </form>
   {{if $d.Preview.IsZero}}
@@ -44,6 +45,7 @@
   </div>
   {{if $d.Preview.IsZero}}
   <p class="meta">Not running. A run connects the sources and records what the analysis finds into a data set; a preview shows them live for ten minutes and records nothing.</p>
+  {{template "run-options-note"}}
   {{else}}
   <p class="preview-on">Preview until {{clock $d.Preview}} UTC. Nothing is recorded: motifs are learned in memory and forgotten, and the analysis's own memory is not touched.</p>
   {{end}}

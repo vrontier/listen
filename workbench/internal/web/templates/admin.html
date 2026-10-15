@@ -56,8 +56,8 @@
       <button class="secondary">Set</button>{{if .OwnCap}} <button class="link" name="default" value="1">default</button>{{else}} <span class="meta">default</span>{{end}}
     </form></td></tr>{{end}}</tbody></table>
   <h3>Streams</h3>
-  <table><thead><tr><th>Name</th><th>Owner</th><th>State</th></tr></thead>
-  <tbody>{{range .Streams}}<tr><td>{{.Texts.Name}}</td><td>{{.OwnerName}}</td><td>{{.State}}</td></tr>{{end}}</tbody></table>
+  <table><thead><tr><th>Name</th><th>Owner</th><th>Run by</th><th>State</th></tr></thead>
+  <tbody>{{range .Streams}}<tr><td>{{.Texts.Name}}</td><td>{{.OwnerName}}</td><td>{{if eq .Attestation "own"}}the owner{{else if eq .Attestation "operator"}}{{.Operator}}{{else}}<span class="meta">not asked</span>{{end}}</td><td>{{.State}}</td></tr>{{end}}</tbody></table>
 </section>
 </div>
 <section>
@@ -73,6 +73,12 @@
   <tbody>{{range .Published}}<tr><td><a href="/research/{{.Slug}}">{{.Name}}</a></td><td>{{.OwnerName}}</td><td>{{when .Published}}</td>
     <td><form method="post" action="/admin/analyses/{{.ID}}/withdraw" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input name="reason" placeholder="reason, sent to the member" size="24" aria-label="Reason"><button class="link">withdraw</button></form></td></tr>{{end}}</tbody></table>
   {{else}}<p class="meta">Nothing is published.</p>{{end}}
+  <form method="post" action="/admin/readers" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Visitors who may watch one published analysis live at once <input name="readers" value="{{.Readers}}" inputmode="numeric" size="6"></label>
+    <button>Save</button>
+  </form>
+  <p class="meta">Counted by address: one visitor with several live views open counts once. Others are told to come back later; the page itself, its runs and data sets stay open to everyone.</p>
 </section>
 <section>
   <h2>Audit log</h2>

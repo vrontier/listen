@@ -32,6 +32,7 @@ type adminData struct {
 	DayMax      float64
 	Reports     []catalogue.Report
 	Published   []catalogue.Analysis
+	Readers     int    // visitors who may read one published analysis live at once
 	Link        string // a just-made invitation link, shown once
 	Err         string
 }
@@ -66,6 +67,9 @@ func (s *Server) adminData(r *http.Request) (adminData, error) {
 		return d, err
 	}
 	if d.Published, err = s.db.PublishedAnalyses(r.Context()); err != nil {
+		return d, err
+	}
+	if d.Readers, err = s.db.PublicReaders(r.Context()); err != nil {
 		return d, err
 	}
 	d.EngineReady, d.EngineNote, d.EngineInfo = s.sync.status()
@@ -258,4 +262,20 @@ func (s *Server) adminCap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.redirect(w, r, "/admin", "Server cap saved.")
+}
+
+// adminReaders sets how many visitors may read one published analysis live
+// at once.
+func (s *Server) adminReaders(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	n, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("readers")))
+	if err != nil || n < 1 || n > 10000 {
+		s.redirect(w, r, "/admin", "Not saved: give a whole number of visitors from 1 to 10000.")
+		return
+	}
+	if err := s.db.SetPublicReaders(r.Context(), sess.User.ID, n); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.redirect(w, r, "/admin", "Saved: "+strconv.Itoa(n)+" visitors may read one published analysis live at once.")
 }

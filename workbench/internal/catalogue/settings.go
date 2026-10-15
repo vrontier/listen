@@ -98,3 +98,40 @@ func (d *DB) MemberCap(ctx context.Context, userID int64) (ServerCap, bool, erro
 func (d *DB) SetMemberCap(ctx context.Context, by, userID int64, c *ServerCap) error {
 	return d.setCapAt(ctx, by, memberKey(userID), "member cap of "+strconv.FormatInt(userID, 10), c)
 }
+
+const keyPublicReaders = "public_readers"
+
+// DefaultPublicReaders is how many visitors may read one published
+// analysis live at once until the master admin sets another number
+// (members-and-streams.md, Of an analysis).
+const DefaultPublicReaders = 50
+
+// PublicReaders is how many visitors may read one published analysis live
+// at once.
+func (d *DB) PublicReaders(ctx context.Context) (int, error) {
+	var v string
+	err := d.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, keyPublicReaders).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return DefaultPublicReaders, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(v)
+}
+
+// SetPublicReaders sets how many visitors may read one published analysis
+// live at once.
+func (d *DB) SetPublicReaders(ctx context.Context, by int64, n int) error {
+	now := d.now()
+	return d.tx(ctx, func(tx *sql.Tx) error {
+		old := strconv.Itoa(DefaultPublicReaders)
+		tx.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, keyPublicReaders).Scan(&old)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value, updated, updated_by) VALUES (?, ?, ?, ?)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated = excluded.updated, updated_by = excluded.updated_by`,
+			keyPublicReaders, strconv.Itoa(n), stamp(now), by); err != nil {
+			return err
+		}
+		return audit(ctx, tx, now, by, "setting", 0, "public readers", old, strconv.Itoa(n))
+	})
+}

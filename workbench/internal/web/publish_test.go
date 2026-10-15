@@ -64,8 +64,8 @@ func TestPublishing(t *testing.T) {
 	if code != 200 || !strings.Contains(page, "By Ann") || !strings.Contains(page, "Ridge station") || !strings.Contains(page, "run by Bob") || !strings.Contains(page, "No filter rules") {
 		t.Fatalf("public page: %d", code)
 	}
-	if strings.Contains(page, "s.example.org") || strings.Contains(page, "50.12345") {
-		t.Fatal("address or coordinates on the public page")
+	if strings.Contains(page, "s.example.org") || strings.Contains(page, "50.12345") || !strings.Contains(page, "near 50.1, 10.5") {
+		t.Fatal("address or exact coordinates on the public page, or not the rounded ones")
 	}
 	if _, page, _ = r.get(visitor, "/research"); !strings.Contains(page, "Dawn chorus") || !strings.Contains(page, `href="/research"`) {
 		t.Fatal("not in the index, or Research not in the menu")
@@ -79,6 +79,23 @@ func TestPublishing(t *testing.T) {
 	r.srv.pushAll(ctx, a.Sources)
 	if _, page, _ = r.get(visitor, "/research/dawn-chorus"); !strings.Contains(page, `data-live="/research/dawn-chorus/live/`) {
 		t.Fatal("no live view in a run")
+	}
+	if !strings.Contains(page, `data-lat="50.1" data-lon="10.5"`) || strings.Contains(page, "50.12345") {
+		t.Fatal("the map's places are not rounded")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		code, body, _ := r.get(visitor, "/research/dawn-chorus/compare/state")
+		if code == 200 {
+			if strings.Contains(body, "50.12345") || !strings.Contains(body, `"lat":50.1`) {
+				t.Fatalf("comparison state not rounded: %.300s", body)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("comparison state: %d", code)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	if code, _, _ := r.get(visitor, "/research/dawn-chorus/data/"+strconv.FormatInt(sa.ID, 10)+"/state"); code != 200 {
 		t.Fatalf("state: %d", code)

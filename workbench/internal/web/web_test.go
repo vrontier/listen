@@ -196,7 +196,11 @@ func TestMemberFlow(t *testing.T) {
 	if code, page, _ = r.post(member, "/sources/new", form); code != 400 || !strings.Contains(page, "rule 4") {
 		t.Fatalf("save without attestation: %d", code)
 	}
-	form.Set("attest", "on")
+	form.Set("attest", "operator")
+	if code, page, _ = r.post(member, "/sources/new", form); code != 400 || !strings.Contains(page, "an email address or web page to reach them, up to") {
+		t.Fatalf("save without the operator: %d", code)
+	}
+	form.Set("operator", "Garden Club, radio@example.org")
 	form.Set("coords", "49.4, 200")
 	if code, page, _ = r.post(member, "/sources/new", form); code != 400 || !strings.Contains(page, "decimal degrees") {
 		t.Fatalf("bad coordinates: %d", code)
@@ -210,22 +214,31 @@ func TestMemberFlow(t *testing.T) {
 	if garden.Texts.Lat == nil || *garden.Texts.Lat != 50.12345 || *garden.Texts.Lon != 10.54321 {
 		t.Fatalf("coordinates not stored: %+v", garden.Texts)
 	}
+	if garden.Attestation != catalogue.AttestOperator || garden.Operator != "Garden Club, radio@example.org" {
+		t.Fatalf("attestation not stored: %q %q", garden.Attestation, garden.Operator)
+	}
 	_, page, _ = r.get(member, "/sources/garden-mic")
+	if !strings.Contains(page, "Run by Garden Club") {
+		t.Fatal("the operator is not on the source page")
+	}
 	if !strings.Contains(page, `value="50.12345, 10.54321"`) || !strings.Contains(page, "map-picker") || !strings.Contains(page, "No analysis uses this source yet") {
 		t.Fatal("source page")
 	}
 
-	// A second registration of the same address is pointed to the source.
+	// A second registration of the same address, in another spelling, is
+	// pointed to the source.
 	_, apage, _ := r.get(admin, "/sources/new")
-	if code, page, _ = r.post(admin, "/sources/new", url.Values{"csrf": {csrfOf(t, apage)}, "input": {input}, "action": {"probe"}}); code != http.StatusConflict || !strings.Contains(page, "registered by Researcher") {
-		t.Fatalf("duplicate: %d", code)
+	for _, other := range []string{input, "http://Stream.Example.org:80/live.ogg/", "HTTPS://stream.example.org:443/live.ogg#x"} {
+		if code, page, _ = r.post(admin, "/sources/new", url.Values{"csrf": {csrfOf(t, apage)}, "input": {other}, "action": {"probe"}}); code != http.StatusConflict || !strings.Contains(page, "registered by Researcher") {
+			t.Fatalf("duplicate %s: %d", other, code)
+		}
 	}
 
 	// A second source.
 	input2 := "https://second.example.org/live.ogg"
 	r.post(member, "/sources/new", url.Values{"csrf": {csrf}, "input": {input2}, "action": {"probe"}})
 	if code, _, _ := r.post(member, "/sources/new", url.Values{"csrf": {csrf}, "input": {input2}, "action": {"save"}, "sample_rate": {"32000"},
-		"name": {"Hill Receiver"}, "timezone": {"UTC"}, "attest": {"on"}}); code != http.StatusSeeOther {
+		"name": {"Hill Receiver"}, "timezone": {"UTC"}, "attest": {"own"}}); code != http.StatusSeeOther {
 		t.Fatalf("second source: %d", code)
 	}
 	hill, _ := r.db.StreamBySlug(ctx, "hill-receiver")

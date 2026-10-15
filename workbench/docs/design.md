@@ -222,7 +222,10 @@ This replaces the earlier drafts in which an analysis was made under a stream, a
 - **A run ends at its planned end on its own**, checked every 30 seconds; the audit trail records start, stop, end and the deletion of a data set.
 - **In the engine** a run needs nothing new: the analysis is put in, and the stream is put with `mode` `continuous` instead of `on_demand` ([control-api.md](control-api.md#streams)). When the run ends, the analysis is taken out once the data set is made, and the stream goes back to `on_demand`.
 - **Caps.** A run reserves its sources' and analyses' cost for its length, as in [Resources and caps](members-and-streams.md#resources-and-caps). Starting a run whose reservation would exceed a cap is refused. Not enforced yet, like the caps themselves.
-- **Open:** whether a run should end by itself when a source has been offline for a long time, and whether a member is told by mail when a run ends.
+- **Decided** (2026-10-15): a run ends by itself when its sources stop sending, because the analysis is off from then on. A switch in the run's setup: "stop the run when a source has sent nothing for N minutes", N 15 by default. Independently of the switch, a run whose sources have all sent nothing for 15 minutes always stops. The data set notes why the run ended. **Proposed:** the switch is on when the setup opens.
+- **Decided** (2026-10-15): the member gets one short mail when a run ends. **Proposed:** not when they stopped it themselves.
+- **Decided** (2026-10-15): when the disk quota is full, running analyses keep writing until their run ends; at 110 % of the quota a run ends early, with a note in its data set and the mail.
+- **Built** (2026-10-15), **proposed** in its detail: the switch and its minutes (1 to 1440) sit next to the run's length on the analysis page and the Runs page, and the run page shows them. Every 30 s the Workbench reads each source's last audio from the engine; time before the run's start does not count, so a source that never connects stops the run after the minutes set. Nothing is checked while the engine itself is unreachable. A run that ends by itself keeps why (`planned`, `offline`, `silent`, `disk`) and a note in words, shown on its pages and written into its data set (`ended_because`, `end_note`, `offline_stop_min`). The mail goes once per run, also for a planned end; runs ended before this was built are not mailed about.
 
 ## What the engine must learn first
 
@@ -363,7 +366,9 @@ The detail is in [groups.md](groups.md#open).
 
 22. **The name:** "group", "comparison" or "study"?
     - **Decided** (2026-10-14): none of them. It is an analysis with several sources; see [Analyses and sources](#analyses-and-sources). "Group" remains the engine's term.
-23. **The first goal** (open): side-by-side activity first (possible on wall time), or straight to the coincidence analysis of VLF stations (needs station time)?
-24. **Where the group service runs** (open): inside the engine process or as a separate process fed by it. The engine session's choice; the control API does not depend on it.
+23. **The first goal:** side-by-side activity first (possible on wall time), or straight to the coincidence analysis of VLF stations (needs station time)?
+    - **Decided** (2026-10-15): side-by-side activity on wall time first. Before `clock` and `coincidence` are built, a small test in the engine session reads the station time from one real stream, to find out whether a relay passes the stations' timestamps on and how accurate they are.
+24. **Where the group service runs:** inside the engine process or as a separate process fed by it.
+    - **Decided** (2026-10-15): inside the engine process, as a module of its own. It already holds every analysis's events, so no transport and no second process are needed. The control API does not depend on it, so it can still be moved out if group analyses ever need a machine of their own.
 
 Further questions that concern accounts, streams and limits are in [members-and-streams.md](members-and-streams.md#questions-and-answers).

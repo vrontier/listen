@@ -22,6 +22,14 @@ type Run struct {
 	Stopped      time.Time // zero while it runs
 	StoppedBy    string    // empty when it ended at its planned end
 	Revision     int       // the analysis's revision at the start
+	// OfflineStop is how many minutes a source may send nothing before the
+	// run stops by itself; 0: it does not (design.md, Runs).
+	OfflineStop int
+	// EndReason is why the run ended by itself: EndPlanned, EndOffline,
+	// EndSilent or EndDisk; empty while it runs or when its member stopped
+	// it. EndNote says it in words.
+	EndReason string
+	EndNote   string
 
 	// The data set the run produced (design.md, Runs): recording while it
 	// runs, freezing at its end, then ready (or failed); deleted by its
@@ -42,6 +50,22 @@ const (
 	DatasetNone      = "none"
 )
 
+// Why a run ended by itself.
+const (
+	EndPlanned = "planned" // it reached its planned end
+	EndOffline = "offline" // a source sent nothing for its OfflineStop
+	EndSilent  = "silent"  // no source sent anything for SilentStop
+	EndDisk    = "disk"    // its member's data went over the disk quota
+)
+
+// DefaultOfflineStop is the run setup's default for OfflineStop, in
+// minutes; SilentStop ends any run whose sources all sent nothing for that
+// long (design.md, Runs).
+const (
+	DefaultOfflineStop = 15
+	SilentStop         = 15 * time.Minute
+)
+
 // Active reports whether the run is going on at t.
 func (r Run) Active(t time.Time) bool {
 	return r.Stopped.IsZero() && (r.Ends.IsZero() || t.Before(r.Ends))
@@ -56,14 +80,14 @@ var ErrNoRun = errors.New("the analysis is not running")
 const runSelect = `SELECT r.id, r.analysis_id, an.name,
 	(SELECT count(*) FROM runs x WHERE x.analysis_id = r.analysis_id AND x.id <= r.id),
 	r.started, su.name, coalesce(r.ends, ''), coalesce(r.stopped, ''), coalesce(tu.name, ''), r.revision,
-	r.dataset, r.dataset_bytes, r.dataset_note, r.summary
+	r.dataset, r.dataset_bytes, r.dataset_note, r.summary, r.offline_stop, r.end_reason, r.end_note
 	FROM runs r JOIN analyses an ON an.id = r.analysis_id JOIN users su ON su.id = r.started_by LEFT JOIN users tu ON tu.id = r.stopped_by `
 
 func scanRun(row interface{ Scan(...any) error }) (Run, error) {
 	var r Run
 	var started, ends, stopped, summary string
 	if err := row.Scan(&r.ID, &r.AnalysisID, &r.AnalysisName, &r.Number, &started, &r.StartedBy, &ends, &stopped, &r.StoppedBy, &r.Revision,
-		&r.Dataset, &r.DatasetBytes, &r.DatasetNote, &summary); err != nil {
+		&r.Dataset, &r.DatasetBytes, &r.DatasetNote, &summary, &r.OfflineStop, &r.EndReason, &r.EndNote); err != nil {
 		return r, notFound(err)
 	}
 	r.Summary = json.RawMessage(summary)
@@ -119,8 +143,15 @@ func (d *DB) StreamInRun(ctx context.Context, streamID int64) (bool, error) {
 	return n > 0, err
 }
 
-// StartRun starts a run of an analysis; a zero ends runs until stopped.
+// StartRun starts a run of an analysis that stops when a source sends
+// nothing for DefaultOfflineStop minutes; a zero ends runs until stopped.
 func (d *DB) StartRun(ctx context.Context, analysisID, by int64, ends time.Time) (Run, error) {
+	return d.StartRunWith(ctx, analysisID, by, ends, DefaultOfflineStop)
+}
+
+// StartRunWith starts a run; offlineStop is in minutes, 0 for no stop when
+// a source sends nothing.
+func (d *DB) StartRunWith(ctx context.Context, analysisID, by int64, ends time.Time, offlineStop int) (Run, error) {
 	now := d.now()
 	var id int64
 	err := d.tx(ctx, func(tx *sql.Tx) error {
@@ -141,13 +172,13 @@ func (d *DB) StartRun(ctx context.Context, analysisID, by int64, ends time.Time)
 		if !ends.IsZero() {
 			endsVal = stamp(ends)
 		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO runs (analysis_id, started, started_by, ends, revision) VALUES (?, ?, ?, ?, ?)`,
-			analysisID, stamp(now), by, endsVal, rev)
+		res, err := tx.ExecContext(ctx, `INSERT INTO runs (analysis_id, started, started_by, ends, revision, offline_stop) VALUES (?, ?, ?, ?, ?, ?)`,
+			analysisID, stamp(now), by, endsVal, rev, offlineStop)
 		if err != nil {
 			return err
 		}
 		id, _ = res.LastInsertId()
-		after, _ := json.Marshal(map[string]any{"run": id, "ends": endsVal, "revision": rev})
+		after, _ := json.Marshal(map[string]any{"run": id, "ends": endsVal, "revision": rev, "offline_stop_min": offlineStop})
 		return audit(ctx, tx, now, by, "analysis", analysisID, "run start", "", string(after))
 	})
 	if err != nil {
@@ -171,7 +202,8 @@ func (d *DB) StopRun(ctx context.Context, analysisID, by int64) error {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE runs SET stopped = ?, stopped_by = ? WHERE id = ?`, stamp(now), by, id); err != nil {
+		// Stopped by its member: nobody needs telling.
+		if _, err := tx.ExecContext(ctx, `UPDATE runs SET stopped = ?, stopped_by = ?, mailed = ? WHERE id = ?`, stamp(now), by, stamp(now), id); err != nil {
 			return err
 		}
 		after, _ := json.Marshal(map[string]any{"run": id})
@@ -219,7 +251,7 @@ func closeEnded(ctx context.Context, tx *sql.Tx, now time.Time) error {
 	}
 	rows.Close()
 	for _, e := range es {
-		if _, err := tx.ExecContext(ctx, `UPDATE runs SET stopped = ends WHERE id = ?`, e.id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE runs SET stopped = ends, end_reason = ?, end_note = 'it reached its planned end' WHERE id = ?`, EndPlanned, e.id); err != nil {
 			return err
 		}
 		after, _ := json.Marshal(map[string]any{"run": e.id, "at": e.ends})
@@ -279,4 +311,40 @@ func (d *DB) DatasetBytesOf(ctx context.Context, userID int64) (int64, error) {
 	var n int64
 	err := d.db.QueryRowContext(ctx, `SELECT coalesce(sum(r.dataset_bytes), 0) FROM runs r JOIN analyses an ON an.id = r.analysis_id WHERE an.owner_id = ?`, userID).Scan(&n)
 	return n, err
+}
+
+// EndRun ends a run by itself, for a reason other than its planned end,
+// before that end. It returns false when the run had ended already.
+func (d *DB) EndRun(ctx context.Context, runID int64, reason, note string) (bool, error) {
+	now := d.now()
+	ended := false
+	err := d.tx(ctx, func(tx *sql.Tx) error {
+		var analysis int64
+		err := tx.QueryRowContext(ctx, `SELECT analysis_id FROM runs WHERE id = ? AND stopped IS NULL AND (ends IS NULL OR ends > ?)`, runID, stamp(now)).Scan(&analysis)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE runs SET stopped = ?, end_reason = ?, end_note = ? WHERE id = ?`, stamp(now), reason, note, runID); err != nil {
+			return err
+		}
+		ended = true
+		after, _ := json.Marshal(map[string]any{"run": runID, "reason": reason, "note": note})
+		return audit(ctx, tx, now, 0, "analysis", analysis, "run end", "", string(after))
+	})
+	return ended, err
+}
+
+// UntoldRuns lists the runs that ended by themselves and whose member has
+// not been told yet.
+func (d *DB) UntoldRuns(ctx context.Context) ([]Run, error) {
+	return d.queryRuns(ctx, `WHERE r.mailed IS NULL AND r.stopped IS NOT NULL ORDER BY r.id`)
+}
+
+// NoteRunTold records that a run's member was told it ended.
+func (d *DB) NoteRunTold(ctx context.Context, runID int64) error {
+	_, err := d.db.ExecContext(ctx, `UPDATE runs SET mailed = ? WHERE id = ?`, stamp(d.now()), runID)
+	return err
 }

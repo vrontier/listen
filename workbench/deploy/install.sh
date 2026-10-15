@@ -57,6 +57,13 @@ LOW_BASE_URL=$SCHEME://$HOST
 EOF
 fi
 sed -i "s#^LOW_BASE_URL=.*#LOW_BASE_URL=$SCHEME://$HOST#" "$ENV"
+# The sealing key of members' language-model keys, made here once. Without
+# it the keys saved so far cannot be opened: keep it with the backups of
+# the catalogue, but apart from them.
+if ! grep -q '^LOW_KEYS_SECRET=' "$ENV"; then
+	say "creating the sealing key of language-model keys in $ENV"
+	echo "LOW_KEYS_SECRET=$(openssl rand -base64 32)" >> "$ENV"
+fi
 chown root:low "$ENV"
 chmod 0640 "$ENV"
 

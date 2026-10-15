@@ -11,7 +11,8 @@
 
 <table class="facts">
   <tr><th>Started</th><td>{{when .Run.Started}} by {{.Run.StartedBy}}</td></tr>
-  <tr><th>{{if .Run.Active}}Until{{else}}Ended{{end}}</th><td>{{if .Run.Active}}{{if .Run.Ends.IsZero}}it is stopped{{else}}{{when .Run.Ends}}{{end}}{{else if not .Run.Stopped.IsZero}}{{when .Run.Stopped}}{{if .Run.StoppedBy}}, stopped by {{.Run.StoppedBy}}{{else}}, as planned{{end}}{{else}}{{when .Run.Ends}}, as planned{{end}}</td></tr>
+  <tr><th>{{if .Run.Active}}Until{{else}}Ended{{end}}</th><td>{{if .Run.Active}}{{if .Run.Ends.IsZero}}it is stopped{{else}}{{when .Run.Ends}}{{end}}{{else if not .Run.Stopped.IsZero}}{{when .Run.Stopped}}{{if .Run.StoppedBy}}, stopped by {{.Run.StoppedBy}}{{else if and .Run.EndNote (ne .Run.EndReason "planned")}}, by itself: {{.Run.EndNote}}{{else}}, as planned{{end}}{{else}}{{when .Run.Ends}}, as planned{{end}}</td></tr>
+  <tr><th>Stops</th><td>{{if .Run.OfflineStop}}when a source sends nothing for {{.Run.OfflineStop}} min{{else}}when all its sources send nothing for 15 min{{end}}</td></tr>
   <tr><th>Length</th><td>{{.Run.Duration}}{{if .Run.Active}} so far{{end}}</td></tr>
   <tr><th>Revisions</th><td>rev-{{.Run.Revision}}{{if ne .Run.RevTo .Run.Revision}} to rev-{{.Run.RevTo}}{{end}}</td></tr>
 </table>

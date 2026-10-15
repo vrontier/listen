@@ -559,7 +559,7 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 		head, _ := json.Marshal(map[string]any{
 			"analysis": map[string]any{"title": a.Name, "description": a.Description},
 			"run": map[string]any{"number": run.Number, "started": run.Started, "ended": end, "started_by": run.StartedBy, "stopped_by": run.StoppedBy,
-				"revision_at_start": run.Revision},
+				"revision_at_start": run.Revision, "offline_stop_min": run.OfflineStop, "ended_because": run.EndReason, "end_note": run.EndNote},
 			"revisions": used,
 			"time":      "wall time at the engine: the sources are aligned to a few seconds, not to their stations' clocks",
 		})

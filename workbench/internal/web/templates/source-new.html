@@ -57,8 +57,13 @@
       <label>Credit link {{with index .Errs "credit_url"}}<span class="field-error">{{.}}</span>{{end}}
         <input name="credit_url" value="{{.Texts.CreditURL}}" placeholder="https://"></label>
     </div>
-    <label class="check"><input type="checkbox" name="attest" {{if .Attest}}checked{{end}}> I run this stream, or its operator has explicitly agreed to its analysis here.</label>
-    {{with index .Errs "attest"}}<span class="field-error">{{.}}</span>{{end}}
+    <fieldset>
+      <legend>Who allows its analysis here {{with index .Errs "attest"}}<span class="field-error">{{.}}</span>{{end}}</legend>
+      <label class="check"><input type="radio" name="attest" value="own" {{if eq .Attest "own"}}checked{{end}}> I run this stream myself.</label>
+      <label class="check"><input type="radio" name="attest" value="operator" {{if eq .Attest "operator"}}checked{{end}}> Someone else runs it, and they have explicitly agreed to its analysis here.</label>
+      <label>Operator {{with index .Errs "operator"}}<span class="field-error">{{.}}</span>{{end}}<small>if someone else runs it: their name, and an email address or web page to reach them. Kept with your statement and the time, shown only to you and the master admin; it is where a takedown request starts.</small>
+        <input name="operator" value="{{.Operator}}" maxlength="200"></label>
+    </fieldset>
     <label class="check"><input type="checkbox" name="audio" {{if .Audio}}checked{{end}}> Audio may be played in the browser</label>
     <button name="action" value="save">Register</button>
   {{end}}

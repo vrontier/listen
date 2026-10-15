@@ -121,13 +121,13 @@ The Observatory's draft makes the further work conditional on a test: `activity`
 
 1. Specify groups in the control API (this document and [control-api.md](control-api.md#groups)).
 2. Analyses with 1 to n sources in the Workbench (decided 2026-10-14). Then the comparison view, against the stand-in, which makes up group results. **Built** 2026-10-15 for `activity`, see [Built so far](#built-so-far).
-3. In the engine, after pieces A and B: the group service with `activity` on wall time. Then the premise test.
+3. In the engine, after pieces A and B: the group service with `activity` on wall time, inside the engine process (**decided** 2026-10-15, design.md question 24). Then the premise test.
 4. Station time and impulse times in the engine, then `clock` and `coincidence`, if the premise test was positive.
 
 ## Open
 
 1. **The name.** **Decided** (2026-10-14): an analysis with several sources; "group" only inside the engine.
-2. **The first goal.** Side-by-side activity first (possible on wall time), or straight to the VLF coincidence analysis (needs station time)?
+2. **The first goal.** **Decided** (2026-10-15): side-by-side activity on wall time first; before `clock` and `coincidence`, a test of the station time of one real stream (see question 4). See [design.md](design.md#raised-by-groups), question 23.
 3. **Sources of other members.** With sharing, an analysis can use a source someone else registered; its settings for that source are still its own. Settings another member made for the same source are not reused, which keeps a result traceable to settings the analysis's member controls.
 4. **Does a relay re-encode?** If a relay re-encodes the stations' streams, the timestamps are the relay's, not the stations'. A question for the relay's operator, carried over from the Observatory's draft.
 5. **A narrator for a group** ("all three stations grew louder after dusk") was asked in the Observatory's draft. Not proposed for the first version.

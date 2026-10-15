@@ -43,14 +43,14 @@ browser ──► web server ──► Workbench process ──control API──
 ## Registering a stream
 
 1. **Form.** The stream URL, a name, the place, the time zone, a description, a credit line and link. Two checkboxes:
-   - "I run this stream or have the right to have it analysed" (**decided** as a requirement, see rule 4 in [design.md](design.md)).
+   - "I run this stream or have the right to have it analysed" (**decided** as a requirement, see rule 4 in [design.md](design.md)). **Decided** (2026-10-15, question 12): if the member does not run the stream, they also give the operator's name or contact; the Workbench takes their word for the permission. **Built** (2026-10-15): two choices, "I run this stream myself" or "someone else runs it and has agreed", the second with a field for the operator's name and an email address or web page (3 to 200 characters). Shown on the source's page to its owner and in the master admin's list of streams; streams registered before show "not asked".
    - "Audio may be played in the browser", off by default. Audio is allowed (**decided**, 2026-10-14); the owner switches it on per stream.
 2. **Probe.** On the Workbench's request the engine checks that the stream answers, delivers audio that decodes, and is not silent; it reports the sample rate, the level and the bit rate. The member sees the result at once. The sample rate becomes a property of the stream, the same for all its analyses (see [analyses-and-filters.md](analyses-and-filters.md)). A stream whose probe fails is not saved.
 3. **Draft first.** A new stream is in draft and visible only to its owner and the members they invite. It connects only while an analysis using it is in a run or a preview (decided 2026-10-15, see [design.md](design.md#runs)).
 4. **No analysis is made.** **Decided** (2026-10-14): registering a source creates no analysis. The source's page offers "New analysis with this source"; see [design.md](design.md#analyses-and-sources).
 5. **Afterwards.** The owner can edit the texts, move the stream to production, pause or delete it. The engine reports a stream that has been offline for 24 hours; the Workbench pauses it and tells the owner.
 
-**Decided** (2026-10-14): a stream address exists once. If a second member registers an address that is already a stream, no second stream is made; the stream is shared (see [Sharing](#sharing)). **Proposed:** the second member is shown that the stream exists and who owns it, and can ask the owner to be invited. Recognising two spellings of one address (redirects, `http` and `https`, a trailing slash) is the Workbench's task and is **open** in its detail.
+**Decided** (2026-10-14): a stream address exists once. If a second member registers an address that is already a stream, no second stream is made; the stream is shared (see [Sharing](#sharing)). **Proposed:** the second member is shown that the stream exists and who owns it, and can ask the owner to be invited. Recognising two spellings of one address is the Workbench's task. **Decided** (2026-10-15): the obvious cases are normalised when a stream is registered (`http` and `https`, the host's case, a default port, a trailing slash); redirects are left for later. **Built** (2026-10-15): the address is stored with scheme and host in lower case, without a default port, a trailing slash or a fragment; one that exists over the other of `http` and `https` counts as the same stream. Addresses with a user name and password are refused. Streams registered before are not rewritten.
 
 ## States
 
@@ -100,7 +100,10 @@ any state ──► suspended (master admin)
   - **Others' sources.** The owner of a shared source agrees per member on the source's page ("May publish"). Without it, publishing is refused and says whose agreement is missing. When the owner no longer agrees, or stops sharing, that member's published analyses using the source are withdrawn and the member is told by mail.
   - **Withdrawn.** The member withdraws on the analysis page; the public address then answers `410` with "This work was withdrawn on …". Publishing again uses the same address.
   - **Reports.** Every public page has a report form (message, optional contact; a hidden field and a limit of five reports an hour per address, fifty in all, keep robots out). Each report is mailed to the master admins and listed on the admin page, where they close it. The admin page also lists what is published, and the master admin can withdraw an analysis with a reason, which is mailed to its member.
-- **Open:** whether rounded coordinates, or a map, should appear on public pages; limits on the number of visitors reading live at once; a privacy notice and legal notice before anything is public beyond the intranet (see [Rights and privacy](#rights-and-privacy)).
+- **Decided** (2026-10-15): public pages show a source's coordinates rounded to one decimal (about 10 km), with the map; the exact place stays with the member.
+- **Decided** (2026-10-15): at most 50 visitors read one published analysis live at once; the master admin can change the number.
+- **Built** (2026-10-15), **proposed** in its detail: a public page shows "near 50.1, 10.5"; the comparison's map on it uses the rounded places, and so do the engine's answers passed to visitors and a published `dataset.json` (rounded as it is sent; the member's own copy keeps the exact places). Visitors are counted by address, so one visitor with several live views open counts once; one turned away sees the page, its runs and data sets, with a note to come back later. The address is the one the local web server saw (the last entry of `X-Forwarded-For`, trusted only from the local web server), which also makes the report limit count visitors rather than the web server.
+- **Open:** a privacy notice and legal notice before anything is public beyond the intranet (see [Rights and privacy](#rights-and-privacy)).
 - The Workbench process checks who is asking, on every data path: the session of a logged-in member, or a token. The engine is reachable on a local socket only and checks nothing.
 
 ## Sharing
@@ -139,7 +142,7 @@ any state ──► suspended (master admin)
 - **Whose cap it counts against.** Nothing here is about money; the costs are counted against the members' CPU and RAM caps. Each analysis counts against its own member's cap. **Decided** (2026-10-14): the connection and decode of a shared stream is split equally among the members who have an analysis running on it. While only one member has one, that member carries all of it. The server's cap counts the decode once.
 - **Reservation, not hindsight.** Starting something reserves its measured cost (until measured: a fixed estimate). The Workbench refuses a start whose reservation would exceed a cap. This includes a page opened on an idle stream in draft: if the server is full, the page says so instead of connecting.
 - **Running work is not stopped** when the measured cost of something already running rises above a cap. The member and the master admin are told.
-- **Disk.** The quota counts the memories and history of the member's analyses and their captures. At 80 % the member is warned. At 100 % nothing new that writes to disk can start (a rule change starts a new memory, a capture). Running analyses continue; whether they keep writing history is **open**. Nothing is deleted automatically; the member deletes old memories on the analysis page.
+- **Disk.** The quota counts the memories and history of the member's analyses and their captures. At 80 % the member is warned. At 100 % nothing new that writes to disk can start (a rule change starts a new memory, a capture). Running analyses continue and keep writing until their run ends (**decided** 2026-10-15); at 110 % a run ends early, with a note in its data set and a mail. Nothing is deleted automatically; the member deletes old memories on the analysis page.
 - **The view.** `/account/usage` shows the member's running streams and analyses with CPU, RAM, bandwidth and disk, against their cap, over the last day and month. `/admin` shows the same for the whole server.
 
 **Built** against the stand-in (2026-10-15), **proposed** in every detail:
@@ -216,6 +219,16 @@ A member creates tokens for programs and AI assistants. A token:
 - The interpretation runs only while someone watches, as today, so that a key is not used up by an empty page. The page shows how many calls were made with the member's key this month.
 - Deleting a key, or the provider refusing it, stops the interpretation and tells the member.
 
+**Built** (2026-10-15), **proposed** in every detail; the interpretation itself waits for the engine:
+
+- `/account/keys`: one form per provider (Anthropic, OpenAI). A key is checked before it is saved, by listing the provider's models (`GET /v1/models`), a call that is not billed; a refusal (401, 403) or no answer means it is not saved. A rate limit (429) counts as accepted, since the provider checks the key first. Redirects are not followed, so the key goes nowhere else.
+- Before any call, the key's shape is checked: length, no spaces, the provider's prefix (`sk-ant-` for Anthropic, `sk-` for OpenAI), an Anthropic key entered under OpenAI, and Anthropic admin keys, which are refused because the Workbench needs no more than an ordinary key.
+- A member can cause at most ten checks an hour, so that the page cannot be used to try out keys found elsewhere.
+- Sealed with AES-256-GCM under `LOW_KEYS_SECRET` (32 bytes, base64) from the server's settings file, bound to the member and provider, so a sealed key copied to another member's row does not open. The install script makes the secret once. Without it, keys cannot be opened: it belongs with the backups of the catalogue, but kept apart from them. Without the secret set, the page says so and saves nothing.
+- The page shows the last four characters, when the key was saved and last accepted, and whether a later check was refused. "Check again" asks the provider anew; "delete" removes it at once, and the page reminds the member to delete it at the provider too.
+- Saving, replacing and deleting are in the audit trail, with the provider and the last four characters only. The key never appears in a log, a page, a token's or MCP's answers.
+- **Not built:** passing the key to the engine with an analysis's settings, the choice of model, the count of calls per month, and telling the member when the engine's calls are refused. These need the engine's interpretation ([control-api.md](control-api.md#reserved)).
+
 ## Filtering and limits
 
 | Rule | Proposal |
@@ -233,7 +246,7 @@ No user-written code or expressions run on the server: filters and motif definit
 
 ## Rights and privacy
 
-- The owner's attestation is stored with a timestamp and is where a takedown request starts.
+- The owner's attestation is stored with a timestamp, and for a stream the owner does not run, with the operator's name or contact; it is where a takedown request starts.
 - An account stores an email address and a display name.
 - An account may store a language-model API key per provider, encrypted.
 - Before sign-up opens beyond the intranet, the site needs a privacy notice and a legal notice covering accounts, the email login, tokens, language-model keys and what is sent to those providers, logs, the audit trail and the display names shown to invited members.
@@ -286,4 +299,4 @@ Answers are the maintainer's of 2026-10-14 and are **decided**. Recommendations 
     - **Decided:** a disk quota per member, 0.5 GB to start with. **Proposed:** see [Resources and caps](#resources-and-caps).
 12. What is checked about "I run this stream or have the right to have it analysed"?
     - The question, put differently: when a member ticks the box for a stream they do not run themselves, does the Workbench take their word for it, or ask for something that shows the operator agreed?
-    - *Recommendation:* take their word, and in that case ask for the operator's name or contact and keep it with the attestation. With sign-up by invitation, the master admin knows every member; the contact is what a takedown request starts from. This is still **open**.
+    - **Decided** (2026-10-15): take their word. A member who does not run the stream themselves gives the operator's name or contact, which is kept with the attestation and its time. With sign-up by invitation, the master admin knows every member; the contact is what a takedown request starts from. This has to be looked at again if sign-up ever opens beyond invitation.

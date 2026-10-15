@@ -44,6 +44,7 @@ type researchData struct {
 	Preview   bool      // the member's look before publishing
 	Problems  []string  // what keeps the analysis from being published
 	Sent      bool      // a report was just sent
+	Full      bool      // in a run, but as many visitors read it live as may
 }
 
 func describeSettings(raw []byte) (string, []string) {
@@ -279,6 +280,9 @@ func (s *Server) researchPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Sent = r.URL.Query().Has("reported")
+	if d.Live && s.visitors.full(a.ID, clientIP(r), s.readerLimit(r.Context())) {
+		d.Full, d.Live, d.Comparing = true, false, false
+	}
 	s.render(w, r, 200, "research", a.Name, d)
 }
 
@@ -302,6 +306,12 @@ func (s *Server) researchLive(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	out, ok := s.visitors.enter(a.ID, clientIP(r), s.readerLimit(r.Context()))
+	if !ok {
+		http.Error(w, "as many visitors read this analysis live as may; try again later", http.StatusServiceUnavailable)
+		return
+	}
+	defer out()
 	rd := &reader{ch: make(chan []byte, 256), person: true, who: "visitor"}
 	leave := s.live.join(src.Stream.EngineID(), a.EngineID(), rd)
 	defer leave()
@@ -325,7 +335,7 @@ func (s *Server) researchData(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Write(raw)
+	w.Write(roundCoordsJSON(raw))
 }
 
 func (s *Server) researchCompareLive(w http.ResponseWriter, r *http.Request) {
@@ -337,6 +347,12 @@ func (s *Server) researchCompareLive(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not compared now", http.StatusConflict)
 		return
 	}
+	out, ok := s.visitors.enter(a.ID, clientIP(r), s.readerLimit(r.Context()))
+	if !ok {
+		http.Error(w, "as many visitors read this analysis live as may; try again later", http.StatusServiceUnavailable)
+		return
+	}
+	defer out()
 	rd := &reader{ch: make(chan []byte, 256), person: true, who: "visitor"}
 	leave := s.live.joinGroup(a.GroupID(), rd)
 	defer leave()
@@ -359,7 +375,7 @@ func (s *Server) researchCompareState(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Write(raw)
+	w.Write(roundCoordsJSON(raw))
 }
 
 // researchFile offers a file of a finished run's data set, when the member
@@ -383,6 +399,10 @@ func (s *Server) researchFile(w http.ResponseWriter, r *http.Request) {
 	defer rc.Close()
 	w.Header().Set("Content-Type", datasetTypes[name])
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-run-%d-%s"`, a.Slug, run.Number, name))
+	if name == fileJSON {
+		copyRoundingCoords(w, rc) // the sources' places, as on the page
+		return
+	}
 	io.Copy(w, rc)
 }
 
@@ -422,10 +442,22 @@ func (l *reportLimit) allow(ip string) bool {
 	return true
 }
 
+// clientIP is the visitor's address. Behind the local web server, which
+// appends the address it saw to X-Forwarded-For, that last entry is the
+// visitor's; earlier entries come from the client and are not trusted, nor
+// is the header from anyone but the local web server.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
+			parts := strings.Split(xff[len(xff)-1], ",")
+			if last := strings.TrimSpace(parts[len(parts)-1]); net.ParseIP(last) != nil {
+				return last
+			}
+		}
 	}
 	return host
 }

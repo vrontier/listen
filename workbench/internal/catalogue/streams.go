@@ -29,9 +29,15 @@ type Stream struct {
 	AudioAllowed bool
 	State        string
 	Attested     time.Time
-	Probe        json.RawMessage
-	Created      time.Time
-	Updated      time.Time
+	// Attestation says who allowed the analysis: AttestOwn or
+	// AttestOperator; empty for streams registered before it was asked.
+	Attestation string
+	// Operator is the operator's name or contact, given when the member
+	// does not run the stream (members-and-streams.md, question 12).
+	Operator string
+	Probe    json.RawMessage
+	Created  time.Time
+	Updated  time.Time
 }
 
 // StreamTexts are the parts of a stream its owner may edit at any time.
@@ -58,8 +64,16 @@ type NewStream struct {
 	SampleRate   int
 	Texts        StreamTexts
 	AudioAllowed bool
+	Attestation  string
+	Operator     string
 	Probe        json.RawMessage
 }
+
+// Attestations: who allowed the analysis of a stream.
+const (
+	AttestOwn      = "own"      // the member runs it
+	AttestOperator = "operator" // its operator agreed
+)
 
 // CreateStream registers a stream. It makes no analysis.
 func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, error) {
@@ -71,10 +85,10 @@ func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, error) {
 			return err
 		}
 		res, err := tx.ExecContext(ctx, `INSERT INTO streams
-			(slug, owner_id, input, sample_rate, name, place, timezone, lat, lon, description, credit, credit_url, audio_allowed, attested, probe, created, updated)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(slug, owner_id, input, sample_rate, name, place, timezone, lat, lon, description, credit, credit_url, audio_allowed, attested, attestation, operator, probe, created, updated)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			slug, n.OwnerID, n.Input, n.SampleRate, n.Texts.Name, n.Texts.Place, n.Texts.TimeZone, n.Texts.Lat, n.Texts.Lon, n.Texts.Description,
-			n.Texts.Credit, n.Texts.CreditURL, n.AudioAllowed, stamp(now), string(n.Probe), stamp(now), stamp(now))
+			n.Texts.Credit, n.Texts.CreditURL, n.AudioAllowed, stamp(now), n.Attestation, n.Operator, string(n.Probe), stamp(now), stamp(now))
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed: streams.input") {
 				return ErrDuplicateInput
@@ -82,7 +96,8 @@ func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, error) {
 			return err
 		}
 		sid, _ = res.LastInsertId()
-		after, _ := json.Marshal(map[string]any{"input": n.Input, "sample_rate": n.SampleRate, "texts": n.Texts, "audio_allowed": n.AudioAllowed})
+		after, _ := json.Marshal(map[string]any{"input": n.Input, "sample_rate": n.SampleRate, "texts": n.Texts, "audio_allowed": n.AudioAllowed,
+			"attestation": n.Attestation, "operator": n.Operator})
 		return audit(ctx, tx, now, n.OwnerID, "stream", sid, "create", "", string(after))
 	})
 	if err != nil {
@@ -147,14 +162,14 @@ func Slugify(name string) string {
 }
 
 const streamCols = `s.id, s.slug, s.owner_id, u.name, s.input, s.sample_rate, s.name, s.place, s.timezone, s.lat, s.lon, s.description,
-	s.credit, s.credit_url, s.audio_allowed, s.state, s.attested, s.probe, s.created, s.updated`
+	s.credit, s.credit_url, s.audio_allowed, s.state, s.attested, s.attestation, s.operator, s.probe, s.created, s.updated`
 
 func scanStream(row interface{ Scan(...any) error }) (Stream, error) {
 	var s Stream
 	var attested, probe, created, updated string
 	err := row.Scan(&s.ID, &s.Slug, &s.OwnerID, &s.OwnerName, &s.Input, &s.SampleRate, &s.Texts.Name, &s.Texts.Place,
 		&s.Texts.TimeZone, &s.Texts.Lat, &s.Texts.Lon, &s.Texts.Description, &s.Texts.Credit, &s.Texts.CreditURL, &s.AudioAllowed, &s.State,
-		&attested, &probe, &created, &updated)
+		&attested, &s.Attestation, &s.Operator, &probe, &created, &updated)
 	s.Attested, s.Created, s.Updated = parseStamp(attested), parseStamp(created), parseStamp(updated)
 	s.Probe = json.RawMessage(probe)
 	return s, err

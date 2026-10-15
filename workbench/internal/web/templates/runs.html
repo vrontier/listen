@@ -34,8 +34,10 @@
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <label>Analysis <select name="analysis">{{range .Startable}}<option value="{{.ID}}">{{.Name}} ({{len .Sources}} source{{if ne (len .Sources) 1}}s{{end}})</option>{{end}}</select></label>
     <label>Length <select name="length">{{range $d.RunLengths}}<option value="{{.Value}}" {{if eq .Value "24h"}}selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+    {{template "run-options"}}
     <button>Start</button>
   </form>
+  {{template "run-options-note"}}
   {{else}}<p class="meta">{{if .Active}}All your analyses are running.{{else}}You have no analyses yet. <a href="/analyses/new">Make one</a> first.{{end}}</p>{{end}}
 </section>
 
@@ -48,7 +50,7 @@
       <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
       <td><a href="/runs/{{.ID}}">{{.Number}}</a></td>
       <td>{{when .Started}}</td>
-      <td>{{when .Stopped}}{{if .StoppedBy}} <span class="meta">stopped by {{.StoppedBy}}</span>{{else}} <span class="meta">as planned</span>{{end}}</td>
+      <td>{{when .Stopped}}{{if .StoppedBy}} <span class="meta">stopped by {{.StoppedBy}}</span>{{else if and .EndNote (ne .EndReason "planned")}} <span class="meta">by itself: {{.EndNote}}</span>{{else}} <span class="meta">as planned</span>{{end}}</td>
       <td>{{.Duration}}</td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
       <td>{{.StartedBy}}</td>

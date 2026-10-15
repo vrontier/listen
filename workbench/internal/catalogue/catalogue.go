@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS streams (
 	audio_allowed INTEGER NOT NULL DEFAULT 0,
 	state         TEXT NOT NULL DEFAULT 'draft',
 	attested      TEXT NOT NULL,
+	attestation   TEXT NOT NULL DEFAULT '',  -- own, operator; '' before it was asked
+	operator      TEXT NOT NULL DEFAULT '',  -- name or contact of the operator, for attestation 'operator'
 	probe         TEXT NOT NULL DEFAULT '{}',
 	created       TEXT NOT NULL,
 	updated       TEXT NOT NULL
@@ -116,7 +118,11 @@ CREATE TABLE IF NOT EXISTS runs (
 	dataset       TEXT NOT NULL DEFAULT 'recording', -- recording, freezing, ready, failed, deleted, none
 	dataset_bytes INTEGER NOT NULL DEFAULT 0,
 	dataset_note  TEXT NOT NULL DEFAULT '',
-	summary       TEXT NOT NULL DEFAULT '{}'
+	summary       TEXT NOT NULL DEFAULT '{}',
+	offline_stop  INTEGER NOT NULL DEFAULT 0, -- minutes a source may send nothing before the run stops; 0: no such stop
+	end_reason    TEXT NOT NULL DEFAULT '',  -- planned, offline, silent, disk; '' while it runs or when its member stopped it
+	end_note      TEXT NOT NULL DEFAULT '',  -- in words, for the data set and the mail
+	mailed        TEXT                       -- when its member was told it ended
 );
 CREATE INDEX IF NOT EXISTS runs_analysis ON runs(analysis_id);
 CREATE TABLE IF NOT EXISTS usage_minutes (
@@ -173,6 +179,16 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 	created   TEXT NOT NULL,
 	last_used TEXT,
 	revoked   TEXT
+);
+CREATE TABLE IF NOT EXISTS llm_keys (
+	user_id  INTEGER NOT NULL REFERENCES users(id),
+	provider TEXT NOT NULL,                  -- anthropic, openai
+	sealed   BLOB NOT NULL,                  -- the key, encrypted with the server's sealing key
+	hint     TEXT NOT NULL,                  -- its last four characters
+	created  TEXT NOT NULL,
+	checked  TEXT NOT NULL,                  -- when the provider last accepted it
+	refused  TEXT,                           -- when the provider last refused it; NULL: not since checked
+	PRIMARY KEY (user_id, provider)
 );
 CREATE TABLE IF NOT EXISTS audit (
 	id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -253,7 +269,31 @@ func migrate(db *sql.DB) error {
 	if err := migratePublishing(db); err != nil {
 		return err
 	}
-	return migrateRuns(db)
+	if err := migrateRuns(db); err != nil {
+		return err
+	}
+	return migrateRunEnds(db)
+}
+
+// migrateRunEnds adds how a run ended (2026-10-15 night). Runs ended
+// before are marked as told, so that nobody gets mail about old runs.
+func migrateRunEnds(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('runs') WHERE name = 'end_reason'`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	for _, q := range []string{
+		`ALTER TABLE runs ADD COLUMN offline_stop INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE runs ADD COLUMN end_reason TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE runs ADD COLUMN end_note TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE runs ADD COLUMN mailed TEXT`,
+		`UPDATE runs SET mailed = coalesce(stopped, ends) WHERE stopped IS NOT NULL OR ends IS NOT NULL`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // migratePublishing adds what publishing needs (2026-10-15) to tables made
@@ -270,6 +310,8 @@ func migratePublishing(db *sql.DB) error {
 		{"analyses", "withdrawn", "TEXT"},
 		{"analyses", "publish_data", "INTEGER NOT NULL DEFAULT 0"},
 		{"stream_shares", "publish_ok", "TEXT"},
+		{"streams", "attestation", "TEXT NOT NULL DEFAULT ''"},
+		{"streams", "operator", "TEXT NOT NULL DEFAULT ''"},
 	} {
 		ok, err := has(c.table, c.col)
 		if err != nil {

@@ -2,6 +2,7 @@
 {{with .Data}}
 {{template "research-body" .}}
 
+{{if .Full}}<p class="notice">This analysis is in a run now, but as many visitors are watching it live as may at once. Try again in a while; its runs and their data sets below are open all the same.</p>{{end}}
 {{if .Live}}
 {{if .Comparing}}
 <section class="compare" data-state="{{.Base}}/compare/state" data-live="{{.Base}}/compare/live">
@@ -9,7 +10,9 @@
     <h2 class="live-title">Comparison</h2>
     <span class="status conn">connecting…</span> <span class="compare-status meta"></span>
   </div>
-  <ol class="lane-names" hidden>{{range .Sources}}{{if .Live}}<li data-stream="{{.Stream.EngineID}}">{{.Stream.Texts.Name}}</li>{{end}}{{end}}</ol>
+  <ol class="lane-names" hidden>{{range .Sources}}{{if .Live}}<li data-stream="{{.Stream.EngineID}}"{{if and .Stream.Texts.Lat .Stream.Texts.Lon}} data-lat="{{publicCoord .Stream.Texts.Lat}}" data-lon="{{publicCoord .Stream.Texts.Lon}}"{{end}}>{{.Stream.Texts.Name}}</li>{{end}}{{end}}</ol>
+  <div class="compare-map" hidden></div>
+  <p class="compare-map-note meta small" hidden>Stations, placed to about 10 km, the distance between each pair with the time a radio wave needs for it, and the night side of the earth (shaded). Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, loaded by your browser from openstreetmap.org.</p>
   <div class="compare-controls" role="radiogroup" aria-label="What the lanes show">
     <label class="check"><input type="radio" name="lane-metric" value="impulse_rate" checked> impulse rate</label>
     <label class="check"><input type="radio" name="lane-metric" value="level_db"> level</label>
@@ -19,6 +22,8 @@
   <h3>Correlation</h3>
   <table class="correlations"><thead><tr><th>Pair</th><th>r</th><th title="Positive: the second source hears the same later">Lag</th><th title="The same pair shifted 150 s apart: what chance alone gives">Baseline r</th><th>Above baseline</th></tr></thead><tbody><tr><td colspan="5" class="meta">The first correlation comes after five minutes of activity.</td></tr></tbody></table>
   <p class="meta">Lanes show each source's activity per second over the last ten minutes, on one time axis in UTC. The times are wall time at the engine, so the sources are aligned to a few seconds, not to their stations' clocks. A correlation is worth something only well above its baseline, the same pair shifted 150 s apart.</p>
+  <link rel="stylesheet" href="{{asset "leaflet/leaflet.css"}}">
+  <script src="{{asset "leaflet/leaflet.js"}}" defer></script>
   <script src="{{asset "compare.js"}}" defer></script>
 </section>
 {{end}}

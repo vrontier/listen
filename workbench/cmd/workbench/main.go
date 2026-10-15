@@ -22,6 +22,7 @@ import (
 	"github.com/vrontier/listen-workbench/internal/catalogue"
 	"github.com/vrontier/listen-workbench/internal/engine"
 	"github.com/vrontier/listen-workbench/internal/mail"
+	"github.com/vrontier/listen-workbench/internal/secret"
 	"github.com/vrontier/listen-workbench/internal/web"
 )
 
@@ -42,7 +43,7 @@ func main() {
 		baseURL  = flag.String("base-url", env("LOW_BASE_URL", "http://low.home.arpa"), "address of the Workbench as members reach it, for links in mails [env LOW_BASE_URL]")
 		smtpAddr = flag.String("smtp", env("LOW_SMTP", ""), "mail server host:port; empty: mails are written to the log [env LOW_SMTP]")
 		smtpFrom = flag.String("smtp-from", env("LOW_SMTP_FROM", ""), "sender address of mails [env LOW_SMTP_FROM]")
-		smtpUser = flag.String("smtp-user", env("LOW_SMTP_USER", ""), "mail server login; the password is read from LOW_SMTP_PASSWORD")
+		smtpUser = flag.String("smtp-user", env("LOW_SMTP_USER", ""), "mail server login; the password is read from LOW_SMTP_PASSWORD.\nMembers' language-model keys are sealed with LOW_KEYS_SECRET (32 bytes in base64, as made by openssl rand -base64 32)")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "usage: workbench [flags]\n       workbench [flags] admin -email ADDRESS -name NAME\n\n")
@@ -77,7 +78,17 @@ func main() {
 	if err := os.MkdirAll(*dataDir, 0o750); err != nil {
 		log.Fatal(err)
 	}
-	srv, err := web.New(web.Config{BaseURL: *baseURL, DatasetDir: *dataDir}, db, engine.Dial(*engAddr), sender)
+	// The sealing key of members' language-model keys comes only from the
+	// environment, never from a flag, which would show in the process list.
+	var seal *secret.Box
+	if v := os.Getenv("LOW_KEYS_SECRET"); v != "" {
+		if seal, err = secret.Parse(v); err != nil {
+			log.Fatalf("LOW_KEYS_SECRET: %v", err)
+		}
+	} else {
+		log.Printf("LOW_KEYS_SECRET not set: members cannot save language-model keys")
+	}
+	srv, err := web.New(web.Config{BaseURL: *baseURL, DatasetDir: *dataDir, Seal: seal}, db, engine.Dial(*engAddr), sender)
 	if err != nil {
 		log.Fatal(err)
 	}
