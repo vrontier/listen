@@ -168,9 +168,11 @@
     <summary>Memories</summary>
     {{if .Memories}}
     <table>
-      <thead><tr><th>Key</th><th>Motifs</th><th>Size</th><th>Last used</th></tr></thead>
-      <tbody>{{range .Memories}}<tr><td><code class="small">{{.Key}}</code>{{if .InUse}} <span class="meta">in use</span>{{end}}</td><td>{{.Motifs}}</td><td>{{bytes .Bytes}}</td><td>{{when .LastUsed}}</td></tr>{{end}}</tbody>
+      <thead><tr><th>Key</th><th>Motifs</th><th>Size</th><th>Last used</th><th></th></tr></thead>
+      <tbody>{{$src := .Stream.ID}}{{range .Memories}}<tr><td><code class="small">{{.Key}}</code>{{if .InUse}} <span class="meta">in use</span>{{end}}</td><td>{{.Motifs}}</td><td>{{bytes .Bytes}}</td><td>{{when .LastUsed}}</td>
+        <td>{{if not .InUse}}<form method="post" action="/analyses/{{$d.Analysis.ID}}/memories/{{$src}}/delete" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="key" value="{{.Key}}"><button class="link">delete</button></form>{{end}}</td></tr>{{end}}</tbody>
     </table>
+    <p class="meta">Memories count against your disk quota. One made with other ranges or rules can be deleted; the one in use cannot.</p>
     {{else}}<p class="meta">{{if .EngineErr}}{{.EngineErr}}{{else}}None kept yet.{{end}}</p>{{end}}
   </details>
 </section>

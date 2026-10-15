@@ -130,6 +130,14 @@ CREATE TABLE IF NOT EXISTS stream_shares (
 	created_by INTEGER NOT NULL REFERENCES users(id),
 	PRIMARY KEY (stream_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS memory_sizes (
+	analysis_id INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+	stream_id   INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+	key         TEXT NOT NULL,               -- the engine's memory key
+	bytes       INTEGER NOT NULL,
+	updated     TEXT NOT NULL,               -- when the engine last reported it
+	PRIMARY KEY (analysis_id, stream_id, key)
+);
 CREATE TABLE IF NOT EXISTS audit (
 	id        INTEGER PRIMARY KEY AUTOINCREMENT,
 	at        TEXT NOT NULL,

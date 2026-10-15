@@ -80,7 +80,7 @@ func (s *Server) adminData(r *http.Request) (adminData, error) {
 		if m.Cap, m.OwnCap, err = s.db.MemberCap(r.Context(), u.ID); err != nil {
 			return d, err
 		}
-		if m.Disk, err = s.db.DatasetBytesOf(r.Context(), u.ID); err != nil {
+		if m.Disk, err = s.diskBytes(r.Context(), u.ID); err != nil {
 			return d, err
 		}
 		d.Members = append(d.Members, m)

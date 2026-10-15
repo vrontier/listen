@@ -112,6 +112,7 @@ func (s *Server) Start(ctx context.Context) {
 				s.endRuns(ctx)
 				s.endPreviews(ctx)
 				s.data.refresh(ctx)
+				s.measureMemories(ctx)
 			}
 		}
 	}()
@@ -177,6 +178,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /analyses/{id}/delete", s.member(s.analysisDelete))
 	m.HandleFunc("POST /analyses/{id}/run", s.member(s.analysisRunStart))
 	m.HandleFunc("POST /analyses/{id}/stop", s.member(s.analysisRunStop))
+	m.HandleFunc("POST /analyses/{id}/memories/{source}/delete", s.member(s.analysisMemoryDelete))
 	m.HandleFunc("GET /account/usage", s.member(s.usagePage))
 	m.HandleFunc("GET /runs", s.member(s.runsPage))
 	m.HandleFunc("POST /runs", s.member(s.runsStart))

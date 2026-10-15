@@ -370,12 +370,8 @@ func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisDa
 						v.Form.Rules[i].Text = rule.Text
 					}
 				}
-				if raw, err := s.eng.Data(r.Context(), src.Stream.EngineID(), a.EngineID(), "memories", nil); err == nil {
-					var m struct {
-						Memories []engine.Memory `json:"memories"`
-					}
-					json.Unmarshal(raw, &m)
-					v.Memories = m.Memories
+				if ms, err := s.memories(r.Context(), a, src); err == nil {
+					v.Memories = ms
 				}
 			}
 		} else {

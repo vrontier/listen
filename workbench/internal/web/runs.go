@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen-workbench/internal/engine"
 )
 
 // A run keeps an analysis's sources connected from its start until it is
@@ -295,7 +296,7 @@ type pairSummary struct {
 }
 
 // diskQuota is a member's disk quota (decided 2026-10-14), against which
-// data sets count.
+// data sets and the memories of the member's analyses count.
 const diskQuota = 512 << 20
 
 func (s *Server) runPage(w http.ResponseWriter, r *http.Request) {
@@ -338,7 +339,7 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request) {
 			d.Files = append(d.Files, runFileView{Name: f, Bytes: n, About: about[f]})
 		}
 	}
-	d.Used, _ = s.db.DatasetBytesOf(r.Context(), sess.User.ID)
+	d.Used, _ = s.diskBytes(r.Context(), sess.User.ID)
 	title := fmt.Sprintf("%s, run %d", a.Name, run.Number)
 	s.render(w, r, 200, "run", title, d)
 }
@@ -462,4 +463,77 @@ func (s *Server) runsStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.startRun(w, r, a, "/runs")
+}
+
+// memories lists the memories the engine keeps for one source of an
+// analysis in a run, and notes their sizes for the disk quota.
+func (s *Server) memories(ctx context.Context, a catalogue.Analysis, src catalogue.AnalysisSource) ([]engine.Memory, error) {
+	raw, err := s.eng.Data(ctx, src.Stream.EngineID(), a.EngineID(), "memories", nil)
+	if err != nil {
+		return nil, err
+	}
+	var m struct {
+		Memories []engine.Memory `json:"memories"`
+	}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, err
+	}
+	sizes := make([]catalogue.MemorySize, 0, len(m.Memories))
+	for _, x := range m.Memories {
+		sizes = append(sizes, catalogue.MemorySize{Key: x.Key, Bytes: x.Bytes})
+	}
+	if err := s.db.SetMemorySizes(ctx, a.ID, src.Stream.ID, sizes); err != nil {
+		log.Printf("memory sizes %s: %v", a.EngineID(), err)
+	}
+	return m.Memories, nil
+}
+
+// measureMemories notes the memory sizes of every analysis in a run.
+func (s *Server) measureMemories(ctx context.Context) {
+	runs, err := s.db.ActiveRuns(ctx)
+	if err != nil {
+		return
+	}
+	for _, run := range runs {
+		a, err := s.db.Analysis(ctx, run.AnalysisID)
+		if err != nil {
+			continue
+		}
+		for _, src := range a.Sources {
+			if running(src.Stream) {
+				s.memories(ctx, a, src)
+			}
+		}
+	}
+}
+
+// analysisMemoryDelete deletes one memory of a source during a run, when
+// the analysis is in the engine; the one in use cannot be deleted.
+func (s *Server) analysisMemoryDelete(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	a, src, ok := s.ownSource(w, r)
+	if !ok {
+		return
+	}
+	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); !inRun || !running(src.Stream) {
+		s.redirect(w, r, analysisPath(a), "Memories can be deleted while the analysis runs, when the engine has them at hand.")
+		return
+	}
+	key := r.PostFormValue("key")
+	err := s.eng.DeleteMemory(r.Context(), src.Stream.EngineID(), a.EngineID(), key)
+	switch {
+	case engine.IsCode(err, "in_use"):
+		s.redirect(w, r, analysisPath(a), "The memory in use cannot be deleted.")
+		return
+	case engine.IsCode(err, "not_found"):
+		s.redirect(w, r, analysisPath(a), "There is no such memory any more.")
+		return
+	case err != nil:
+		s.fail(w, r, err)
+		return
+	}
+	after, _ := json.Marshal(map[string]any{"source": src.Stream.ID, "key": key})
+	s.db.Note(r.Context(), sess.User.ID, "analysis", a.ID, "memory delete", string(after))
+	s.memories(r.Context(), a, src)
+	s.redirect(w, r, analysisPath(a), "Memory deleted.")
 }

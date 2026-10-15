@@ -9,9 +9,9 @@
     <tr><th>CPU</th><td>{{cores .Now.CPUPercent}} cores{{if .Cap.CPUCores}} of {{.Cap.CPUCores}}{{end}}</td></tr>
     <tr><th>Memory</th><td>{{printf "%.0f" .Now.MemoryMB}} MB{{if .Cap.MemoryMB}} of {{.Cap.MemoryMB}} MB{{end}}</td></tr>
     <tr><th>Incoming</th><td>{{printf "%.0f" .Now.InKbps}} kbit/s</td></tr>
-    <tr><th>Disk</th><td>{{bytes .Disk}} of {{bytes .Quota}} in data sets{{if .DiskWarn}} <span class="field-error">over 80 %: delete data sets you no longer need under <a href="/runs">Runs</a></span>{{end}}</td></tr>
+    <tr><th>Disk</th><td>{{bytes .Disk.Total}} of {{bytes .Quota}}: {{bytes .Disk.Datasets}} in data sets, {{bytes .Disk.Memories}} in memories{{if .DiskWarn}} <span class="field-error">over 80 %: delete data sets you no longer need under <a href="/runs">Runs</a>, or old memories on an analysis's page during a run</span>{{end}}</td></tr>
   </table>
-  <p class="meta">{{if .Cap.Set}}Your cap{{if not .OwnCap}}, the same for every member,{{end}} is set by the master admin. Starting a run, a preview or a trial that would go over it is refused.{{else}}No cap is set for you.{{end}} A run is also refused while your data sets fill your disk quota.</p>
+  <p class="meta">{{if .Cap.Set}}Your cap{{if not .OwnCap}}, the same for every member,{{end}} is set by the master admin. Starting a run, a preview or a trial that would go over it is refused.{{else}}No cap is set for you.{{end}} A run is also refused while your data sets and memories fill your disk quota. A memory's size is as the engine last reported it, during the analysis's latest run.</p>
   {{if .Running}}
   <table>
     <thead><tr><th>What</th><th>Source</th><th>CPU, cores</th><th>Memory, MB</th></tr></thead>

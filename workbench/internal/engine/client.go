@@ -155,6 +155,11 @@ func (c *Client) DeleteAnalysis(ctx context.Context, stream, analysis string, pu
 	return c.do(ctx, http.MethodDelete, analysisPath(stream, analysis)+q, nil, nil)
 }
 
+// DeleteMemory deletes one memory of an analysis; the one in use cannot be.
+func (c *Client) DeleteMemory(ctx context.Context, stream, analysis, key string) error {
+	return c.do(ctx, http.MethodDelete, analysisPath(stream, analysis)+"/memories/"+url.PathEscape(key), nil, nil)
+}
+
 func (c *Client) Validate(ctx context.Context, req ValidateRequest) (Validation, error) {
 	var v Validation
 	return v, c.do(ctx, http.MethodPost, "/v1/validate/analysis", req, &v)

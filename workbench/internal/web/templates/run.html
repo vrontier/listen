@@ -33,7 +33,7 @@
     <thead><tr><th>File</th><th>Size, compressed</th><th>Content</th></tr></thead>
     <tbody>{{range .Files}}<tr><td><a href="/runs/{{$d.Run.ID}}/{{.Name}}">{{.Name}}</a></td><td>{{bytes .Bytes}}</td><td class="meta">{{.About}}</td></tr>{{end}}</tbody>
   </table>
-  <p class="meta">Times are UTC, wall time at the engine. Data sets count against your disk quota: {{bytes .Used}} of {{bytes .Quota}} used.</p>
+  <p class="meta">Times are UTC, wall time at the engine. Data sets and the analyses' memories count against your disk quota: {{bytes .Used}} of {{bytes .Quota}} used.</p>
 
   <h3>What it holds</h3>
   <table>

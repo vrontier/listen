@@ -237,15 +237,22 @@ func (s *Server) capRefusal(ctx context.Context, user int64, a catalogue.Analysi
 		return why + " Please try again later.", nil
 	}
 	if run {
-		used, err := s.db.DatasetBytesOf(ctx, user)
+		k, err := s.db.DiskOf(ctx, user)
 		if err != nil {
 			return "", err
 		}
-		if used >= diskQuota {
-			return fmt.Sprintf("Your data sets use %s of your %s: delete some under Runs before starting a run.", byteSize(used), byteSize(diskQuota)), nil
+		if k.Total() >= diskQuota {
+			return fmt.Sprintf("Your data sets (%s) and memories (%s) fill your disk quota of %s: delete data sets under Runs, or memories on an analysis's page during a run, before starting a run.",
+				byteSize(k.Datasets), byteSize(k.Memories), byteSize(diskQuota)), nil
 		}
 	}
 	return "", nil
+}
+
+// diskBytes is what a member uses of their disk quota.
+func (s *Server) diskBytes(ctx context.Context, user int64) (int64, error) {
+	k, err := s.db.DiskOf(ctx, user)
+	return k.Total(), err
 }
 
 func byteSize(n int64) string { return funcs["bytes"].(func(int64) string)(n) }
@@ -262,7 +269,7 @@ type usageData struct {
 	OwnCap   bool
 	Now      catalogue.Usage
 	Running  []usageItem
-	Disk     int64
+	Disk     catalogue.Disk
 	Quota    int64
 	DiskWarn bool
 	Day      []usageBar // CPU per hour, last 24 hours
@@ -314,12 +321,12 @@ func (s *Server) usagePage(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Now = s.acct.now(sess.User.ID)
 	d.Running = s.acct.running(sess.User.ID)
-	if d.Disk, err = s.db.DatasetBytesOf(ctx, sess.User.ID); err != nil {
+	if d.Disk, err = s.db.DiskOf(ctx, sess.User.ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	d.Quota = diskQuota
-	d.DiskWarn = d.Disk*5 >= d.Quota*4
+	d.DiskWarn = d.Disk.Total()*5 >= d.Quota*4
 	now := time.Now().UTC()
 	samples, err := s.db.UsageSince(ctx, sess.User.ID, now.Add(-31*24*time.Hour))
 	if err != nil {
