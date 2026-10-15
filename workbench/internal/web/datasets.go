@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -60,7 +61,45 @@ type recording struct {
 	run      catalogue.Run
 	analysis int64
 	topics   map[string]context.CancelFunc
+	streams  map[string]bool // the analysis's sources, by engine id
 	wg       sync.WaitGroup
+}
+
+// statesFile keeps the state changes of a run's sources, from which the
+// data set tells when a source was absent.
+const statesFile = "states.jsonl"
+
+type stateLine struct {
+	Stream string    `json:"stream"`
+	State  string    `json:"state"`
+	At     time.Time `json:"at"`
+}
+
+// noteState records a stream's change of state in every recording of a run
+// that uses the stream.
+func (d *datasets) noteState(stream, state string, at time.Time) {
+	d.mu.Lock()
+	var runs []int64
+	for id, rec := range d.recs {
+		if rec.streams[stream] {
+			runs = append(runs, id)
+		}
+	}
+	d.mu.Unlock()
+	b, _ := json.Marshal(stateLine{stream, state, at})
+	for _, id := range runs {
+		appendLine(filepath.Join(d.runDir(id), statesFile), b)
+	}
+}
+
+func appendLine(path string, b []byte) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o640)
+	if err != nil {
+		log.Printf("data set: %v", err)
+		return
+	}
+	f.Write(append(b, '\n'))
+	f.Close()
 }
 
 func newDatasets(s *Server, dir string) *datasets {
@@ -68,6 +107,22 @@ func newDatasets(s *Server, dir string) *datasets {
 }
 
 func (d *datasets) runDir(id int64) string { return filepath.Join(d.dir, strconv.FormatInt(id, 10)) }
+
+// close stops every recording and waits for freezing in progress; what
+// was recorded stays, and the next start goes on from it.
+func (d *datasets) close() {
+	d.mu.Lock()
+	recs := d.recs
+	d.recs = map[int64]*recording{}
+	d.mu.Unlock()
+	for _, rec := range recs {
+		for _, cancel := range rec.topics {
+			cancel()
+		}
+		rec.wg.Wait()
+	}
+	d.busy.Wait()
+}
 
 // refresh starts recording runs that go on and follows changes of their
 // sources; runs that ended are frozen.
@@ -120,9 +175,25 @@ func (d *datasets) record(run catalogue.Run, a catalogue.Analysis) {
 			log.Printf("data set of run %d: %v", run.ID, err)
 			return
 		}
-		rec = &recording{run: run, analysis: a.ID, topics: map[string]context.CancelFunc{}}
+		rec = &recording{run: run, analysis: a.ID, topics: map[string]context.CancelFunc{}, streams: map[string]bool{}}
 		d.recs[run.ID] = rec
 		d.s.sync.hold(a.ID) // until frozen
+	}
+	for _, src := range a.Sources {
+		id := src.Stream.EngineID()
+		if rec.streams[id] {
+			continue
+		}
+		// Where a source stands when the recording begins to follow it.
+		rec.streams[id] = true
+		state := "removed"
+		if !running(src.Stream) {
+			state = src.Stream.State
+		} else if es, ok := d.s.sync.stream(id); ok {
+			state = es.State
+		}
+		b, _ := json.Marshal(stateLine{id, state, time.Now().UTC()})
+		appendLine(filepath.Join(d.runDir(run.ID), statesFile), b)
 	}
 	want := map[string]func(context.Context){}
 	for _, src := range a.Sources {
@@ -363,11 +434,78 @@ type datasetSummary struct {
 }
 
 type sourceSummary struct {
-	Name   string         `json:"name"`
-	Slug   string         `json:"slug"`
-	Events map[string]int `json:"events"`
-	Total  int            `json:"total"`
-	Motifs int            `json:"motifs"`
+	Name     string         `json:"name"`
+	Slug     string         `json:"slug"`
+	Events   map[string]int `json:"events"`
+	Total    int            `json:"total"`
+	Motifs   int            `json:"motifs"`
+	Absences int            `json:"absences"`
+	AbsentS  float64        `json:"absent_s"`
+}
+
+// absence is a period of a run in which a source was not heard.
+type absence struct {
+	From    time.Time `json:"from"`
+	To      time.Time `json:"to"`
+	Seconds float64   `json:"seconds"`
+	States  []string  `json:"states"` // what the engine reported meanwhile: idle, connecting, removed, paused, …
+}
+
+// minAbsence is the shortest absence a data set reports; shorter ones are
+// the moments of connecting at the start.
+const minAbsence = time.Second
+
+// absences reads from the recorded state changes when a source was not
+// connected between from and to.
+func absences(lines []stateLine, stream string, from, to time.Time) []absence {
+	var own []stateLine
+	for _, l := range lines {
+		if l.Stream == stream {
+			own = append(own, l)
+		}
+	}
+	sort.SliceStable(own, func(i, j int) bool { return own[i].At.Before(own[j].At) })
+	state, t := "unknown", from
+	var out []absence
+	var cur *absence
+	flush := func(until time.Time) {
+		if state == "connected" || !until.After(t) {
+			return
+		}
+		if cur == nil {
+			cur = &absence{From: t}
+		}
+		cur.To = until
+		if len(cur.States) == 0 || cur.States[len(cur.States)-1] != state {
+			cur.States = append(cur.States, state)
+		}
+	}
+	end := func() {
+		if cur != nil {
+			if d := cur.To.Sub(cur.From); d >= minAbsence {
+				cur.Seconds = d.Round(time.Millisecond).Seconds()
+				out = append(out, *cur)
+			}
+			cur = nil
+		}
+	}
+	for _, l := range own {
+		if !l.At.After(from) {
+			state = l.State
+			continue
+		}
+		if !l.At.Before(to) {
+			break
+		}
+		flush(l.At)
+		if l.State == "connected" {
+			end()
+		}
+		state, t = l.State, l.At
+	}
+	flush(to)
+	end()
+	return out
 }
 
 type compareSummary struct {
@@ -399,6 +537,22 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 	}
 	sort.Slice(used, func(i, j int) bool { return used[i].Revision < used[j].Revision })
 	sum := datasetSummary{Files: map[string]int64{}}
+	var states []stateLine
+	eachLine(filepath.Join(dir, statesFile), func(b []byte) error {
+		var l stateLine
+		if json.Unmarshal(b, &l) == nil {
+			states = append(states, l)
+		}
+		return nil
+	})
+	absent := map[string][]absence{}
+	for _, src := range a.Sources {
+		absent[src.Stream.EngineID()] = absences(states, src.Stream.EngineID(), run.Started, end)
+	}
+	compare := a.Spec.Compare
+	if compare == nil && len(a.Sources) >= 2 {
+		compare = catalogue.DefaultCompare // saved before there was a choice
+	}
 
 	// The JSON with everything.
 	err = writeGz(filepath.Join(dir, fileJSON+".gz"), func(w io.Writer) error {
@@ -417,6 +571,14 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 			}
 			st := src.Stream
 			ss := sourceSummary{Name: st.Texts.Name, Slug: st.Slug, Events: map[string]int{}}
+			gaps := absent[st.EngineID()]
+			if gaps == nil {
+				gaps = []absence{}
+			}
+			ss.Absences = len(gaps)
+			for _, g := range gaps {
+				ss.AbsentS += g.Seconds
+			}
 			motifs := json.RawMessage(`null`)
 			if m, err := d.s.eng.Data(ctx, st.EngineID(), a.EngineID(), "motifs", nil); err == nil {
 				motifs = m
@@ -428,7 +590,7 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 			}
 			meta, _ := json.Marshal(map[string]any{
 				"name": st.Texts.Name, "slug": st.Slug, "place": st.Texts.Place, "credit": st.Texts.Credit, "sample_rate": st.SampleRate,
-				"lat": st.Texts.Lat, "lon": st.Texts.Lon, "settings": src.Spec, "motifs_at_end": motifs,
+				"lat": st.Texts.Lat, "lon": st.Texts.Lon, "settings": src.Spec, "motifs_at_end": motifs, "absences": gaps,
 			})
 			w.Write(meta[:len(meta)-1])
 			io.WriteString(w, `,"events":[`)
@@ -458,7 +620,7 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 		if _, err := os.Stat(cpath); err == nil {
 			cs := &compareSummary{}
 			io.WriteString(w, `,"comparison":{"analyses":`)
-			b, _ := json.Marshal(a.Spec.Compare)
+			b, _ := json.Marshal(compare)
 			w.Write(b)
 			io.WriteString(w, `,"note":"activity per second is in comparison.csv","correlations":[`)
 			n := 0
@@ -510,6 +672,12 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 			if err != nil {
 				return err
 			}
+			for _, g := range absent[src.Stream.EngineID()] {
+				row := make([]string, len(eventColumns))
+				row[0], row[1], row[3], row[5] = src.Stream.Slug, g.From.Format("2006-01-02T15:04:05.000Z07:00"), "source.absent", strings.Join(g.States, " ")
+				row[8] = strconv.FormatFloat(g.Seconds, 'f', 3, 64)
+				cw.Write(row)
+			}
 		}
 		cw.Flush()
 		return cw.Error()
@@ -556,7 +724,7 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 		return err
 	}
 	// The recording is in the data set now.
-	logs, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	logs, _ := filepath.Glob(filepath.Join(dir, "*.jsonl")) // with the states
 	for _, l := range logs {
 		os.Remove(l)
 	}

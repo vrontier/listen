@@ -54,6 +54,7 @@ func newRig(t *testing.T) *rig {
 	r.srv.Start(ctx)
 	t.Cleanup(func() {
 		cancel()
+		r.srv.data.close()
 		ws.CloseClientConnections()
 		ws.Close()
 		es.CloseClientConnections()
@@ -317,18 +318,59 @@ func TestMemberFlow(t *testing.T) {
 	}
 	stopLive()
 
-	// Settings per source: the engine refuses some, marked at that source.
+	// While the run lasts, its sources and settings are fixed.
 	pg, ph := "s"+g+"_", "s"+h+"_"
+	good := url.Values{"csrf": {csrf}, "source": {g, h}, pg + "memory_mode": {"disk"}, pg + "rule_count": {"2"}, pg + "rule_kind_0": {"comb"}, pg + "rule_hz_0": {"50"},
+		pg + "rule_kind_1": {"comb"}, ph + "memory_mode": {"ram"}}
+	if code, _, _ = r.post(member, aURL+"/settings", good); code != http.StatusSeeOther {
+		t.Fatalf("save during a run: %d", code)
+	}
+	if a, _ = r.db.Analysis(ctx, id); a.Revision != 1 {
+		t.Fatalf("saved during a run: rev %d", a.Revision)
+	}
+	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "fixed while the run lasts") || !strings.Contains(page, `data-prefix="`+pg+`" disabled`) {
+		t.Fatal("settings not shown as fixed during a run")
+	}
+
+	// Stopping the run freezes its data set; then the analysis leaves the
+	// engine.
+	code, _, hdr = r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}})
+	if code != http.StatusSeeOther || !strings.HasPrefix(hdr.Get("Location"), "/runs/") {
+		t.Fatalf("stop: %d %s", code, hdr.Get("Location"))
+	}
+	r.srv.data.busy.Wait()
+	runURL := hdr.Get("Location")
+	if _, page, _ = r.get(member, runURL); !strings.Contains(page, `href="`+runURL+`/events.csv"`) || !strings.Contains(page, "Delete the data set") {
+		t.Fatalf("run page without its data set:\n%s", page)
+	}
+	// Plain CSV: the header is the first line, which spreadsheets need.
+	code, page, hdr = r.get(member, runURL+"/events.csv")
+	if code != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "text/csv") || !strings.HasPrefix(page, "source,timestamp,position_s,type") {
+		t.Fatalf("events of the run: %d", code)
+	}
+	if code, page, _ = r.get(member, runURL+"/dataset.json"); code != 200 || !json.Valid([]byte(page)) || !strings.Contains(page, `"revisions"`) {
+		t.Fatalf("data set JSON: %d %s", code, page)
+	}
+	if code, _, _ = r.get(admin, runURL); code != 404 {
+		t.Fatalf("admin sees a member's run: %d", code)
+	}
+	if _, err := cl.Analysis(ctx, garden.EngineID(), a.EngineID()); !engine.IsCode(err, "not_found") {
+		t.Fatalf("analysis kept in the engine after the run: %v", err)
+	}
+
+	// Settings per source: the engine refuses some, marked at that source.
 	bad := url.Values{"csrf": {csrf}, "source": {g, h}, pg + "min_hz": {"9000"}, pg + "max_hz": {"10000"}, pg + "memory_mode": {"disk"},
 		pg + "rule_count": {"1"}, pg + "rule_kind_0": {"line"}, pg + "rule_hz_0": {"1000"}, pg + "rule_odd_0": {"on"}, ph + "memory_mode": {"disk"}}
 	if code, page, _ = r.post(member, aURL+"/settings", bad); code != 422 || !strings.Contains(page, "below half of max_hz") || !strings.Contains(page, "odd harmonics") {
 		t.Fatalf("refused settings: %d\n%s", code, page)
 	}
-	// Good settings make revision 2 and reach the engine, per source.
-	good := url.Values{"csrf": {csrf}, "source": {g, h}, pg + "memory_mode": {"disk"}, pg + "rule_count": {"2"}, pg + "rule_kind_0": {"comb"}, pg + "rule_hz_0": {"50"},
-		pg + "rule_kind_1": {"comb"}, ph + "memory_mode": {"ram"}}
+	// Good settings make revision 2; the next run takes them to the engine,
+	// per source.
 	if code, _, _ = r.post(member, aURL+"/settings", good); code != http.StatusSeeOther {
 		t.Fatalf("save settings: %d", code)
+	}
+	if code, _, _ := r.post(member, aURL+"/run", url.Values{"csrf": {csrf}, "length": {"1h"}}); code != http.StatusSeeOther {
+		t.Fatalf("second run: %d", code)
 	}
 	_, page, _ = r.get(member, aURL)
 	if !strings.Contains(page, "rev-2") || !strings.Contains(page, "<code>comb=50</code>") {
@@ -340,6 +382,8 @@ func TestMemberFlow(t *testing.T) {
 	if ea, _ := cl.Analysis(ctx, hill.EngineID(), a.EngineID()); len(ea.Rules) != 0 || ea.Memory.Mode != "ram" {
 		t.Fatalf("engine, second source: %+v", ea)
 	}
+	r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}})
+	r.srv.data.busy.Wait()
 
 	// Taking a source out makes revision 3 and removes its engine analysis.
 	if code, _, _ = r.post(member, aURL+"/settings", url.Values{"csrf": {csrf}, "source": {g}, pg + "memory_mode": {"disk"},
@@ -369,37 +413,11 @@ func TestMemberFlow(t *testing.T) {
 		t.Fatalf("paused source still in the engine: %v", err)
 	}
 	r.post(member, "/sources/garden-mic/state", url.Values{"csrf": {csrf}, "to": {"resume"}})
-	if es, err := cl.Stream(ctx, garden.EngineID()); err != nil || len(es.Analyses) != 1 {
-		t.Fatalf("resumed source: %v %+v", err, es)
+	if _, err := cl.Stream(ctx, garden.EngineID()); err != nil {
+		t.Fatalf("resumed source: %v", err)
 	}
 	if entries, _ := r.db.AuditOf(ctx, "stream", garden.ID); len(entries) != 3 {
 		t.Fatalf("audit entries for the source: %d", len(entries))
-	}
-
-	// Stopping the run freezes its data set; then the analysis leaves the
-	// engine.
-	code, _, hdr = r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}})
-	if code != http.StatusSeeOther || !strings.HasPrefix(hdr.Get("Location"), "/runs/") {
-		t.Fatalf("stop: %d %s", code, hdr.Get("Location"))
-	}
-	r.srv.data.busy.Wait()
-	runURL := hdr.Get("Location")
-	if _, page, _ = r.get(member, runURL); !strings.Contains(page, `href="`+runURL+`/events.csv"`) || !strings.Contains(page, "Delete the data set") {
-		t.Fatalf("run page without its data set:\n%s", page)
-	}
-	// Plain CSV: the header is the first line, which spreadsheets need.
-	code, page, hdr = r.get(member, runURL+"/events.csv")
-	if code != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "text/csv") || !strings.HasPrefix(page, "source,timestamp,position_s,type") {
-		t.Fatalf("events of the run: %d", code)
-	}
-	if code, page, _ = r.get(member, runURL+"/dataset.json"); code != 200 || !json.Valid([]byte(page)) || !strings.Contains(page, `"revisions"`) {
-		t.Fatalf("data set JSON: %d %s", code, page)
-	}
-	if code, _, _ = r.get(admin, runURL); code != 404 {
-		t.Fatalf("admin sees a member's run: %d", code)
-	}
-	if _, err := cl.Analysis(ctx, garden.EngineID(), a.EngineID()); !engine.IsCode(err, "not_found") {
-		t.Fatalf("analysis kept in the engine after the run: %v", err)
 	}
 
 	// Deleting the analysis removes it from the engine.

@@ -530,6 +530,16 @@ func (s *Server) analysisSettings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// A run holds one configuration: nothing of a revision changes while
+	// it lasts (design.md, Runs).
+	if _, inRun, err := s.db.ActiveRun(r.Context(), a.ID); err != nil || inRun {
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.redirect(w, r, analysisPath(a), "Not saved: the sources and their settings are fixed while the run lasts. Stop the run to change them.")
+		return
+	}
 	ids, _, err := s.chosenSources(r)
 	if err != nil {
 		s.fail(w, r, err)

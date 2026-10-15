@@ -32,6 +32,10 @@ type engineSync struct {
 
 	previews map[int64]time.Time // analysis → end of its preview
 	held     map[int64]int       // analysis → holders keeping it in the engine
+
+	// onState, if set, is told every change of a stream's state; "removed"
+	// when the engine dropped it.
+	onState func(stream, state string, at time.Time)
 }
 
 func newEngineSync(eng *engine.Client, db *catalogue.DB) *engineSync {
@@ -133,7 +137,15 @@ func (s *engineSync) session(ctx context.Context) error {
 				} else {
 					s.streams[st.ID] = st.Stream
 				}
+				onState := s.onState
 				s.mu.Unlock()
+				if onState != nil {
+					state := st.State
+					if st.Deleted {
+						state = "removed"
+					}
+					onState(st.ID, state, time.Now().UTC())
+				}
 			}
 		case "usage":
 			var u engine.UsageReport

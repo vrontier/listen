@@ -46,7 +46,8 @@
 {{end}}
 </div>
 
-{{if or .Run (not .Preview.IsZero)}}
+{{$live := or .Run (not .Preview.IsZero)}}
+{{if $live}}
 {{if gt (len .Sources) 1}}
 <section class="compare"{{if .Comparing}} data-state="/analyses/{{.Analysis.ID}}/compare/state" data-live="/analyses/{{.Analysis.ID}}/compare/live"{{end}}>
   <div class="live-head">
@@ -74,12 +75,19 @@
   {{end}}
 </section>
 {{end}}
+{{end}}
+
+<form method="post" action="/analyses/{{.Analysis.ID}}/settings" id="settings">
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+</form>
+{{with .Warnings}}<div class="note warn-note">{{range .}}<p>{{.}}</p>{{end}}</div>{{end}}
 
 {{range .Sources}}
-<section class="live" {{if .Live}}data-live="{{.LivePath}}" data-data="{{.DataPath}}"{{end}}>
+{{$p := .Prefix}}
+<section class="live source-block" {{if .Live}}data-live="{{.LivePath}}" data-data="{{.DataPath}}"{{end}}>
   <div class="live-head">
     <h2 class="live-title"><a href="/sources/{{.Stream.Slug}}">{{.Stream.Texts.Name}}</a></h2>
-    {{if .Live}}<span class="status conn">connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{end}}
+    {{if .Live}}<span class="status conn">connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else if not .Running}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{else}}<span class="meta">{{.Stream.SampleRate}} Hz · live during a run or a preview</span>{{end}}
   </div>
   {{if .Live}}
   <div class="spectro">
@@ -97,89 +105,97 @@
     </div>
   </div>
   {{end}}
-</section>
-{{end}}
-<p class="meta">Times are UTC. Spectrograms show the analysed range, newest on the right. Dots mark the spectral peaks left after the filter rules; the bands themselves are never filtered. Motifs are what a source's memory has found to recur{{if not .Run}}; in a preview they are learned afresh and forgotten{{end}}.</p>
-<script src="{{asset "analysis.js"}}" defer></script>
-{{end}}
 
-<section>
-  <h2>Sources and settings</h2>
-  {{with .Warnings}}<div class="note warn-note">{{range .}}<p>{{.}}</p>{{end}}</div>{{end}}
-  <form method="post" action="/analyses/{{.Analysis.ID}}/settings" class="stack" id="settings">
-    <input type="hidden" name="csrf" value="{{$csrf}}">
-    <fieldset>
-      <legend>Sources</legend>
-      {{with index .Errs "source"}}<p class="field-error">{{.}}</p>{{end}}
-      {{range .Picks}}
-        <label class="check"><input type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{.Stream.SampleRate}} Hz, {{.Stream.State}}</span></label>
-      {{end}}
-      <p class="meta">Up to {{.MaxSources}}. A source added here starts with the default settings; a source taken out loses its settings and memories in this analysis.</p>
-    </fieldset>
-
-    {{with .Compare}}
-    <fieldset>
-      <legend>Comparison</legend>
-      <input type="hidden" name="compare_form" value="1">
-      {{with index $d.Errs "compare"}}<p class="field-error">{{.}}</p>{{end}}
-      {{range .}}
-        <label class="check"><input type="checkbox" name="compare" value="{{.ID}}" {{if .Checked}}checked{{end}} {{if .Blocked}}disabled{{end}}> {{.Label}}{{if .Blocked}} <span class="meta">({{.Blocked}})</span>{{end}}</label>
-      {{end}}
-      <p class="meta">How the sources are compared on one time axis. Part of the revision, like the settings below.</p>
-    </fieldset>
-    {{end}}
-
-    {{range .Sources}}
-    {{$p := .Prefix}}
-    <fieldset class="source-settings" data-prefix="{{$p}}">
-      <legend>{{.Stream.Texts.Name}}</legend>
+  <details class="block"{{if or (not $d.Run) $d.Errs}} open{{end}}>
+    <summary>Settings and filter rules{{if $d.Run}} <span class="meta">(fixed while the run lasts)</span>{{end}}</summary>
+    <fieldset class="source-settings" data-prefix="{{$p}}"{{if $d.Run}} disabled{{end}}>
       <p class="meta">{{.Stream.SampleRate}} Hz.{{if .Engine}} In use: {{hz .Engine.Effective.MinHz}} to {{hz .Engine.Effective.MaxHz}}, peaks searched from {{hz .Engine.Effective.PeakMinHz}} to {{hz .Engine.Effective.PeakMaxHz}}, bins of {{hz .Engine.Effective.BinHz}}.{{end}} Empty means the engine's default.</p>
       <div class="row four">
-        <label>Lowest Hz {{with index $d.Errs (printf "%smin_hz" $p)}}<span class="field-error">{{.}}</span>{{end}}<input name="{{$p}}min_hz" value="{{.Form.MinHz}}" inputmode="decimal" placeholder="20"></label>
-        <label>Highest Hz {{with index $d.Errs (printf "%smax_hz" $p)}}<span class="field-error">{{.}}</span>{{end}}<input name="{{$p}}max_hz" value="{{.Form.MaxHz}}" inputmode="decimal" placeholder="near half the rate"></label>
-        <label>Transient threshold {{with index $d.Errs (printf "%stransient_k" $p)}}<span class="field-error">{{.}}</span>{{end}}<input name="{{$p}}transient_k" value="{{.Form.TransientK}}" inputmode="decimal" placeholder="6"></label>
-        <label>Gap between transients, s {{with index $d.Errs (printf "%stransient_gap_s" $p)}}<span class="field-error">{{.}}</span>{{end}}<input name="{{$p}}transient_gap_s" value="{{.Form.TransientGap}}" inputmode="decimal" placeholder="0.3"></label>
+        <label>Lowest Hz {{with index $d.Errs (printf "%smin_hz" $p)}}<span class="field-error">{{.}}</span>{{end}}<input form="settings" name="{{$p}}min_hz" value="{{.Form.MinHz}}" inputmode="decimal" placeholder="20"></label>
+        <label>Highest Hz {{with index $d.Errs (printf "%smax_hz" $p)}}<span class="field-error">{{.}}</span>{{end}}<input form="settings" name="{{$p}}max_hz" value="{{.Form.MaxHz}}" inputmode="decimal" placeholder="near half the rate"></label>
+        <label>Transient threshold {{with index $d.Errs (printf "%stransient_k" $p)}}<span class="field-error">{{.}}</span>{{end}}<input form="settings" name="{{$p}}transient_k" value="{{.Form.TransientK}}" inputmode="decimal" placeholder="6"></label>
+        <label>Gap between transients, s {{with index $d.Errs (printf "%stransient_gap_s" $p)}}<span class="field-error">{{.}}</span>{{end}}<input form="settings" name="{{$p}}transient_gap_s" value="{{.Form.TransientGap}}" inputmode="decimal" placeholder="0.3"></label>
       </div>
 
       <h3>Filter rules</h3>
       <p class="meta">A rule removes spectral peaks at known interference of this receiver before resonances and motifs are derived from them. It does not change the audio or the spectrogram. A comb covers a frequency and its harmonics.</p>
       {{with index $d.Errs (printf "%srules" $p)}}<p class="field-error">{{.}}</p>{{end}}
       <table class="rules">
-        <thead><tr><th>Kind</th><th>Hz</th><th>Odd only</th><th>Tolerance Hz</th><th>Drift %</th><th title="The rule as the engine applies it, in its own notation; shown once saved">Saved as</th></tr></thead>
+        <thead><tr><th>Kind</th><th>Hz</th><th>Odd only</th><th>Tolerance Hz</th><th>Drift %</th><th title="The rule as the engine applies it, in its own notation; shown during a run">Applied as</th></tr></thead>
         <tbody>
         {{range $i, $r := .Form.Rules}}
         <tr>
-          <td><select name="{{$p}}rule_kind_{{$i}}"><option value="comb" {{if eq $r.Kind "comb"}}selected{{end}}>comb</option><option value="line" {{if eq $r.Kind "line"}}selected{{end}}>line</option></select></td>
-          <td><input name="{{$p}}rule_hz_{{$i}}" value="{{$r.Hz}}" inputmode="decimal" size="7">{{with index $d.Errs (printf "%srule_hz_%d" $p $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
-          <td><input type="checkbox" name="{{$p}}rule_odd_{{$i}}" {{if $r.Odd}}checked{{end}}></td>
-          <td><input name="{{$p}}rule_tol_{{$i}}" value="{{$r.Tol}}" inputmode="decimal" size="5" placeholder="1.5 bins">{{with index $d.Errs (printf "%srule_tol_%d" $p $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
-          <td><input name="{{$p}}rule_drift_{{$i}}" value="{{$r.Drift}}" inputmode="decimal" size="4">{{with index $d.Errs (printf "%srule_drift_%d" $p $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
+          <td><select form="settings" name="{{$p}}rule_kind_{{$i}}"><option value="comb" {{if eq $r.Kind "comb"}}selected{{end}}>comb</option><option value="line" {{if eq $r.Kind "line"}}selected{{end}}>line</option></select></td>
+          <td><input form="settings" name="{{$p}}rule_hz_{{$i}}" value="{{$r.Hz}}" inputmode="decimal" size="7">{{with index $d.Errs (printf "%srule_hz_%d" $p $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
+          <td><input form="settings" type="checkbox" name="{{$p}}rule_odd_{{$i}}" {{if $r.Odd}}checked{{end}}></td>
+          <td><input form="settings" name="{{$p}}rule_tol_{{$i}}" value="{{$r.Tol}}" inputmode="decimal" size="5" placeholder="1.5 bins">{{with index $d.Errs (printf "%srule_tol_%d" $p $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
+          <td><input form="settings" name="{{$p}}rule_drift_{{$i}}" value="{{$r.Drift}}" inputmode="decimal" size="4">{{with index $d.Errs (printf "%srule_drift_%d" $p $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
           <td class="saved-as">{{if $r.Text}}<code>{{$r.Text}}</code>{{else}}<span class="meta">—</span>{{end}}</td>
         </tr>
         {{end}}
         </tbody>
       </table>
-      <input type="hidden" name="{{$p}}rule_count" value="{{len .Form.Rules}}" class="rule-count">
+      <input form="settings" type="hidden" name="{{$p}}rule_count" value="{{len .Form.Rules}}" class="rule-count">
 
       <h3>Memory</h3>
       {{$mm := .Form.MemoryMode}}
-      <label class="check"><input type="radio" name="{{$p}}memory_mode" value="disk" {{if eq $mm "disk"}}checked{{end}}> learn motifs and keep them with the history</label>
-      <label class="check"><input type="radio" name="{{$p}}memory_mode" value="ram" {{if eq $mm "ram"}}checked{{end}}> learn motifs but keep nothing</label>
-      <label class="check"><input type="radio" name="{{$p}}memory_mode" value="off" {{if eq $mm "off"}}checked{{end}}> no motifs, no history</label>
+      <label class="check"><input form="settings" type="radio" name="{{$p}}memory_mode" value="disk" {{if eq $mm "disk"}}checked{{end}}> learn motifs and keep them with the history</label>
+      <label class="check"><input form="settings" type="radio" name="{{$p}}memory_mode" value="ram" {{if eq $mm "ram"}}checked{{end}}> learn motifs but keep nothing</label>
+      <label class="check"><input form="settings" type="radio" name="{{$p}}memory_mode" value="off" {{if eq $mm "off"}}checked{{end}}> no motifs, no history</label>
       {{with index $d.Errs (printf "%smemory_mode" $p)}}<span class="field-error">{{.}}</span>{{end}}
 
+      {{if not $d.Run}}
       <div class="actions">
         <button type="button" class="secondary add-rule" hidden>Add a rule</button>
         {{if gt (len $d.Sources) 1}}<button type="button" class="secondary copy-settings" hidden>Copy these settings to all sources</button>{{end}}
+        <button form="settings">Save as revision {{add $d.Analysis.Revision 1}}</button>
       </div>
+      {{end}}
     </fieldset>
+  </details>
+
+  <details class="block">
+    <summary>Memories</summary>
+    {{if .Memories}}
+    <table>
+      <thead><tr><th>Key</th><th>Motifs</th><th>Size</th><th>Last used</th></tr></thead>
+      <tbody>{{range .Memories}}<tr><td><code class="small">{{.Key}}</code>{{if .InUse}} <span class="meta">in use</span>{{end}}</td><td>{{.Motifs}}</td><td>{{bytes .Bytes}}</td><td>{{when .LastUsed}}</td></tr>{{end}}</tbody>
+    </table>
+    {{else}}<p class="meta">{{if .EngineErr}}{{.EngineErr}}{{else}}None kept yet.{{end}}</p>{{end}}
+  </details>
+</section>
+{{end}}
+{{if $live}}<p class="meta">Times are UTC. Spectrograms show the analysed range, newest on the right. Dots mark the spectral peaks left after the filter rules; the bands themselves are never filtered. Motifs are what a source's memory has found to recur{{if not .Run}}; in a preview they are learned afresh and forgotten{{end}}.</p>{{end}}
+<script src="{{asset "analysis.js"}}" defer></script>
+
+<section>
+  <h2>Sources and revision</h2>
+  {{if .Run}}<p class="note">The sources and their settings are fixed while the run lasts, so that the run's data set holds one configuration: revision {{.Analysis.Revision}}. Stop the run to change them; the next run starts with the new revision.</p>{{end}}
+  <fieldset{{if .Run}} disabled{{end}}>
+    <legend>Sources</legend>
+    {{with index .Errs "source"}}<p class="field-error">{{.}}</p>{{end}}
+    {{range .Picks}}
+      <label class="check"><input form="settings" type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{.Stream.SampleRate}} Hz, {{.Stream.State}}</span></label>
     {{end}}
-    <p class="meta">Saving makes a new revision of the whole analysis: its sources and all their settings. Changing a source's range or rules starts a fresh motif memory for it; the earlier one is kept and comes back if you return to the same values. The engine checks every source's settings before anything is saved.</p>
-    <button>Save as revision {{add .Analysis.Revision 1}}</button>
-  </form>
+    <p class="meta">Up to {{.MaxSources}}. A source added here starts with the default settings; a source taken out loses its settings and memories in this analysis.</p>
+  </fieldset>
+  {{with .Compare}}
+  <fieldset{{if $d.Run}} disabled{{end}}>
+    <legend>Comparison</legend>
+    <input form="settings" type="hidden" name="compare_form" value="1">
+    {{with index $d.Errs "compare"}}<p class="field-error">{{.}}</p>{{end}}
+    {{range .}}
+      <label class="check"><input form="settings" type="checkbox" name="compare" value="{{.ID}}" {{if .Checked}}checked{{end}} {{if .Blocked}}disabled{{end}}> {{.Label}}{{if .Blocked}} <span class="meta">({{.Blocked}})</span>{{end}}</label>
+    {{end}}
+    <p class="meta">How the sources are compared on one time axis, during runs.</p>
+  </fieldset>
+  {{end}}
+  {{if not .Run}}
+  <p class="meta">Saving makes a new revision of the whole analysis: its sources, each source's settings above, and the comparison. Changing a source's range or rules starts a fresh motif memory for it; the earlier one is kept and comes back if you return to the same values. The engine checks every source's settings before anything is saved.</p>
+  <button form="settings">Save as revision {{add .Analysis.Revision 1}}</button>
+  {{end}}
 </section>
 
-<div class="grid">
 <section>
   <h2>Title and description</h2>
   <form method="post" action="/analyses/{{.Analysis.ID}}" class="stack">
@@ -188,20 +204,8 @@
     <label>Description {{with index .Errs "description"}}<span class="field-error">{{.}}</span>{{end}}<textarea name="description" rows="3" maxlength="2000">{{.Description}}</textarea></label>
     <button>Save</button>
   </form>
+  <p class="meta">Title and description are not part of a revision; they can be changed during a run.</p>
 </section>
-<section>
-  <h2>Memories</h2>
-  {{range .Sources}}
-    <h3>{{.Stream.Texts.Name}}</h3>
-    {{if .Memories}}
-    <table>
-      <thead><tr><th>Key</th><th>Motifs</th><th>Size</th><th>Last used</th></tr></thead>
-      <tbody>{{range .Memories}}<tr><td><code class="small">{{.Key}}</code>{{if .InUse}} <span class="meta">in use</span>{{end}}</td><td>{{.Motifs}}</td><td>{{bytes .Bytes}}</td><td>{{when .LastUsed}}</td></tr>{{end}}</tbody>
-    </table>
-    {{else}}<p class="meta">{{if .EngineErr}}{{.EngineErr}}{{else}}None kept yet.{{end}}</p>{{end}}
-  {{end}}
-</section>
-</div>
 
 <section>
   <h2>Runs</h2>

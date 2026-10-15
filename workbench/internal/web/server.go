@@ -81,6 +81,7 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 		probes: map[string]probeEntry{},
 	}
 	s.data = newDatasets(s, cfg.DatasetDir)
+	s.sync.onState = s.data.noteState
 	if err := s.parseTemplates(); err != nil {
 		return nil, err
 	}
@@ -93,6 +94,10 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 func (s *Server) Start(ctx context.Context) {
 	go s.sync.run(ctx)
 	go s.data.refresh(ctx) // runs that went on, or ended, while the Workbench was down
+	go func() {
+		<-ctx.Done()
+		s.data.close()
+	}()
 	go func() {
 		t := time.NewTicker(30 * time.Second)
 		defer t.Stop()
@@ -185,7 +190,8 @@ func (s *Server) routes() {
 // --- templates ---
 
 var funcs = template.FuncMap{
-	"clock": func(t time.Time) string { return t.UTC().Format("15:04:05") },
+	"clock":   func(t time.Time) string { return t.UTC().Format("15:04:05") },
+	"seconds": func(v float64) string { return roundDuration(time.Duration(v * float64(time.Second))) },
 	"when": func(t time.Time) string {
 		if t.IsZero() {
 			return "—"
