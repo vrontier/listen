@@ -150,7 +150,9 @@
         </tbody>
       </table>
       <input form="settings" type="hidden" name="{{$p}}rule_count" value="{{len .Form.Rules}}" class="rule-count">
-      {{if .SavedRules}}
+      {{if not .SavedRules}}
+      <p class="meta library-put">To share this source's filter rules with other members through the <a href="/library">Library</a>, add rules above and save them as a revision{{if $d.Run}} once the run has ended (settings are fixed during a run){{end}}; then "Put these rules in the library" appears here.</p>
+      {{else}}
       <details class="library-put">
         <summary>Put these rules in the library</summary>
         <form method="post" action="/library" class="stack">
@@ -253,7 +255,6 @@
   <p><a class="button secondary" href="/analyses/{{.Analysis.ID}}/publish">{{if eq .Analysis.State "withdrawn"}}Publish again…{{else}}Publish…{{end}}</a></p>
   {{else}}
   <p class="meta">{{if eq .Analysis.State "withdrawn"}}Withdrawn on {{when .Analysis.Withdrawn}}.{{else}}Private: only you see it.{{end}} Publishing is not open on this Workbench yet.</p>
-  <p><button class="secondary" disabled>Publish…</button></p>
   {{end}}
   {{end}}
 </section>

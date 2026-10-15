@@ -152,7 +152,7 @@ func TestPublishingOff(t *testing.T) {
 	aURL := "/analyses/" + strconv.FormatInt(a.ID, 10)
 	c := r.loginAs("m@example.org")
 	_, page, _ := r.get(c, aURL)
-	if strings.Contains(page, `href="`+aURL+`/publish"`) || !strings.Contains(page, "Publishing is not open on this Workbench yet") {
+	if strings.Contains(page, `href="`+aURL+`/publish"`) || strings.Contains(page, "Publish…") || !strings.Contains(page, "Publishing is not open on this Workbench yet") {
 		t.Fatal("the analysis page still offers publishing")
 	}
 	if code, _, hdr := r.get(c, aURL+"/publish"); code != http.StatusSeeOther || hdr.Get("Location") != aURL {
