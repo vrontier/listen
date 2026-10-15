@@ -103,6 +103,13 @@ func (d *DB) PublishedAnalyses(ctx context.Context) ([]Analysis, error) {
 	return d.queryAnalyses(ctx, `WHERE a.state = ?`, AnalysisPublished)
 }
 
+// AnyPublished tells whether anything is public now.
+func (d *DB) AnyPublished(ctx context.Context) (bool, error) {
+	var n int
+	err := d.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM analyses WHERE state = ?`, AnalysisPublished).Scan(&n)
+	return n > 0, err
+}
+
 // SetPublishConsent records whether a stream's owner agrees that the
 // member it is shared with publishes analyses that use it.
 func (d *DB) SetPublishConsent(ctx context.Context, streamID, userID, by int64, ok bool) error {

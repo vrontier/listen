@@ -339,11 +339,15 @@ type page struct {
 	Flash         string
 	Error         string
 	EngineProblem string
+	Research      bool // something is published, so the menu offers it
 	Data          any
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name, title string, data any) {
 	p := page{Site: s.cfg.SiteName, Title: title, Data: data}
+	if pub, err := s.db.AnyPublished(r.Context()); err == nil {
+		p.Research = pub
+	}
 	if sess, ok := sessionFrom(r); ok {
 		u := sess.User
 		p.User, p.CSRF = &u, sess.CSRF

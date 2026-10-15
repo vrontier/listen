@@ -29,6 +29,11 @@ func TestPublishing(t *testing.T) {
 	aURL := "/analyses/" + strconv.FormatInt(a.ID, 10)
 	annC := r.loginAs("ann@example.org")
 
+	// Nothing is published, so the menu does not offer Research.
+	if _, page, _ := r.get(annC, "/analyses"); strings.Contains(page, `href="/research"`) {
+		t.Fatal("Research in the menu with nothing published")
+	}
+
 	// Bob has not agreed yet: the page says so and publishing is refused.
 	_, page, _ := r.get(annC, aURL+"/publish")
 	if !strings.Contains(page, "belongs to Bob, who has not agreed") || !strings.Contains(page, "Dawn chorus") {
@@ -62,8 +67,8 @@ func TestPublishing(t *testing.T) {
 	if strings.Contains(page, "s.example.org") || strings.Contains(page, "50.12345") {
 		t.Fatal("address or coordinates on the public page")
 	}
-	if _, page, _ = r.get(visitor, "/research"); !strings.Contains(page, "Dawn chorus") {
-		t.Fatal("not in the index")
+	if _, page, _ = r.get(visitor, "/research"); !strings.Contains(page, "Dawn chorus") || !strings.Contains(page, `href="/research"`) {
+		t.Fatal("not in the index, or Research not in the menu")
 	}
 	if code, _, _ := r.get(visitor, "/research/dawn-chorus/live/"+strconv.FormatInt(sa.ID, 10)); code != http.StatusConflict {
 		t.Fatalf("live outside a run: %d", code)
