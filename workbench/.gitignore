@@ -44,3 +44,6 @@ go.work.sum
 *.sock
 /build/
 deploy/local.mk
+
+# Local MCP servers; they name hosts
+.mcp.json
