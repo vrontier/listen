@@ -28,7 +28,6 @@ type Stream struct {
 	Texts        StreamTexts
 	AudioAllowed bool
 	State        string
-	AlwaysOn     bool
 	Attested     time.Time
 	Probe        json.RawMessage
 	Created      time.Time
@@ -148,14 +147,14 @@ func Slugify(name string) string {
 }
 
 const streamCols = `s.id, s.slug, s.owner_id, u.name, s.input, s.sample_rate, s.name, s.place, s.timezone, s.lat, s.lon, s.description,
-	s.credit, s.credit_url, s.audio_allowed, s.state, s.always_on, s.attested, s.probe, s.created, s.updated`
+	s.credit, s.credit_url, s.audio_allowed, s.state, s.attested, s.probe, s.created, s.updated`
 
 func scanStream(row interface{ Scan(...any) error }) (Stream, error) {
 	var s Stream
 	var attested, probe, created, updated string
 	err := row.Scan(&s.ID, &s.Slug, &s.OwnerID, &s.OwnerName, &s.Input, &s.SampleRate, &s.Texts.Name, &s.Texts.Place,
 		&s.Texts.TimeZone, &s.Texts.Lat, &s.Texts.Lon, &s.Texts.Description, &s.Texts.Credit, &s.Texts.CreditURL, &s.AudioAllowed, &s.State,
-		&s.AlwaysOn, &attested, &probe, &created, &updated)
+		&attested, &probe, &created, &updated)
 	s.Attested, s.Created, s.Updated = parseStamp(attested), parseStamp(created), parseStamp(updated)
 	s.Probe = json.RawMessage(probe)
 	return s, err
@@ -223,19 +222,18 @@ func (d *DB) UpdateStreamTexts(ctx context.Context, id, by int64, t StreamTexts,
 }
 
 // SetStreamState moves a stream to another state.
-func (d *DB) SetStreamState(ctx context.Context, id, by int64, state string, alwaysOn bool) error {
+func (d *DB) SetStreamState(ctx context.Context, id, by int64, state string) error {
 	now := d.now()
 	return d.tx(ctx, func(tx *sql.Tx) error {
 		var oldState string
-		var oldAlways bool
-		if err := tx.QueryRowContext(ctx, `SELECT state, always_on FROM streams WHERE id = ?`, id).Scan(&oldState, &oldAlways); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT state FROM streams WHERE id = ?`, id).Scan(&oldState); err != nil {
 			return notFound(err)
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE streams SET state = ?, always_on = ?, updated = ? WHERE id = ?`, state, alwaysOn, stamp(now), id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE streams SET state = ?, updated = ? WHERE id = ?`, state, stamp(now), id); err != nil {
 			return err
 		}
-		before, _ := json.Marshal(map[string]any{"state": oldState, "always_on": oldAlways})
-		after, _ := json.Marshal(map[string]any{"state": state, "always_on": alwaysOn})
+		before, _ := json.Marshal(map[string]any{"state": oldState})
+		after, _ := json.Marshal(map[string]any{"state": state})
 		return audit(ctx, tx, now, by, "stream", id, "state", string(before), string(after))
 	})
 }

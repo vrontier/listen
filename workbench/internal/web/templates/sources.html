@@ -11,7 +11,7 @@
 <article class="card">
   <div class="heading-row">
     <h2><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></h2>
-    <span class="state state-{{.State}}">{{.State}}{{if .AlwaysOn}}, always on{{end}}</span>
+    <span class="state state-{{.State}}">{{.State}}</span>
   </div>
   <p class="meta">{{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: <span class="conn conn-{{.Engine.State}}">{{.Engine.State}}</span>{{else}}not in the engine{{end}}</p>
   <p class="meta">{{if .Analyses}}Used by {{range $i, $a := .Analyses}}{{if $i}}, {{end}}{{$a.Name}} ({{$a.OwnerName}}){{end}}.{{else}}No analysis uses it yet.{{end}}</p>

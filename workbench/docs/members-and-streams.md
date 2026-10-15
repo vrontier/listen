@@ -56,7 +56,7 @@ browser ──► web server ──► Workbench process ──control API──
 
 ### Of a stream
 
-**Decided** (2026-10-15): a stream connects only while an analysis using it is in a run or a preview ([design.md](design.md#runs)). This replaces the rule of 2026-10-14 (draft on demand, production possibly always on). The rest of this table is **proposed**.
+**Decided** (2026-10-15): a stream connects only while an analysis using it is in a run or a preview ([design.md](design.md#runs)). This replaces the rule of 2026-10-14 (draft on demand, production possibly always on); "always on" is removed (decided 2026-10-15). The rest of this table is **proposed**.
 
 ```text
 draft ──► production
@@ -70,14 +70,14 @@ any state ──► suspended (master admin)
 | State | Connected | Who sees it |
 |---|---|---|
 | Draft | while an analysis using it is in a run or a preview | the owner and invited members |
-| Production | as in draft ("always on" has no effect since 2026-10-15; open whether it goes) | the owner and invited members; published analyses are public |
+| Production | as in draft | the owner and invited members; published analyses are public |
 | Paused | no | the owner and invited members see the last state |
 | Suspended | no | nobody; the owner sees the reason |
 
-- **Decided:** once a stream is connected, it goes offline only when all its consumers have stopped. A consumer is a page or a token reading one of its analyses, a trial run, or an analysis that runs always on.
-- **Decided:** a stream always shows who is connected to it. **Proposed:** its page lists, live, each analysis on it with its member's display name, whether it runs always on, and how many pages and tokens are reading. Everyone who may see the stream sees this list. The privacy notice has to say that display names are shown to invited members.
+- **Decided:** once a stream is connected, it goes offline only when all its consumers have stopped. A consumer is a page or a token reading one of its analyses, a trial run, or an analysis in a run.
+- **Decided:** a stream always shows who is connected to it. **Proposed:** its page lists, live, each analysis on it with its member's display name, whether it is in a run, and how many pages and tokens are reading. Everyone who may see the stream sees this list. The privacy notice has to say that display names are shown to invited members.
 - **Proposed**, a reading of the answer above that the maintainer should confirm: the owner can still pause the stream while others are consumers, because the owner holds the operator's permission. The other members are told. Without this, a stream whose operator withdraws permission could not be stopped by its owner.
-- **Proposed:** moving to production and switching on "always on" are checked against the caps (see [Resources and caps](#resources-and-caps)). Always on is for a stream the member runs or whose operator has agreed to continuous listening.
+- **Proposed:** starting a run is checked against the caps (see [Resources and caps](#resources-and-caps)). A long run is for a stream the member runs or whose operator has agreed to continuous listening.
 - A stream in draft builds a motif memory with gaps. Every analysis page states the mode and which hours were actually heard, so that such a memory is not misread.
 
 ### Of an analysis

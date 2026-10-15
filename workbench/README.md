@@ -49,7 +49,7 @@ What `deploy/install.sh` sets up there:
 
 - **Public presentation of research:** pages that show ongoing work to visitors.
 - **A member area for researchers:** usable without programming.
-- **Streams:** register streams, analyse them on demand or always on, and share them with invited members.
+- **Streams:** register streams, analyse them in runs, and share them with invited members.
 - **Filters and motifs:** define what the analysis leaves out and what it looks for, try a change before keeping it, and share filters through a common library.
 - **A data stream by token:** analysis data over Server-Sent Events.
 - **An MCP interface by token:** for AI-supported research.

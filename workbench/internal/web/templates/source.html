@@ -3,7 +3,7 @@
 {{with .Data}}
 <div class="heading-row">
   <h1>{{.Stream.Texts.Name}}</h1>
-  <span class="state state-{{.Stream.State}}">{{.Stream.State}}{{if .Stream.AlwaysOn}}, always on{{end}}</span>
+  <span class="state state-{{.Stream.State}}">{{.Stream.State}}</span>
 </div>
 <p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz · registered {{when .Stream.Created}} by {{.Stream.OwnerName}}</p>
 
@@ -40,19 +40,13 @@
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="resume">Resume</button></form>
     {{else}}
       {{if eq .Stream.State "draft"}}
-      <form method="post" action="/sources/{{.Stream.Slug}}/state" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}">
-        <label class="check"><input type="checkbox" name="always_on"> always on <span class="meta">(no effect at the moment)</span></label>
-        <button name="to" value="production">Move to production</button></form>
+      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="production">Move to production</button></form>
       {{else}}
-      <form method="post" action="/sources/{{.Stream.Slug}}/state" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}">
-        <label class="check"><input type="checkbox" name="always_on" {{if .Stream.AlwaysOn}}checked{{end}}> always on <span class="meta">(no effect at the moment)</span></label>
-        <button name="to" value="production">Apply</button></form>
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="draft" class="secondary">Back to draft</button></form>
       {{end}}
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="pause" class="secondary">Pause</button></form>
     {{end}}
   </div>
-  <p class="meta">Always on is for a stream you run, or whose operator has agreed to continuous listening.</p>
   {{end}}
 </section>
 

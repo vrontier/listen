@@ -8,7 +8,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/url"
@@ -497,12 +496,10 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 		return err
 	}
 
-	// The events as CSV, a column naming the source.
+	// The events as CSV, a column naming the source. Plain CSV with one
+	// header row, so that spreadsheets read it; what the run was and its
+	// settings are in the JSON.
 	err = writeGz(filepath.Join(dir, fileEvents+".gz"), func(w io.Writer) error {
-		fmt.Fprintf(w, "# analysis: %s, run %d, %s to %s (UTC)\n", a.Name, run.Number, run.Started.Format(time.RFC3339), end.Format(time.RFC3339))
-		for _, src := range a.Sources {
-			fmt.Fprintf(w, "# source %s: %s, sample rate %d Hz, settings %s\n", src.Stream.Slug, src.Stream.Texts.Name, src.Stream.SampleRate, src.Spec)
-		}
 		cw := csv.NewWriter(w)
 		cw.Write(eventColumns)
 		for _, src := range a.Sources {
@@ -528,7 +525,6 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 			names[src.Stream.EngineID()] = src.Stream.Slug
 		}
 		err = writeGz(filepath.Join(dir, fileCompare+".gz"), func(w io.Writer) error {
-			fmt.Fprintf(w, "# analysis: %s, run %d; comparison: %v\n# times are wall time at the engine: accurate to seconds, not to the stations' clocks\n", a.Name, run.Number, a.Spec.Compare)
 			cw := csv.NewWriter(w)
 			cw.Write(compareColumns)
 			err := eachLine(filepath.Join(dir, groupTopic+".jsonl"), func(b []byte) error {

@@ -414,30 +414,25 @@ func (s *Server) streamState(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "/sources/"+st.Slug, "A suspended stream cannot be changed.")
 		return
 	}
-	state, always := st.State, st.AlwaysOn
-	var flash string
+	var state, flash string
 	switch r.PostFormValue("to") {
 	case "draft":
-		state, always, flash = catalogue.StreamDraft, false, "Back in draft."
+		state, flash = catalogue.StreamDraft, "Back in draft."
 	case "production":
-		state, always = catalogue.StreamProduction, r.PostFormValue("always_on") == "on"
-		flash = "In production."
-		if always {
-			flash = "In production. \"Always on\" has no effect at the moment: sources connect only for runs and previews."
-		}
+		state, flash = catalogue.StreamProduction, "In production."
 	case "pause":
 		state, flash = catalogue.StreamPaused, "Paused. The stream is disconnected; its memories are kept."
 	case "resume":
-		state, always, flash = catalogue.StreamDraft, false, "Resumed, in draft."
+		state, flash = catalogue.StreamDraft, "Resumed, in draft."
 	default:
 		http.Error(w, "unknown state", http.StatusBadRequest)
 		return
 	}
-	if err := s.db.SetStreamState(r.Context(), st.ID, sess.User.ID, state, always); err != nil {
+	if err := s.db.SetStreamState(r.Context(), st.ID, sess.User.ID, state); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	st.State, st.AlwaysOn = state, always
+	st.State = state
 	defer s.syncGroups(r.Context())
 	if err := s.sync.push(r.Context(), st); err != nil {
 		log.Printf("push %s: %v", st.EngineID(), err)

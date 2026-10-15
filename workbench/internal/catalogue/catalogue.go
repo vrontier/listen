@@ -70,7 +70,6 @@ CREATE TABLE IF NOT EXISTS streams (
 	credit_url    TEXT NOT NULL DEFAULT '',
 	audio_allowed INTEGER NOT NULL DEFAULT 0,
 	state         TEXT NOT NULL DEFAULT 'draft',
-	always_on     INTEGER NOT NULL DEFAULT 0,
 	attested      TEXT NOT NULL,
 	probe         TEXT NOT NULL DEFAULT '{}',
 	created       TEXT NOT NULL,
@@ -180,6 +179,13 @@ func migrate(db *sql.DB) error {
 			if _, err := db.Exec(`ALTER TABLE streams ADD COLUMN ` + c + ` REAL`); err != nil {
 				return err
 			}
+		}
+	}
+	// "Always on" went on 2026-10-15: sources connect only for runs and
+	// previews.
+	if cols["always_on"] {
+		if _, err := db.Exec(`ALTER TABLE streams DROP COLUMN always_on`); err != nil {
+			return err
 		}
 	}
 	if err := migrateAnalyses(db); err != nil {

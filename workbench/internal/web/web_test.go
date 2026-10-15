@@ -387,8 +387,9 @@ func TestMemberFlow(t *testing.T) {
 	if _, page, _ = r.get(member, runURL); !strings.Contains(page, `href="`+runURL+`/events.csv"`) || !strings.Contains(page, "Delete the data set") {
 		t.Fatalf("run page without its data set:\n%s", page)
 	}
+	// Plain CSV: the header is the first line, which spreadsheets need.
 	code, page, hdr = r.get(member, runURL+"/events.csv")
-	if code != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "text/csv") || !strings.Contains(page, "source,timestamp,position_s,type") {
+	if code != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "text/csv") || !strings.HasPrefix(page, "source,timestamp,position_s,type") {
 		t.Fatalf("events of the run: %d", code)
 	}
 	if code, page, _ = r.get(member, runURL+"/dataset.json"); code != 200 || !json.Valid([]byte(page)) || !strings.Contains(page, `"revisions"`) {
@@ -607,7 +608,7 @@ func TestComparison(t *testing.T) {
 	if len(runs) != 1 || runs[0].Dataset != catalogue.DatasetReady {
 		t.Fatalf("data set: %+v", runs)
 	}
-	if code, page, _ := r.get(member, "/runs/"+strconv.FormatInt(runs[0].ID, 10)+"/comparison.csv"); code != 200 || !strings.Contains(page, "type,timestamp,source,other_source") {
+	if code, page, _ := r.get(member, "/runs/"+strconv.FormatInt(runs[0].ID, 10)+"/comparison.csv"); code != 200 || !strings.HasPrefix(page, "type,timestamp,source,other_source") {
 		t.Fatalf("comparison of the run: %d", code)
 	}
 

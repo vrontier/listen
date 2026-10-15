@@ -38,7 +38,7 @@
   <tbody>{{range .Users}}<tr><td>{{.Name}}{{if .Admin}} <span class="meta">admin</span>{{end}}</td><td>{{.Email}}</td><td>{{when .Created}}</td></tr>{{end}}</tbody></table>
   <h3>Streams</h3>
   <table><thead><tr><th>Name</th><th>Owner</th><th>State</th></tr></thead>
-  <tbody>{{range .Streams}}<tr><td>{{.Texts.Name}}</td><td>{{.OwnerName}}</td><td>{{.State}}{{if .AlwaysOn}}, always on{{end}}</td></tr>{{end}}</tbody></table>
+  <tbody>{{range .Streams}}<tr><td>{{.Texts.Name}}</td><td>{{.OwnerName}}</td><td>{{.State}}</td></tr>{{end}}</tbody></table>
 </section>
 </div>
 <section>

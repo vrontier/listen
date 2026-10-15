@@ -146,18 +146,13 @@ func (s *engineSync) session(ctx context.Context) error {
 	})
 }
 
-// wanted reports whether a stream should exist in the engine, and how. A
-// stream an analysis in a run uses stays connected, in draft too.
+// wanted reports whether a stream should exist in the engine, and how: a
+// stream an analysis in a run uses stays connected; otherwise it connects
+// on demand, for a preview.
 func wanted(st catalogue.Stream, inRun bool) (engine.StreamSpec, bool) {
 	spec := engine.StreamSpec{Input: st.Input, SampleRate: st.SampleRate, Mode: engine.OnDemand}
 	switch st.State {
-	case catalogue.StreamDraft:
-		if inRun {
-			spec.Mode = engine.Continuous
-		}
-	case catalogue.StreamProduction:
-		// "Always on" has had no effect since sources connect only for
-		// runs and previews (design.md, Runs); whether it goes is open.
+	case catalogue.StreamDraft, catalogue.StreamProduction:
 		if inRun {
 			spec.Mode = engine.Continuous
 		}
