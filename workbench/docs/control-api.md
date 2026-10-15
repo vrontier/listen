@@ -531,6 +531,19 @@ A new event type of an analysis, `signal.impulses`, once per second: the second,
 
 `source` in a group event's envelope is the group's identifier. Changes of a group's state are sent on `GET /v1/events` as `group.state`.
 
+### As the stand-in serves it
+
+**Proposed** (2026-10-15): the shapes below are what the stand-in engine serves and the Workbench reads. They fill in what the tables above leave open; the engine session may change them, with this document.
+
+- **Envelope:** as for an analysis, plus `label` and `time_source`. The `timestamp` of `group.activity` is the second it describes.
+- **`group.activity`:** `{"second": "…Z", "members": [{"stream", "analysis", "present", "level_db", "flux", "impulse_rate"}]}`; the three values are missing when `present` is false.
+- **`group.correlation`:** `{"window_s": 300, "max_lag_s": 30, "series": "impulse_rate", "pairs": [{"a", "b", "r", "lag_s", "baseline_r", "n"}]}`. `lag_s` positive means `b` hears the same later than `a`. `baseline_r` is the best correlation of the same pair shifted 150 s apart; `null` until there is enough history. `r` is `null` while fewer than half the window's seconds have both members.
+- **`group.status`:** `{"members": [{"stream", "analysis", "state", "time_source", "delay_s"}], "watermark", "behind_s", "time_source"}`. On wall time `delay_s` is `null`: the engine cannot know a path delay without station time.
+- **`…/state`:** `{"group": <the group>, "status": <the last status event>, "activity": [<the last 600 activity events>], "correlation": <the last correlation event>, "clock": null, "coincidence": null}`.
+- **The group** as `GET` returns it: the spec's fields, each member with `state` (`present`, `absent`, `removed`), `time_source` and `delay_s`, and the group's `state` (`running` or `idle`) and `subscribers`.
+- **Refusals:** a timing analysis without station time is `422` with the code `needs_station_time` at `analyses[i]`; an unknown member is `not_found` at `members[i].stream` or `members[i].analysis`.
+- **`counts.groups`** in `GET /v1/engine`.
+
 ## Errors
 
 Every error has this body:

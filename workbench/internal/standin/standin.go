@@ -24,7 +24,7 @@ import (
 
 const (
 	apiMajor = 1
-	apiMinor = 0
+	apiMinor = 1
 	version  = "standin-0.1.0"
 )
 
@@ -46,6 +46,7 @@ type Engine struct {
 
 	mu      sync.Mutex
 	streams map[string]*stream
+	groups  map[string]*group
 	watch   map[chan event]struct{} // GET /v1/events subscribers
 	stop    chan struct{}
 }
@@ -62,6 +63,8 @@ var limits = map[string]int{
 	"subscriptions_per_analysis": 4,
 	"max_sample_rate":            48000,
 	"max_bitrate_kbps":           512,
+	"groups":                     20,
+	"members_per_group":          8,
 }
 
 // New starts a stand-in. Close stops its clock.
@@ -73,7 +76,7 @@ func New(opts Options) *Engine {
 	rand.Read(b)
 	e := &Engine{
 		opts: opts, instance: hex.EncodeToString(b), started: time.Now().UTC(),
-		streams: map[string]*stream{}, watch: map[chan event]struct{}{}, stop: make(chan struct{}),
+		streams: map[string]*stream{}, groups: map[string]*group{}, watch: map[chan event]struct{}{}, stop: make(chan struct{}),
 	}
 	e.routes()
 	go e.clock()
@@ -105,6 +108,7 @@ func (e *Engine) routes() {
 	m.HandleFunc("DELETE /v1/streams/{s}/analyses/{a}/memories/{key}", e.deleteMemory)
 	m.HandleFunc("POST /v1/validate/analysis", e.validate)
 	m.HandleFunc("POST /v1/probes", e.probe)
+	e.groupRoutes(m)
 	e.mux = m
 }
 
@@ -173,7 +177,7 @@ func (e *Engine) notify(typ string, data any) {
 func (e *Engine) getEngine(w http.ResponseWriter, r *http.Request) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	counts := map[string]int{"streams": len(e.streams)}
+	counts := map[string]int{"streams": len(e.streams), "groups": len(e.groups)}
 	var total usage
 	for _, s := range e.streams {
 		counts["analyses"] += len(s.analyses)
@@ -199,6 +203,7 @@ func (e *Engine) getEngine(w http.ResponseWriter, r *http.Request) {
 		"capabilities": map[string]any{
 			"rule_kinds": []string{"line", "comb"}, "detectors": []any{},
 			"file_inputs": false, "address_check": "initial",
+			"station_time": false, "group_analyses": groupAnalyses,
 		},
 		"counts": counts,
 		"host":   hostInfo(),

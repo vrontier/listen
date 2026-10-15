@@ -44,6 +44,8 @@ type Limits struct {
 	SubscriptionsPerAnalysis int `json:"subscriptions_per_analysis"`
 	MaxSampleRate            int `json:"max_sample_rate"`
 	MaxBitrateKbps           int `json:"max_bitrate_kbps"`
+	Groups                   int `json:"groups"`            // 1.1
+	MembersPerGroup          int `json:"members_per_group"` // 1.1
 }
 
 type Capabilities struct {
@@ -51,7 +53,21 @@ type Capabilities struct {
 	Detectors    []any    `json:"detectors"`
 	FileInputs   bool     `json:"file_inputs"`
 	AddressCheck string   `json:"address_check"`
+	// 1.1
+	StationTime   bool               `json:"station_time"`
+	GroupAnalyses []GroupAnalysisCap `json:"group_analyses"`
 }
+
+// GroupAnalysisCap is one group analysis the engine offers, with the
+// timing it needs: "seconds" works on wall time, "milliseconds" needs
+// station time.
+type GroupAnalysisCap struct {
+	ID     string `json:"id"`
+	Timing string `json:"timing"`
+}
+
+// Groups reports whether the engine has groups (control API 1.1).
+func (i Info) Groups() bool { return i.API.Minor >= 1 && len(i.Capabilities.GroupAnalyses) > 0 }
 
 type Counts struct {
 	Streams   int `json:"streams"`
@@ -270,3 +286,36 @@ type Error struct {
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("engine: %d %s: %s", e.Status, e.Code, e.Message) }
+
+// GroupMember is one analysis in a group (control-api.md, Groups).
+type GroupMember struct {
+	Stream   string   `json:"stream"`
+	Analysis string   `json:"analysis"`
+	Lat      *float64 `json:"lat,omitempty"`
+	Lon      *float64 `json:"lon,omitempty"`
+}
+
+// GroupSpec is what is put for a group.
+type GroupSpec struct {
+	Members     []GroupMember `json:"members"`
+	Analyses    []string      `json:"analyses"`
+	HistoryDays int           `json:"history_days,omitempty"`
+	Label       string        `json:"label,omitempty"`
+	Mode        string        `json:"mode,omitempty"`
+}
+
+// Group is a group as the engine reports it.
+type Group struct {
+	ID      string `json:"id"`
+	Members []struct {
+		GroupMember
+		State      string   `json:"state"`
+		TimeSource string   `json:"time_source"`
+		DelayS     *float64 `json:"delay_s"`
+	} `json:"members"`
+	Analyses    []string `json:"analyses"`
+	Mode        string   `json:"mode"`
+	Label       string   `json:"label"`
+	State       string   `json:"state"`
+	Subscribers int      `json:"subscribers"`
+}

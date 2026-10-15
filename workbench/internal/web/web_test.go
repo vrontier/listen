@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -416,6 +417,138 @@ func TestRunKeepsSourceConnected(t *testing.T) {
 	_, page, _ = r.get(member, aURL)
 	if !strings.Contains(page, "Start a run") || !strings.Contains(page, "stopped by M") || !strings.Contains(page, "format=csv") {
 		t.Fatal("stopped run not listed")
+	}
+
+	// The Runs page starts and stops runs of any of the member's analyses.
+	_, page, _ = r.get(member, "/runs")
+	if !strings.Contains(page, "Nothing is running") || !strings.Contains(page, `<option value="`+strconv.FormatInt(a.ID, 10)+`">Night watch`) {
+		t.Fatal("runs page before the start")
+	}
+	if code, _, hdr := r.post(member, "/runs", url.Values{"csrf": {csrf}, "analysis": {strconv.FormatInt(a.ID, 10)}, "length": {"0"}}); code != http.StatusSeeOther || hdr.Get("Location") != "/runs" {
+		t.Fatalf("start from the runs page: %d %s", code, hdr.Get("Location"))
+	}
+	_, page, _ = r.get(member, "/runs")
+	if !strings.Contains(page, "until stopped") || !strings.Contains(page, `name="back" value="runs"`) || !strings.Contains(page, "All your analyses are running") {
+		t.Fatal("runs page while running")
+	}
+	if code, _, hdr := r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}, "back": {"runs"}}); code != http.StatusSeeOther || hdr.Get("Location") != "/runs" {
+		t.Fatalf("stop from the runs page: %d %s", code, hdr.Get("Location"))
+	}
+	other, _ := r.db.CreateUser(ctx, "o@example.org", "O", false)
+	oa, _ := r.db.CreateAnalysis(ctx, other.ID, "Theirs", "", nil, nil)
+	if _, _, hdr := r.post(member, "/runs", url.Values{"csrf": {csrf}, "analysis": {strconv.FormatInt(oa.ID, 10)}, "length": {"0"}}); hdr.Get("Location") != "/runs" {
+		t.Fatal("start of another member's analysis")
+	}
+	if _, ok, _ := r.db.ActiveRun(ctx, oa.ID); ok {
+		t.Fatal("another member's analysis was started")
+	}
+}
+
+// An analysis with two sources is compared in an engine group, as its
+// revision says; with one source left the group goes.
+func TestComparison(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	u, _ := r.db.CreateUser(ctx, "m@example.org", "M", false)
+	var ids []int64
+	var streams []catalogue.Stream
+	for _, n := range []string{"a", "b"} {
+		lat, lon := 50.12345, 10.54321
+		st, err := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://" + n + ".example.org/x", SampleRate: 22050,
+			Texts: catalogue.StreamTexts{Name: "Station " + n, Lat: &lat, Lon: &lon}, Probe: []byte(`{}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, st.ID)
+		streams = append(streams, st)
+	}
+	a, err := r.db.CreateAnalysis(ctx, u.ID, "Pair", "", ids, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(a.Spec.Compare, catalogue.DefaultCompare) {
+		t.Fatalf("new analysis compares %v", a.Spec.Compare)
+	}
+	if err := r.srv.sync.reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	cl := engine.NewClient(&http.Client{}, r.engSrv.URL)
+	group := func() (engine.Group, bool) {
+		gs, err := cl.Groups(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, g := range gs {
+			if g.ID == a.GroupID() {
+				return g, true
+			}
+		}
+		return engine.Group{}, false
+	}
+	g, ok := group()
+	if !ok || len(g.Members) != 2 || g.Mode != engine.OnDemand || g.Label != "rev-1" || g.Members[0].Lat == nil {
+		t.Fatalf("group: %v %+v", ok, g)
+	}
+
+	member := r.loginAs("m@example.org")
+	aURL := "/analyses/" + strconv.FormatInt(a.ID, 10)
+	_, page, _ := r.get(member, aURL)
+	if !strings.Contains(page, "compare.js") || !strings.Contains(page, `name="compare" value="activity" checked`) || !strings.Contains(page, "needs station time") {
+		t.Fatal("analysis page lacks the comparison")
+	}
+	if code, body, _ := r.get(member, aURL+"/compare/state"); code != 200 || !strings.Contains(body, `"group"`) {
+		t.Fatalf("compare state: %d %s", code, body)
+	}
+	csrf := csrfOf(t, page)
+	p0, p1 := prefixOf(ids[0]), prefixOf(ids[1])
+	form := url.Values{"csrf": {csrf}, "source": {strconv.FormatInt(ids[0], 10), strconv.FormatInt(ids[1], 10)}, "compare_form": {"1"},
+		p0 + "memory_mode": {"disk"}, p1 + "memory_mode": {"disk"}}
+	form["compare"] = []string{"activity", "coincidence"}
+	if code, body, _ := r.post(member, aURL+"/settings", form); code != 422 || !strings.Contains(body, "needs station time") {
+		t.Fatalf("coincidence without station time: %d", code)
+	}
+	form["compare"] = nil
+	if code, body, _ := r.post(member, aURL+"/settings", form); code != 422 || !strings.Contains(body, "at least one way") {
+		t.Fatalf("no comparison chosen: %d", code)
+	}
+
+	// A run keeps the group going without a page.
+	if code, _, _ := r.post(member, aURL+"/run", url.Values{"csrf": {csrf}, "length": {"1h"}}); code != http.StatusSeeOther {
+		t.Fatalf("start: %d", code)
+	}
+	if g, _ := group(); g.Mode != engine.Continuous {
+		t.Fatalf("group in a run: %s", g.Mode)
+	}
+	r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}})
+	if g, _ := group(); g.Mode != engine.OnDemand {
+		t.Fatalf("group after the run: %s", g.Mode)
+	}
+
+	// Pausing one source leaves one running: the group goes, and the page
+	// says why.
+	r.post(member, "/sources/"+streams[1].Slug+"/state", url.Values{"csrf": {csrf}, "to": {"pause"}})
+	if _, ok := group(); ok {
+		t.Fatal("group kept with one source running")
+	}
+	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "Fewer than two of the sources are running") {
+		t.Fatal("page does not say why there is no comparison")
+	}
+	r.post(member, "/sources/"+streams[1].Slug+"/state", url.Values{"csrf": {csrf}, "to": {"resume"}})
+	if _, ok := group(); !ok {
+		t.Fatal("group not back after resuming")
+	}
+
+	// Taking a source out ends the comparison.
+	delete(form, "compare_form")
+	form["source"] = []string{strconv.FormatInt(ids[0], 10)}
+	if code, _, _ := r.post(member, aURL+"/settings", form); code != http.StatusSeeOther {
+		t.Fatalf("one source: %d", code)
+	}
+	if _, ok := group(); ok {
+		t.Fatal("group kept with one source")
+	}
+	if a, _ = r.db.Analysis(ctx, a.ID); a.Spec.Compare != nil {
+		t.Fatalf("one source still compares %v", a.Spec.Compare)
 	}
 }
 

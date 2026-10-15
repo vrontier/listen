@@ -183,7 +183,7 @@ What exists today that these build on:
 
 **Decided** (2026-10-14). An analysis is the member's own object, and it uses 1 to n sources. It is not an element of a source.
 
-- **The menu** has "Sources" (the registered streams) and "Analyses".
+- **The menu** has "Sources" (the registered streams) and "Analyses", and since 2026-10-15 "Runs" (see [Runs](#runs)).
 - **A source** is registered, probed, described, located, switched between draft and production, paused and deleted. Its page shows who is connected: which members' analyses use it and how many pages and tokens are reading. Registering a source creates no analysis; its page offers "New analysis with this source".
 - **An analysis** has a name, a description and its sources. **Settings are kept per source inside the analysis:** range, sensitivity, filter rules and memory, because interference belongs to a receiver (one station's mains run at 50 Hz, another's at 60 Hz). A button copies one source's settings to all the others, for sources that share their interference.
 - **One revision number covers the whole analysis:** its sources and all their settings together, so that a result can be traced to exactly one configuration.
@@ -200,6 +200,7 @@ This replaces the earlier drafts in which an analysis was made under a stream, a
 - **A source's state says how far along the source is** (draft, production, paused). Whether it runs is decided by what uses it: a run, an open page, a token, or "always on" in production.
 - **Start and stop.** A run is started with a planned length or "until stopped", and can be stopped at any time.
 - **Runs are listed** on the analysis page, each with its start and end, the revisions in force during it, who started and stopped it, and an export of its period.
+- **A menu "Runs"** (decided 2026-10-15) manages them across analyses: what is running now, with a stop button; starting a run of any analysis; and the finished runs with their exports.
 
 **Proposed** (built against the stand-in on 2026-10-15):
 

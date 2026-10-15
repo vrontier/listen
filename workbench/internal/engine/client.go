@@ -176,6 +176,41 @@ func (c *Client) Data(ctx context.Context, stream, analysis, sub string, q url.V
 	return raw, c.do(ctx, http.MethodGet, path, nil, &raw)
 }
 
+func groupPath(id string) string { return "/v1/groups/" + id }
+
+// Groups lists the engine's groups (1.1).
+func (c *Client) Groups(ctx context.Context) ([]Group, error) {
+	var out struct {
+		Groups []Group `json:"groups"`
+	}
+	return out.Groups, c.do(ctx, http.MethodGet, "/v1/groups", nil, &out)
+}
+
+func (c *Client) PutGroup(ctx context.Context, id string, spec GroupSpec) (Group, error) {
+	var g Group
+	return g, c.do(ctx, http.MethodPut, groupPath(id), spec, &g)
+}
+
+func (c *Client) DeleteGroup(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, groupPath(id), nil, nil)
+}
+
+// GroupData fetches one of a group's data paths (state, history/events)
+// as raw JSON.
+func (c *Client) GroupData(ctx context.Context, id, sub string, q url.Values) (json.RawMessage, error) {
+	path := groupPath(id) + "/" + sub
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var raw json.RawMessage
+	return raw, c.do(ctx, http.MethodGet, path, nil, &raw)
+}
+
+// SubscribeGroup opens a group's live events.
+func (c *Client) SubscribeGroup(ctx context.Context, id string, fn func(SSE)) error {
+	return c.follow(ctx, groupPath(id)+"/events", fn)
+}
+
 // SSE is one event read from an event stream.
 type SSE struct {
 	ID    string

@@ -26,6 +26,32 @@
 {{end}}
 </div>
 
+{{if gt (len .Sources) 1}}
+<section class="compare"{{if .Comparing}} data-state="/analyses/{{.Analysis.ID}}/compare/state" data-live="/analyses/{{.Analysis.ID}}/compare/live"{{end}}>
+  <div class="live-head">
+    <h2 class="live-title">Comparison</h2>
+    {{if .Comparing}}<span class="status conn">connecting…</span> <span class="compare-status meta"></span>{{end}}
+  </div>
+  {{if .Comparing}}
+  <ol class="lane-names" hidden>{{range .Sources}}{{if .Running}}<li data-stream="{{.Stream.EngineID}}">{{.Stream.Texts.Name}}</li>{{end}}{{end}}</ol>
+  <div class="compare-controls" role="radiogroup" aria-label="What the lanes show">
+    <label class="check"><input type="radio" name="lane-metric" value="impulse_rate" checked> impulse rate</label>
+    <label class="check"><input type="radio" name="lane-metric" value="level_db"> level</label>
+    <label class="check"><input type="radio" name="lane-metric" value="flux"> flux</label>
+  </div>
+  <canvas class="lanes" width="960" height="240" aria-label="Activity of each source per second over the last ten minutes, one lane per source, on one time axis in UTC"></canvas>
+  <h3>Correlation</h3>
+  <table class="correlations"><thead><tr><th>Pair</th><th>r</th><th title="Positive: the second source hears the same later">Lag</th><th title="The same pair shifted 150 s apart: what chance alone gives">Baseline r</th><th>Above baseline</th></tr></thead><tbody><tr><td colspan="5" class="meta">The first correlation comes after five minutes of activity.</td></tr></tbody></table>
+  <p class="meta">Lanes show each source's activity per second over the last ten minutes, on one time axis in UTC; gaps are seconds in which a source was not heard. Each lane is scaled to its own range. The times are wall time at the engine, so the sources are aligned to a few seconds, not to their stations' clocks: the lag of a correlation is mostly the difference of the streams' delays on their way here. The correlation compares the impulse rates of the last five minutes, at lags up to 30 s, and is worth something only well above its baseline, the same pair shifted 150 s apart.</p>
+  <script src="{{asset "compare.js"}}" defer></script>
+  {{else if not .Groups}}
+  <p class="note">The engine does not compare sources yet: it lacks the group analyses of control API 1.1. The sources are shown one below the other, each on its own.</p>
+  {{else}}
+  <p class="note">Fewer than two of the sources are running, so there is nothing to compare now.</p>
+  {{end}}
+</section>
+{{end}}
+
 {{range .Sources}}
 <section class="live" {{if .Running}}data-live="{{.LivePath}}" data-data="{{.DataPath}}"{{end}}>
   <div class="live-head">
@@ -50,9 +76,6 @@
   {{end}}
 </section>
 {{end}}
-{{if gt (len .Sources) 1}}
-<p class="note">Comparing the sources on one time axis (activity side by side, later station clocks and shared impulses) comes with the engine's group analyses. Until then the sources are shown one below the other, each on its own clock.</p>
-{{end}}
 <p class="meta">Times are UTC. Spectrograms show the analysed range, newest on the right. Dots mark the spectral peaks left after the filter rules; the bands themselves are never filtered. Motifs are what a source's memory has found to recur; a memory starts afresh when that source's range or rules change.</p>
 <script src="{{asset "analysis.js"}}" defer></script>
 
@@ -61,7 +84,7 @@
   <form method="get" action="/analyses/{{.Analysis.ID}}/export" class="inline-form">
     <label>From, UTC <input type="datetime-local" name="from"></label>
     <label>To, UTC <input type="datetime-local" name="to"></label>
-    <label>Format <select name="format"><option value="csv">CSV</option><option value="json">JSON with motifs</option></select></label>
+    <label>Format <select name="format"><option value="csv">CSV</option><option value="json">JSON with motifs{{if .Comparing}} and correlations{{end}}</option>{{if .Comparing}}<option value="compare-csv">Comparison, CSV</option>{{end}}</select></label>
     <button class="secondary">Download</button>
   </form>
   <p class="meta">Stored events of all sources in the period (default: the last 24 hours, at most 31 days), with each source's settings in the file.</p>
@@ -80,6 +103,18 @@
       {{end}}
       <p class="meta">Up to {{.MaxSources}}. A source added here starts with the default settings; a source taken out loses its settings and memories in this analysis.</p>
     </fieldset>
+
+    {{with .Compare}}
+    <fieldset>
+      <legend>Comparison</legend>
+      <input type="hidden" name="compare_form" value="1">
+      {{with index $d.Errs "compare"}}<p class="field-error">{{.}}</p>{{end}}
+      {{range .}}
+        <label class="check"><input type="checkbox" name="compare" value="{{.ID}}" {{if .Checked}}checked{{end}} {{if .Blocked}}disabled{{end}}> {{.Label}}{{if .Blocked}} <span class="meta">({{.Blocked}})</span>{{end}}</label>
+      {{end}}
+      <p class="meta">How the sources are compared on one time axis. Part of the revision, like the settings below.</p>
+    </fieldset>
+    {{end}}
 
     {{range .Sources}}
     {{$p := .Prefix}}
@@ -167,7 +202,7 @@
       <td>{{.Duration}}</td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
       <td>{{.StartedBy}}</td>
-      <td>{{if .TooLong}}<span class="meta">longer than 31 days: export in parts above</span>{{else}}<a href="/analyses/{{$d.Analysis.ID}}/export?{{.Export}}&amp;format=csv">CSV</a> · <a href="/analyses/{{$d.Analysis.ID}}/export?{{.Export}}&amp;format=json">JSON</a>{{end}}</td>
+      <td>{{if .TooLong}}<span class="meta">longer than 31 days: export in parts above</span>{{else}}<a href="/analyses/{{$d.Analysis.ID}}/export?{{.Export}}&amp;format=csv">CSV</a> · <a href="/analyses/{{$d.Analysis.ID}}/export?{{.Export}}&amp;format=json">JSON</a>{{if $d.Comparing}} · <a href="/analyses/{{$d.Analysis.ID}}/export?{{.Export}}&amp;format=compare-csv">comparison</a>{{end}}{{end}}</td>
     </tr>{{end}}</tbody>
   </table>
   <p class="meta">Every event carries the revision it was made with, so a run that spans revisions can be told apart in its export.</p>

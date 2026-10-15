@@ -158,9 +158,13 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /analyses/{id}/delete", s.member(s.analysisDelete))
 	m.HandleFunc("POST /analyses/{id}/run", s.member(s.analysisRunStart))
 	m.HandleFunc("POST /analyses/{id}/stop", s.member(s.analysisRunStop))
+	m.HandleFunc("GET /runs", s.member(s.runsPage))
+	m.HandleFunc("POST /runs", s.member(s.runsStart))
 	m.HandleFunc("GET /analyses/{id}/live/{source}", s.member(s.analysisLive))
 	m.HandleFunc("GET /analyses/{id}/data/{source}/{what...}", s.member(s.analysisProxy))
 	m.HandleFunc("GET /analyses/{id}/export", s.member(s.analysisExport))
+	m.HandleFunc("GET /analyses/{id}/compare/live", s.member(s.analysisCompareLive))
+	m.HandleFunc("GET /analyses/{id}/compare/state", s.member(s.analysisCompareState))
 
 	m.HandleFunc("GET /admin", s.admin(s.adminPage))
 	m.HandleFunc("POST /admin/invitations", s.admin(s.adminInvite))

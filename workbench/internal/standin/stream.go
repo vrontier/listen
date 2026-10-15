@@ -1,6 +1,7 @@
 package standin
 
 import (
+	"fmt"
 	"hash/fnv"
 	"math"
 	"math/rand/v2"
@@ -28,6 +29,24 @@ type stream struct {
 
 	analyses map[string]*analysis
 	scene    scene
+
+	// What the stream hears of the made-up sky that all streams share,
+	// for the group analyses: later by its path delay, and with a weight
+	// of its own.
+	delay     float64 // seconds
+	skyWeight float64
+	skyNow    float64
+	secs      []secStat // the last seconds, oldest first
+	cur       secStat
+	curN      int
+}
+
+// secStat is what a stream heard in one second of wall time.
+type secStat struct {
+	T           time.Time
+	LevelDB     float64
+	Flux        float64
+	ImpulseRate float64
 }
 
 func newStream(e *Engine, id, input string, rate int) *stream {
@@ -48,6 +67,8 @@ func newStream(e *Engine, id, input string, rate int) *stream {
 	sc.whistleHz = 1200 + 3000*sc.rng.Float64()
 	sc.levelDB = -40 + 16*sc.rng.Float64()
 	sc.nextClick = sc.rng.Float64() * 6
+	s.delay = 4 + 14*sc.rng.Float64()
+	s.skyWeight = 0.5 + 0.5*sc.rng.Float64()
 	return s
 }
 
@@ -71,7 +92,7 @@ func (s *stream) subscribers() int {
 
 // update moves the stream's state towards what is asked of it.
 func (s *stream) update(now time.Time) {
-	wanted := len(s.analyses) > 0 && (s.mode == "continuous" || s.subscribers() > 0)
+	wanted := len(s.analyses) > 0 && (s.mode == "continuous" || s.subscribers() > 0 || s.e.groupWants(s.id))
 	if wanted {
 		s.lastWanted = now
 	} else if len(s.analyses) > 0 && s.state != "idle" && now.Sub(s.lastWanted) < time.Duration(s.idleAfter)*time.Second {
@@ -127,11 +148,68 @@ func (s *stream) tick(now time.Time, d time.Duration) {
 	s.lastData = &t
 	s.decoded += d.Seconds()
 	s.scene.advance(s.decoded, float64(s.sampleRate)/2)
+	s.hearSky(t, d)
 	s.statusTick++
 	status := s.statusTick%50 == 0
 	for _, a := range s.analyses {
 		a.step(s, t, status)
 	}
+}
+
+// hearSky adds what the stream hears of the shared sky in this tick to the
+// current second, and closes the second when the next one begins.
+func (s *stream) hearSky(t time.Time, d time.Duration) {
+	sec := t.Truncate(time.Second)
+	if !s.cur.T.Equal(sec) {
+		if s.curN > 0 {
+			s.cur.LevelDB /= float64(s.curN)
+			s.cur.Flux /= float64(s.curN)
+			s.secs = append(s.secs, s.cur)
+			if len(s.secs) > 900 {
+				s.secs = s.secs[len(s.secs)-900:]
+			}
+		}
+		s.cur, s.curN = secStat{T: sec}, 0
+	}
+	u := float64(t.UnixNano())/1e9 - s.delay
+	k := sky(u) * s.skyWeight
+	s.skyNow = k
+	rng := s.scene.rng
+	s.cur.LevelDB += s.scene.levelDB + 8*k + 3*rng.Float64()
+	s.cur.Flux += 0.08 + 0.5*k + 0.06*rng.Float64()
+	s.cur.ImpulseRate += (3 + 60*k + 6*rng.Float64()) * d.Seconds()
+	s.curN++
+}
+
+// second returns what the stream heard in the wall-time second t.
+func (s *stream) second(t time.Time) (secStat, bool) {
+	for i := len(s.secs) - 1; i >= 0; i-- {
+		switch {
+		case s.secs[i].T.Equal(t):
+			return s.secs[i], true
+		case s.secs[i].T.Before(t):
+			return secStat{}, false
+		}
+	}
+	return secStat{}, false
+}
+
+// sky is the made-up activity of the sky at Unix time u, the same for all
+// streams: a slow swell, and now and then a burst that dies away.
+func sky(u float64) float64 {
+	slow := 0.5 + 0.5*math.Sin(2*math.Pi*u/900)*math.Sin(2*math.Pi*u/173)
+	slot := math.Floor(u / 30)
+	h := fnv.New64a()
+	fmt.Fprint(h, slot)
+	x := float64(h.Sum64()%1000000) / 1e6
+	burst := 0.0
+	if x < 0.35 {
+		start := slot*30 + 18*math.Mod(x*7, 1)
+		if d := u - start; d >= 0 && d < 12 {
+			burst = math.Exp(-d / 3)
+		}
+	}
+	return math.Min(1, 0.35*slow+0.8*burst)
 }
 
 // component is one sound in the made-up scene.
@@ -213,6 +291,9 @@ func (e *Engine) clock() {
 			e.mu.Lock()
 			for _, s := range e.streams {
 				s.tick(now, e.opts.Tick)
+			}
+			for _, g := range e.groups {
+				e.tickGroup(g, now)
 			}
 			n++
 			if n%usageEvery == 0 {

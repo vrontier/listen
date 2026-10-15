@@ -118,7 +118,11 @@ th { color: var(--muted); font-weight: 500; }
 table.rules input[size] { width: 6.5rem; }
 table.audit td:last-child { max-width: 28rem; }
 
-.live { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 1rem 1rem; margin: 0.6rem 0 1rem; }
+.live, .compare { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 1rem 1rem; margin: 0.6rem 0 1rem; }
+.compare-controls { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; margin-bottom: 0.4rem; font-size: 0.9rem; }
+canvas.lanes { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; display: block; }
+table.correlations td:nth-child(n+2) { font-variant-numeric: tabular-nums; }
+.above { color: var(--ok); }
 .live-head { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; align-items: baseline; margin-bottom: 0.5rem; }
 .spectro { display: flex; gap: 0.4rem; }
 .axis { display: flex; flex-direction: column; justify-content: space-between; font-size: 0.75rem; color: var(--muted); white-space: nowrap; }

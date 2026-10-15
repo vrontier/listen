@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -109,6 +110,9 @@ type analysisData struct {
 	Description string
 	Sources     []sourceView
 	Picks       []pick
+	Compare     []compareChoice // from two sources on
+	Groups      bool            // the engine has groups
+	Comparing   bool            // two or more sources run, and are compared
 	Revisions   []catalogue.Revision
 	Runs        []runView
 	Run         *runView // the run going on, if any
@@ -270,8 +274,9 @@ func (s *Server) analysisNew(w http.ResponseWriter, r *http.Request) {
 }
 
 // pushSources puts the given streams, with all analyses using them, into the
-// engine.
+// engine, and then the groups.
 func (s *Server) pushSources(r *http.Request, sources []catalogue.AnalysisSource) error {
+	defer s.syncGroups(r.Context())
 	var first error
 	for _, src := range sources {
 		st, err := s.db.Stream(r.Context(), src.Stream.ID)
@@ -350,6 +355,10 @@ func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisDa
 		d.Run = &d.Runs[0]
 	}
 	d.RunLengths = runLengths
+	_, _, info := s.sync.status()
+	d.Groups = info.Groups()
+	d.Comparing = s.compares(a)
+	d.Compare = compareChoices(info, a.Spec.Compare, len(a.Sources))
 	d.Audit, err = s.db.AuditOf(r.Context(), "analysis", a.ID)
 	return d, err
 }
@@ -505,10 +514,20 @@ func (s *Server) analysisSettings(w http.ResponseWriter, r *http.Request) {
 	case len(ids) > maxSources:
 		errs["source"] = fmt.Sprintf("at most %d sources", maxSources)
 	}
+	ready, problem, info := s.sync.status()
+	compare, cerr := readCompare(r, ids, info)
+	if cerr != "" {
+		errs["compare"] = cerr
+	}
+	if compare == nil && len(ids) >= 2 {
+		compare = a.Spec.Compare
+		if compare == nil {
+			compare = catalogue.DefaultCompare
+		}
+	}
 	forms := map[int64]settingsForm{}
 	settings := map[int64]json.RawMessage{}
 	var warns []string
-	ready, problem, _ := s.sync.status()
 	for _, id := range ids {
 		src, inAnalysis := a.Source(id)
 		if !inAnalysis {
@@ -564,17 +583,18 @@ func (s *Server) analysisSettings(w http.ResponseWriter, r *http.Request) {
 		for i := range d.Picks {
 			d.Picks[i].Checked = chosen[d.Picks[i].Stream.ID]
 		}
+		d.Compare = compareChoices(info, compare, len(ids))
 		d.Errs, d.Warnings, d.Err = errs, warns, "Not saved. Please check the marked fields."
 		s.renderAnalysis(w, r, 422, d)
 		return
 	}
 
-	if sameRevision(a, ids, settings) {
+	if sameRevision(a, ids, settings, compare) {
 		s.redirect(w, r, analysisPath(a), "Nothing changed.")
 		return
 	}
 	before := a.Sources
-	a, err = s.db.SaveRevision(r.Context(), a.ID, sess.User.ID, ids, settings)
+	a, err = s.db.SaveRevision(r.Context(), a.ID, sess.User.ID, ids, settings, compare)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -594,8 +614,8 @@ func (s *Server) analysisSettings(w http.ResponseWriter, r *http.Request) {
 
 // sameRevision reports whether sources and settings are what the analysis
 // already has.
-func sameRevision(a catalogue.Analysis, ids []int64, settings map[int64]json.RawMessage) bool {
-	if len(ids) != len(a.Sources) {
+func sameRevision(a catalogue.Analysis, ids []int64, settings map[int64]json.RawMessage, compare []string) bool {
+	if len(ids) != len(a.Sources) || len(ids) >= 2 && !slices.Equal(compare, a.Spec.Compare) {
 		return false
 	}
 	for i, id := range ids {
@@ -665,38 +685,11 @@ func (s *Server) analysisLive(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the source is "+src.Stream.State, http.StatusConflict)
 		return
 	}
-	fl, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "streaming unsupported", 500)
-		return
-	}
 	sess, _ := sessionFrom(r)
 	rd := &reader{ch: make(chan []byte, 256), person: true, who: sess.User.Name}
 	leave := s.live.join(src.Stream.EngineID(), a.EngineID(), rd)
 	defer leave()
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(200)
-	io.WriteString(w, ": connected\n\n")
-	fl.Flush()
-	ping := time.NewTicker(20 * time.Second)
-	defer ping.Stop()
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case msg := <-rd.ch:
-			if _, err := w.Write(msg); err != nil {
-				return
-			}
-			fl.Flush()
-		case <-ping.C:
-			io.WriteString(w, ": ping\n\n")
-			fl.Flush()
-		}
-	}
+	serveReader(w, r, rd)
 }
 
 // analysisProxy passes one of the engine's data paths of one source on.
@@ -821,6 +814,14 @@ func (s *Server) analysisExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := fmt.Sprintf("%s-%s-%s", catalogue.Slugify(a.Name), a.Label(), from.Format("20060102T1504Z"))
+	if r.URL.Query().Get("format") == "compare-csv" {
+		if !s.compares(a) {
+			http.Error(w, "the sources of this analysis are not compared", http.StatusConflict)
+			return
+		}
+		s.exportComparison(w, r, a, from, to, name)
+		return
+	}
 	if r.URL.Query().Get("format") == "csv" {
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`.csv"`)
@@ -875,12 +876,273 @@ func (s *Server) analysisExport(w http.ResponseWriter, r *http.Request) {
 			"motifs":   x.Motifs,
 		})
 	}
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", " ")
-	enc.Encode(map[string]any{
+	out := map[string]any{
 		"analysis": map[string]any{"name": a.Name, "description": a.Description, "revision": a.Revision, "label": a.Label()},
 		"period":   map[string]any{"from": from, "to": to},
 		"exported": now,
 		"sources":  sources,
+	}
+	// The comparison's correlations go with it; its activity, a row per
+	// second, is in the comparison's own CSV.
+	if s.compares(a) {
+		corr := []json.RawMessage{}
+		s.eachGroupEvent(r, a, from, to, "group.correlation", func(ev json.RawMessage) error {
+			corr = append(corr, ev)
+			return nil
+		})
+		out["comparison"] = map[string]any{"group": a.GroupID(), "analyses": a.Spec.Compare, "time": "wall", "correlations": corr}
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", " ")
+	enc.Encode(out)
+}
+
+// --- comparing the sources ---
+
+// compareChoice is one group analysis offered on the settings form.
+type compareChoice struct {
+	ID      string
+	Label   string
+	Checked bool
+	Blocked string // why it cannot be chosen now
+}
+
+var compareLabels = map[string]string{
+	"activity":    "activity side by side: level, flux and impulse rate per second, and how the sources correlate",
+	"clock":       "station clocks: the measured offset between each pair of stations",
+	"coincidence": "coincidence: impulses heard by two or three stations within their travel time",
+}
+
+// compareChoices lists the group analyses the engine offers, marking the
+// chosen ones. Analyses that need station time are blocked until the
+// engine reads it.
+func compareChoices(info engine.Info, chosen []string, sources int) []compareChoice {
+	if sources < 2 || !info.Groups() {
+		return nil
+	}
+	var out []compareChoice
+	for _, c := range info.Capabilities.GroupAnalyses {
+		ch := compareChoice{ID: c.ID, Label: compareLabels[c.ID], Checked: slices.Contains(chosen, c.ID)}
+		if ch.Label == "" {
+			ch.Label = c.ID
+		}
+		if c.Timing == "milliseconds" && !info.Capabilities.StationTime {
+			ch.Blocked = "needs station time, which the engine does not read yet"
+			ch.Checked = false
+		}
+		out = append(out, ch)
+	}
+	return out
+}
+
+// readCompare reads the chosen group analyses. With fewer than two sources
+// there is nothing to compare. Before the engine offers groups the
+// analysis keeps what it had, so nothing is lost while it cannot be shown.
+func readCompare(r *http.Request, ids []int64, info engine.Info) ([]string, string) {
+	if len(ids) < 2 {
+		return nil, ""
+	}
+	if !info.Groups() || r.PostFormValue("compare_form") == "" {
+		// No choice was shown: the engine has no groups, or the analysis
+		// had one source until now. It compares as before, or as default.
+		return nil, ""
+	}
+	choices := compareChoices(info, nil, len(ids))
+	var out []string
+	for _, v := range r.PostForm["compare"] {
+		for _, c := range choices {
+			if c.ID != v || slices.Contains(out, v) {
+				continue
+			}
+			if c.Blocked != "" {
+				return nil, c.ID + " " + c.Blocked
+			}
+			out = append(out, v)
+		}
+	}
+	if len(out) == 0 {
+		return nil, "choose at least one way to compare the sources; activity needs nothing more than the sources"
+	}
+	return out, ""
+}
+
+// eachGroupEvent hands the stored results of the analysis's group in a
+// period to fn, page by page, without holding them all: a day of activity
+// is 86 400 of them.
+func (s *Server) eachGroupEvent(r *http.Request, a catalogue.Analysis, from, to time.Time, typ string, fn func(json.RawMessage) error) error {
+	cursor := from
+	for {
+		q := url.Values{"from": {cursor.Format(time.RFC3339Nano)}, "to": {to.Format(time.RFC3339Nano)}, "limit": {"2000"}}
+		if typ != "" {
+			q.Set("type", typ)
+		}
+		raw, err := s.eng.GroupData(r.Context(), a.GroupID(), "history/events", q)
+		if err != nil {
+			return err
+		}
+		var got struct {
+			Events []json.RawMessage `json:"events"`
+		}
+		json.Unmarshal(raw, &got)
+		for _, ev := range got.Events {
+			if err := fn(ev); err != nil {
+				return err
+			}
+		}
+		if len(got.Events) < 2000 {
+			return nil
+		}
+		var last struct {
+			Timestamp time.Time `json:"timestamp"`
+		}
+		json.Unmarshal(got.Events[len(got.Events)-1], &last)
+		if !last.Timestamp.After(cursor) {
+			return nil
+		}
+		cursor = last.Timestamp.Add(time.Nanosecond)
+	}
+}
+
+// compares reports whether the analysis's sources are compared in the
+// engine now: two or more of them run, and the engine has groups.
+func (s *Server) compares(a catalogue.Analysis) bool {
+	if _, _, info := s.sync.status(); !info.Groups() {
+		return false
+	}
+	n := 0
+	for _, src := range a.Sources {
+		if running(src.Stream) {
+			n++
+		}
+	}
+	return n >= 2
+}
+
+// analysisCompareLive passes the group's events on to a page.
+func (s *Server) analysisCompareLive(w http.ResponseWriter, r *http.Request) {
+	a, ok := s.ownAnalysis(w, r)
+	if !ok {
+		return
+	}
+	if !s.compares(a) {
+		http.Error(w, "the sources of this analysis are not compared now", http.StatusConflict)
+		return
+	}
+	sess, _ := sessionFrom(r)
+	rd := &reader{ch: make(chan []byte, 256), person: true, who: sess.User.Name}
+	leave := s.live.joinGroup(a.GroupID(), rd)
+	defer leave()
+	serveReader(w, r, rd)
+}
+
+// analysisCompareState passes the group's state on: its status, the last
+// ten minutes of activity and the latest correlations.
+func (s *Server) analysisCompareState(w http.ResponseWriter, r *http.Request) {
+	a, ok := s.ownAnalysis(w, r)
+	if !ok {
+		return
+	}
+	raw, err := s.eng.GroupData(r.Context(), a.GroupID(), "state", nil)
+	if err != nil {
+		status := http.StatusBadGateway
+		if engine.IsCode(err, "not_found") {
+			status = http.StatusNotFound
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(raw)
+}
+
+// exportComparison writes the group's stored results of a period as CSV:
+// one row per source and second of activity, and one per pair and minute of
+// correlation.
+func (s *Server) exportComparison(w http.ResponseWriter, r *http.Request, a catalogue.Analysis, from, to time.Time, name string) {
+	names := map[string]string{}
+	for _, src := range a.Sources {
+		names[src.Stream.EngineID()] = src.Stream.Slug
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`-comparison.csv"`)
+	fmt.Fprintf(w, "# analysis: %s, %s; comparison: %s\n# period: %s to %s\n# times are wall time at the engine: accurate to seconds, not to the stations' clocks\n",
+		a.Name, a.Label(), strings.Join(a.Spec.Compare, ", "), from.Format(time.RFC3339), to.Format(time.RFC3339))
+	cw := csv.NewWriter(w)
+	cw.Write([]string{"type", "timestamp", "source", "other_source", "present", "level_db", "flux", "impulse_rate", "r", "lag_s", "baseline_r", "n"})
+	num := func(p *float64) string {
+		if p == nil {
+			return ""
+		}
+		return strconv.FormatFloat(*p, 'g', -1, 64)
+	}
+	err := s.eachGroupEvent(r, a, from, to, "", func(raw json.RawMessage) error {
+		var e struct {
+			Type      string `json:"type"`
+			Timestamp string `json:"timestamp"`
+			Payload   struct {
+				Members []struct {
+					Stream      string   `json:"stream"`
+					Present     bool     `json:"present"`
+					LevelDB     *float64 `json:"level_db"`
+					Flux        *float64 `json:"flux"`
+					ImpulseRate *float64 `json:"impulse_rate"`
+				} `json:"members"`
+				Pairs []struct {
+					A, B      string
+					R         *float64 `json:"r"`
+					LagS      *float64 `json:"lag_s"`
+					BaselineR *float64 `json:"baseline_r"`
+					N         *float64 `json:"n"`
+				} `json:"pairs"`
+			} `json:"payload"`
+		}
+		json.Unmarshal(raw, &e)
+		switch e.Type {
+		case "group.activity":
+			for _, m := range e.Payload.Members {
+				cw.Write([]string{"activity", e.Timestamp, names[m.Stream], "", strconv.FormatBool(m.Present), num(m.LevelDB), num(m.Flux), num(m.ImpulseRate), "", "", "", ""})
+			}
+		case "group.correlation":
+			for _, p := range e.Payload.Pairs {
+				cw.Write([]string{"correlation", e.Timestamp, names[p.A], names[p.B], "", "", "", "", num(p.R), num(p.LagS), num(p.BaselineR), num(p.N)})
+			}
+		}
+		return cw.Error()
 	})
+	cw.Flush()
+	if err != nil {
+		fmt.Fprintf(w, "# the export ended early: %v\n", err)
+	}
+}
+
+// serveReader writes a reader's events to the response until the page goes.
+func serveReader(w http.ResponseWriter, r *http.Request, rd *reader) {
+	fl, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", 500)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(200)
+	io.WriteString(w, ": connected\n\n")
+	fl.Flush()
+	ping := time.NewTicker(20 * time.Second)
+	defer ping.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case msg := <-rd.ch:
+			if _, err := w.Write(msg); err != nil {
+				return
+			}
+			fl.Flush()
+		case <-ping.C:
+			io.WriteString(w, ": ping\n\n")
+			fl.Flush()
+		}
+	}
 }

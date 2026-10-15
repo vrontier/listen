@@ -1,6 +1,6 @@
 # Analyses with several sources
 
-Status: draft (2026-10-14). Nothing here is built.
+Status: draft (2026-10-14). Since 2026-10-15 the comparison view with `activity` is built against the stand-in engine; see [Built so far](#built-so-far). Nothing of it exists in the real engine.
 
 Each statement is marked **decided**, **proposed** or **open**, as in [design.md](design.md).
 
@@ -44,6 +44,18 @@ Why the layer below stays as it is:
 - Timing analyses need coordinates. They come from the sources (the coordinates field added on 2026-10-14). A timing analysis cannot be switched on while one of the sources has none.
 - Publishing needs the consent of the owner of every source in it, and the operators' agreement to a combined view (see [Rights](#rights)).
 - The comparison's cost is counted against the member's cap, with the rest of the analysis (see [members-and-streams.md](members-and-streams.md#resources-and-caps)).
+
+## Built so far
+
+**Built** against the stand-in on 2026-10-15, at the maintainer's request. What it does is **proposed** until the maintainer decides on it.
+
+- **One engine group per analysis** with two or more running sources, named `g-NNNN` after the analysis (`a-NNNN`). Its members are the analysis's engine analyses on the sources that run (draft or production, not paused), with their coordinates. With fewer than two running sources there is no group, and the page says why.
+- **The choice of group analyses** is a fieldset "Comparison" in the analysis's settings, part of its revision (`"compare": ["activity"]` next to `"sources"`). `activity` is preselected; `clock` and `coincidence` are shown but cannot be chosen while the engine reports no station time (`capabilities.station_time` false). At least one has to be chosen.
+- **Mode:** the group is `on_demand` while only pages read it, `continuous` while the analysis is in a [run](design.md#runs), so a run records the comparison too.
+- **The page** has a section "Comparison" above the sources: one lane per source on one time axis in UTC, the last ten minutes per second, showing impulse rate, level or flux (each lane scaled to its own range, gaps where a source was not heard); a status line (how far behind, time source, absent sources); and a table of the latest correlations per pair with lag, baseline and whether the correlation stands clearly (0.2 or more) above its baseline. The page explains that wall time aligns only to a few seconds.
+- **Export:** "Comparison, CSV" with a row per source and second of activity and a row per pair and minute of correlation; the JSON export carries the correlations. The Runs list offers the comparison of each run's period.
+- **The stand-in's made-up data:** all its streams hear one made-up "sky" (a slow swell and short bursts), each later by its own path delay of 4 to 18 s and with its own weight. The correlation therefore finds a lag of the difference of two delays, and the shifted baseline stays low. This tests the view; it says nothing about real stations.
+- **Not built:** the map with the stations and the day-night line, `clock` and `coincidence` (they need station time), and a group page for members who do not own all sources (sharing is not built).
 
 ## Time
 
@@ -107,7 +119,7 @@ The Observatory's draft makes the further work conditional on a test: `activity`
 **Proposed.** The engine steps are listed in [design.md](design.md#what-the-engine-must-learn-first).
 
 1. Specify groups in the control API (this document and [control-api.md](control-api.md#groups)).
-2. Analyses with 1 to n sources in the Workbench (decided 2026-10-14). Then the comparison view, against the stand-in, which makes up group results.
+2. Analyses with 1 to n sources in the Workbench (decided 2026-10-14). Then the comparison view, against the stand-in, which makes up group results. **Built** 2026-10-15 for `activity`, see [Built so far](#built-so-far).
 3. In the engine, after pieces A and B: the group service with `activity` on wall time. Then the premise test.
 4. Station time and impulse times in the engine, then `clock` and `coincidence`, if the premise test was positive.
 

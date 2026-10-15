@@ -12,15 +12,16 @@ import (
 // watches: its sources stay connected from the start until it is stopped
 // or reaches its planned end (design.md, "Runs").
 type Run struct {
-	ID         int64
-	AnalysisID int64
-	Number     int // counted per analysis, from 1
-	Started    time.Time
-	StartedBy  string
-	Ends       time.Time // planned end; zero: until stopped
-	Stopped    time.Time // zero while it runs
-	StoppedBy  string    // empty when it ended at its planned end
-	Revision   int       // the analysis's revision at the start
+	ID           int64
+	AnalysisID   int64
+	AnalysisName string
+	Number       int // counted per analysis, from 1
+	Started      time.Time
+	StartedBy    string
+	Ends         time.Time // planned end; zero: until stopped
+	Stopped      time.Time // zero while it runs
+	StoppedBy    string    // empty when it ended at its planned end
+	Revision     int       // the analysis's revision at the start
 }
 
 // Active reports whether the run is going on at t.
@@ -34,15 +35,15 @@ var ErrRunActive = errors.New("the analysis is already running")
 // ErrNoRun is returned when an analysis that does not run is stopped.
 var ErrNoRun = errors.New("the analysis is not running")
 
-const runSelect = `SELECT r.id, r.analysis_id,
+const runSelect = `SELECT r.id, r.analysis_id, an.name,
 	(SELECT count(*) FROM runs x WHERE x.analysis_id = r.analysis_id AND x.id <= r.id),
 	r.started, su.name, coalesce(r.ends, ''), coalesce(r.stopped, ''), coalesce(tu.name, ''), r.revision
-	FROM runs r JOIN users su ON su.id = r.started_by LEFT JOIN users tu ON tu.id = r.stopped_by `
+	FROM runs r JOIN analyses an ON an.id = r.analysis_id JOIN users su ON su.id = r.started_by LEFT JOIN users tu ON tu.id = r.stopped_by `
 
 func scanRun(row interface{ Scan(...any) error }) (Run, error) {
 	var r Run
 	var started, ends, stopped string
-	if err := row.Scan(&r.ID, &r.AnalysisID, &r.Number, &started, &r.StartedBy, &ends, &stopped, &r.StoppedBy, &r.Revision); err != nil {
+	if err := row.Scan(&r.ID, &r.AnalysisID, &r.AnalysisName, &r.Number, &started, &r.StartedBy, &ends, &stopped, &r.StoppedBy, &r.Revision); err != nil {
 		return r, notFound(err)
 	}
 	r.Started, r.Ends, r.Stopped = parseStamp(started), parseStamp(ends), parseStamp(stopped)
@@ -54,7 +55,16 @@ const activeWhere = `r.stopped IS NULL AND (r.ends IS NULL OR r.ends > ?)`
 
 // Runs lists an analysis's runs, newest first.
 func (d *DB) Runs(ctx context.Context, analysisID int64) ([]Run, error) {
-	rows, err := d.db.QueryContext(ctx, runSelect+`WHERE r.analysis_id = ? ORDER BY r.id DESC`, analysisID)
+	return d.queryRuns(ctx, `WHERE r.analysis_id = ? ORDER BY r.id DESC`, analysisID)
+}
+
+// RunsOf lists the runs of a member's analyses, newest first.
+func (d *DB) RunsOf(ctx context.Context, userID int64) ([]Run, error) {
+	return d.queryRuns(ctx, `WHERE an.owner_id = ? ORDER BY r.id DESC LIMIT 500`, userID)
+}
+
+func (d *DB) queryRuns(ctx context.Context, where string, args ...any) ([]Run, error) {
+	rows, err := d.db.QueryContext(ctx, runSelect+where, args...)
 	if err != nil {
 		return nil, err
 	}

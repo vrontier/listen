@@ -1,0 +1,63 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+<h1>Runs</h1>
+{{with .Data}}
+{{$d := .}}
+<p class="meta">A run keeps an analysis's sources connected from its start until it is stopped or reaches its planned end, whether or not a page is open. Times are UTC.</p>
+
+<section>
+  <h2>Running now</h2>
+  {{if .Active}}
+  <table>
+    <thead><tr><th>Analysis</th><th>#</th><th>Since</th><th>Until</th><th>So far</th><th>Revisions</th><th>Export so far</th><th></th></tr></thead>
+    <tbody>{{range .Active}}<tr>
+      <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
+      <td>{{.Number}}</td>
+      <td>{{when .Started}}</td>
+      <td>{{if .Ends.IsZero}}until stopped{{else}}{{when .Ends}}{{end}}</td>
+      <td>{{.Duration}}</td>
+      <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
+      <td>{{template "run-export" .}}</td>
+      <td><form method="post" action="/analyses/{{.AnalysisID}}/stop" class="inline-form">
+        <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="back" value="runs">
+        <button class="secondary">Stop</button>
+      </form></td>
+    </tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="meta">Nothing is running.</p>{{end}}
+</section>
+
+<section>
+  <h2>Start a run</h2>
+  {{if .Startable}}
+  <form method="post" action="/runs" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Analysis <select name="analysis">{{range .Startable}}<option value="{{.ID}}">{{.Name}} ({{len .Sources}} source{{if ne (len .Sources) 1}}s{{end}})</option>{{end}}</select></label>
+    <label>Length <select name="length">{{range $d.RunLengths}}<option value="{{.Value}}" {{if eq .Value "24h"}}selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+    <button>Start</button>
+  </form>
+  {{else}}<p class="meta">{{if .Active}}All your analyses are running.{{else}}You have no analyses yet. <a href="/analyses/new">Make one</a> first.{{end}}</p>{{end}}
+</section>
+
+<section>
+  <h2>Finished</h2>
+  {{if .Finished}}
+  <table>
+    <thead><tr><th>Analysis</th><th>#</th><th>Started</th><th>Ended</th><th>Length</th><th>Revisions</th><th>By</th><th>Export</th></tr></thead>
+    <tbody>{{range .Finished}}<tr>
+      <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
+      <td>{{.Number}}</td>
+      <td>{{when .Started}}</td>
+      <td>{{when .Stopped}}{{if .StoppedBy}} <span class="meta">stopped by {{.StoppedBy}}</span>{{else}} <span class="meta">as planned</span>{{end}}</td>
+      <td>{{.Duration}}</td>
+      <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
+      <td>{{.StartedBy}}</td>
+      <td>{{template "run-export" .}}</td>
+    </tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="meta">No finished runs yet.</p>{{end}}
+</section>
+{{end}}
+{{end}}
+
+{{define "run-export"}}{{if .TooLong}}<span class="meta">longer than 31 days: export in parts on the analysis</span>{{else}}<a href="/analyses/{{.AnalysisID}}/export?{{.Export}}&amp;format=csv">CSV</a> · <a href="/analyses/{{.AnalysisID}}/export?{{.Export}}&amp;format=json">JSON</a>{{if .Comparing}} · <a href="/analyses/{{.AnalysisID}}/export?{{.Export}}&amp;format=compare-csv">comparison</a>{{end}}{{end}}{{end}}

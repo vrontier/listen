@@ -293,6 +293,7 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	delete(s.probes, key)
 	s.probesMu.Unlock()
 	flash := "Source registered, in draft. Create an analysis with it to see what it hears."
+	defer s.syncGroups(r.Context())
 	if err := s.sync.push(r.Context(), st); err != nil {
 		log.Printf("push %s: %v", st.EngineID(), err)
 		flash = "Source registered. The engine has not taken it yet; it will be sent again when the engine is reachable."
@@ -377,6 +378,7 @@ func (s *Server) streamPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) streamEdit(w http.ResponseWriter, r *http.Request) {
+	defer s.syncGroups(r.Context()) // coordinates go to the groups
 	sess, _ := sessionFrom(r)
 	st, ok := s.ownStream(w, r)
 	if !ok {
@@ -436,6 +438,7 @@ func (s *Server) streamState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st.State, st.AlwaysOn = state, always
+	defer s.syncGroups(r.Context())
 	if err := s.sync.push(r.Context(), st); err != nil {
 		log.Printf("push %s: %v", st.EngineID(), err)
 		flash += " The engine has not taken the change yet; it will be sent again."
@@ -465,6 +468,7 @@ func (s *Server) streamDelete(w http.ResponseWriter, r *http.Request) {
 	if err := s.eng.DeleteStream(r.Context(), st.EngineID(), true); err != nil && !engine.IsCode(err, "not_found") {
 		log.Printf("delete %s in engine: %v", st.EngineID(), err)
 	}
+	s.syncGroups(r.Context())
 	msg := "Deleted " + st.Texts.Name + " and its memories."
 	if len(using) > 0 {
 		msg += fmt.Sprintf(" %d analys%s lost this source.", len(using), map[bool]string{true: "is", false: "es"}[len(using) == 1])

@@ -28,10 +28,16 @@ type Analysis struct {
 }
 
 // Spec is what a revision holds: the settings of each source, as the engine
-// takes them, keyed by the stream's catalogue identifier.
+// takes them, keyed by the stream's catalogue identifier; and from two
+// sources on, the group analyses that compare them.
 type Spec struct {
 	Sources map[string]json.RawMessage `json:"sources"`
+	Compare []string                   `json:"compare,omitempty"`
 }
+
+// DefaultCompare is what an analysis with two or more sources compares
+// until its member chooses otherwise: activity, which wall time allows.
+var DefaultCompare = []string{"activity"}
 
 // AnalysisSource is one source of an analysis, with what the analysis needs
 // to know of the stream.
@@ -44,6 +50,10 @@ type AnalysisSource struct {
 // the analysis is one engine analysis on that source's stream, all under
 // this identifier.
 func (a Analysis) EngineID() string { return fmt.Sprintf("a-%04d", a.ID) }
+
+// GroupID is the identifier of the engine group that compares the
+// analysis's sources, from two sources on.
+func (a Analysis) GroupID() string { return fmt.Sprintf("g-%04d", a.ID) }
 
 // Label is what the engine returns with the analysis's events, so that a
 // result can be traced to its revision.
@@ -90,7 +100,7 @@ func (d *DB) CreateAnalysis(ctx context.Context, owner int64, name, description 
 			return err
 		}
 		id, _ = res.LastInsertId()
-		spec, err := setSources(ctx, tx, id, streams, settings)
+		spec, err := setSources(ctx, tx, id, streams, settings, nil)
 		if err != nil {
 			return err
 		}
@@ -108,8 +118,9 @@ func (d *DB) CreateAnalysis(ctx context.Context, owner int64, name, description 
 }
 
 // setSources replaces an analysis's sources and returns the revision's
-// settings for them.
-func setSources(ctx context.Context, tx *sql.Tx, id int64, streams []int64, settings map[int64]json.RawMessage) (string, error) {
+// settings for them. With two or more sources and no choice of group
+// analyses, DefaultCompare is taken; with one, none.
+func setSources(ctx context.Context, tx *sql.Tx, id int64, streams []int64, settings map[int64]json.RawMessage, compare []string) (string, error) {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM analysis_sources WHERE analysis_id = ?`, id); err != nil {
 		return "", err
 	}
@@ -123,6 +134,12 @@ func setSources(ctx context.Context, tx *sql.Tx, id int64, streams []int64, sett
 			raw = json.RawMessage(`{}`)
 		}
 		spec.Sources[key(sid)] = raw
+	}
+	if len(streams) >= 2 {
+		spec.Compare = compare
+		if spec.Compare == nil {
+			spec.Compare = DefaultCompare
+		}
 	}
 	b, err := json.Marshal(spec)
 	return string(b), err
@@ -204,6 +221,11 @@ func (d *DB) Analysis(ctx context.Context, id int64) (Analysis, error) {
 	return as[0], nil
 }
 
+// AllAnalyses lists every analysis, for putting the engine's groups in step.
+func (d *DB) AllAnalyses(ctx context.Context) ([]Analysis, error) {
+	return d.queryAnalyses(ctx, ``)
+}
+
 // AnalysesOf lists a member's analyses.
 func (d *DB) AnalysesOf(ctx context.Context, userID int64) ([]Analysis, error) {
 	return d.queryAnalyses(ctx, `WHERE a.owner_id = ?`, userID)
@@ -233,9 +255,9 @@ func (d *DB) UpdateAnalysisTexts(ctx context.Context, id, by int64, name, descri
 	})
 }
 
-// SaveRevision stores new sources and settings as the analysis's next
-// revision.
-func (d *DB) SaveRevision(ctx context.Context, id, by int64, streams []int64, settings map[int64]json.RawMessage) (Analysis, error) {
+// SaveRevision stores new sources and settings, and the group analyses
+// that compare the sources, as the analysis's next revision.
+func (d *DB) SaveRevision(ctx context.Context, id, by int64, streams []int64, settings map[int64]json.RawMessage, compare []string) (Analysis, error) {
 	now := d.now()
 	err := d.tx(ctx, func(tx *sql.Tx) error {
 		var rev int
@@ -244,7 +266,7 @@ func (d *DB) SaveRevision(ctx context.Context, id, by int64, streams []int64, se
 			WHERE a.id = ?`, id).Scan(&rev, &old); err != nil {
 			return notFound(err)
 		}
-		spec, err := setSources(ctx, tx, id, streams, settings)
+		spec, err := setSources(ctx, tx, id, streams, settings, compare)
 		if err != nil {
 			return err
 		}

@@ -26,10 +26,13 @@ type engineSync struct {
 	instance string
 	streams  map[string]engine.Stream // by engine id
 	usage    engine.UsageReport
+
+	groupsMu sync.Mutex        // one group sync at a time
+	sent     map[string]string // group id → the body last put
 }
 
 func newEngineSync(eng *engine.Client, db *catalogue.DB) *engineSync {
-	return &engineSync{eng: eng, db: db, problem: "not yet connected to the engine", streams: map[string]engine.Stream{}}
+	return &engineSync{eng: eng, db: db, problem: "not yet connected to the engine", streams: map[string]engine.Stream{}, sent: map[string]string{}}
 }
 
 func (s *engineSync) status() (ready bool, problem string, info engine.Info) {
@@ -247,5 +250,95 @@ func (s *engineSync) reconcile(ctx context.Context) error {
 			}
 		}
 	}
+	s.groupsMu.Lock()
+	clear(s.sent) // the engine may have restarted: put every group again
+	s.groupsMu.Unlock()
+	if err := s.syncGroups(ctx); err != nil && firstErr == nil {
+		firstErr = err
+	}
 	return firstErr
+}
+
+// syncGroups makes the engine hold one group for every analysis with two or
+// more sources that run, comparing them as the analysis's revision says,
+// and no other group. It does nothing before the engine offers groups.
+func (s *engineSync) syncGroups(ctx context.Context) error {
+	s.mu.Lock()
+	info := s.info
+	s.mu.Unlock()
+	if !info.Groups() {
+		return nil
+	}
+	s.groupsMu.Lock()
+	defer s.groupsMu.Unlock()
+	analyses, err := s.db.AllAnalyses(ctx)
+	if err != nil {
+		return err
+	}
+	have, err := s.eng.Groups(ctx)
+	if err != nil {
+		return err
+	}
+	present := map[string]bool{}
+	for _, g := range have {
+		present[g.ID] = true
+	}
+	want := map[string]bool{}
+	var firstErr error
+	for _, a := range analyses {
+		spec, ok, err := s.groupSpec(ctx, a)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		id := a.GroupID()
+		want[id] = true
+		body, _ := json.Marshal(spec)
+		if present[id] && s.sent[id] == string(body) {
+			continue
+		}
+		if _, err := s.eng.PutGroup(ctx, id, spec); err != nil {
+			log.Printf("engine: group %s: %v", id, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			delete(s.sent, id)
+			continue
+		}
+		s.sent[id] = string(body)
+	}
+	for _, g := range have {
+		if !want[g.ID] {
+			if err := s.eng.DeleteGroup(ctx, g.ID); err != nil && !engine.IsCode(err, "not_found") {
+				log.Printf("engine: removing group %s: %v", g.ID, err)
+			}
+			delete(s.sent, g.ID)
+		}
+	}
+	return firstErr
+}
+
+// groupSpec is the engine group of an analysis: its sources that run, if
+// there are two or more. A run keeps the group going without a page open.
+func (s *engineSync) groupSpec(ctx context.Context, a catalogue.Analysis) (engine.GroupSpec, bool, error) {
+	spec := engine.GroupSpec{Analyses: a.Spec.Compare, Label: a.Label(), Mode: engine.OnDemand}
+	if len(spec.Analyses) == 0 {
+		spec.Analyses = catalogue.DefaultCompare
+	}
+	for _, src := range a.Sources {
+		if !running(src.Stream) {
+			continue
+		}
+		spec.Members = append(spec.Members, engine.GroupMember{Stream: src.Stream.EngineID(), Analysis: a.EngineID(), Lat: src.Stream.Texts.Lat, Lon: src.Stream.Texts.Lon})
+	}
+	if len(spec.Members) < 2 {
+		return spec, false, nil
+	}
+	_, inRun, err := s.db.ActiveRun(ctx, a.ID)
+	if inRun {
+		spec.Mode = engine.Continuous
+	}
+	return spec, true, err
 }
