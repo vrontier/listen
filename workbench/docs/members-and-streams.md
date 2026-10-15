@@ -91,6 +91,7 @@ any state ──► suspended (master admin)
 | Withdrawn | as private; the public page answers that the work was withdrawn |
 
 - **Decided:** publishing takes effect at once, without review.
+- **Built** (2026-10-15): publishing can be switched off for the whole Workbench (`LOW_PUBLISHING=on` turns it on); off, the analysis page shows the Publish button disabled, nothing new can be published, and what is published stays and can be withdrawn. It is off on the intranet until the public area is ready (maintainer, 2026-10-15).
 - Publishing asks once more for the rights attestation and shows the page as visitors will see it. A research page carries the name, place and credit of each of its sources.
 - **Proposed:** publishing an analysis that uses a source someone else owns needs that owner's consent, given once per member.
 - Withdrawing takes effect at once.

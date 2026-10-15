@@ -50,6 +50,9 @@ type Config struct {
 	Seal *secret.Box
 	// LLM checks a language-model key with its provider.
 	LLM *llm.Checker
+	// Publishing lets members publish analyses. Off, nothing new is
+	// published; what is published stays, and can be withdrawn.
+	Publishing bool
 }
 
 // Server is the Workbench's web side.

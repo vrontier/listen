@@ -8,6 +8,7 @@
   <span class="state">{{if .Run.Active}}running{{else}}ended{{end}} · data set {{.Run.Dataset}}</span>
 </div>
 {{if or (eq .Run.Dataset "recording") (eq .Run.Dataset "freezing")}}<meta http-equiv="refresh" content="{{if .Run.Active}}60{{else}}3{{end}}">{{end}}
+<p class="meta">One run of the analysis: when it ran, with which revision, how it ended, and the data set it recorded. The data set holds the events of each source and of the comparison, with the times a source was not heard; it does not depend on the engine keeping anything.</p>
 
 <table class="facts">
   <tr><th>Started</th><td>{{when .Run.Started}} by {{.Run.StartedBy}}</td></tr>

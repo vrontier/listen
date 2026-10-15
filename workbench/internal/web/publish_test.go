@@ -138,3 +138,28 @@ func TestPublishing(t *testing.T) {
 		t.Fatal("member not told of the withdrawal")
 	}
 }
+
+// With publishing switched off, nothing can be published and the page
+// offers no way to.
+func TestPublishingOff(t *testing.T) {
+	r := newRig(t)
+	r.srv.cfg.Publishing = false
+	ctx := context.Background()
+	u, _ := r.db.CreateUser(ctx, "m@example.org", "M", false)
+	st, _ := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050,
+		Texts: catalogue.StreamTexts{Name: "Ridge"}, Probe: []byte(`{}`)})
+	a, _ := r.db.CreateAnalysis(ctx, u.ID, "Dusk", "", []int64{st.ID}, nil)
+	aURL := "/analyses/" + strconv.FormatInt(a.ID, 10)
+	c := r.loginAs("m@example.org")
+	_, page, _ := r.get(c, aURL)
+	if strings.Contains(page, `href="`+aURL+`/publish"`) || !strings.Contains(page, "Publishing is not open on this Workbench yet") {
+		t.Fatal("the analysis page still offers publishing")
+	}
+	if code, _, hdr := r.get(c, aURL+"/publish"); code != http.StatusSeeOther || hdr.Get("Location") != aURL {
+		t.Fatalf("publish form: %d %s", code, hdr.Get("Location"))
+	}
+	r.post(c, aURL+"/publish", url.Values{"csrf": {csrfOf(t, page)}, "attest": {"on"}})
+	if got, _ := r.db.Analysis(ctx, a.ID); got.State != catalogue.AnalysisPrivate {
+		t.Fatalf("published while switched off: %s", got.State)
+	}
+}

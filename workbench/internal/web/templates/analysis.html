@@ -8,6 +8,7 @@
   <span class="state state-{{.Analysis.State}}">{{if .Run}}running · {{end}}{{.Analysis.State}} · {{.Analysis.Label}}</span>
 </div>
 {{if .Analysis.Description}}<p>{{.Analysis.Description}}</p>{{end}}
+<p class="meta">Start a run or a preview here, and watch each source live while it lasts. Below: each source's settings and filter rules, its memories, which sources the analysis uses, its runs and revisions. Settings are fixed while a run lasts; a trial tries changed settings next to it.</p>
 <div class="run-bar">
 {{with .Run}}
   <form method="post" action="/analyses/{{$d.Analysis.ID}}/stop" class="inline-form">
@@ -243,12 +244,17 @@
   {{if eq .Analysis.State "published"}}
   <p>Published since {{when .Analysis.Published}} at <a href="/research/{{.Analysis.Slug}}">/research/{{.Analysis.Slug}}</a>{{if .Analysis.PublishData}}, with the data sets of finished runs{{end}}. Everyone can see it; the title and description you change here change there too.</p>
   <div class="actions">
-    <a class="button secondary" href="/analyses/{{.Analysis.ID}}/publish">Change what is offered</a>
+    {{if .Publishing}}<a class="button secondary" href="/analyses/{{.Analysis.ID}}/publish">Change what is offered</a>{{end}}
     <form method="post" action="/analyses/{{.Analysis.ID}}/withdraw" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="secondary">Withdraw</button></form>
   </div>
   {{else}}
+  {{if .Publishing}}
   <p class="meta">{{if eq .Analysis.State "withdrawn"}}Withdrawn on {{when .Analysis.Withdrawn}}; its public page says so.{{else}}Private: only you see it.{{end}} Publishing shows it to everyone at once, without review; you see the page first.</p>
   <p><a class="button secondary" href="/analyses/{{.Analysis.ID}}/publish">{{if eq .Analysis.State "withdrawn"}}Publish again…{{else}}Publish…{{end}}</a></p>
+  {{else}}
+  <p class="meta">{{if eq .Analysis.State "withdrawn"}}Withdrawn on {{when .Analysis.Withdrawn}}.{{else}}Private: only you see it.{{end}} Publishing is not open on this Workbench yet.</p>
+  <p><button class="secondary" disabled>Publish…</button></p>
+  {{end}}
   {{end}}
 </section>
 

@@ -121,10 +121,20 @@ func (s *Server) publishProblems(ctx context.Context, user int64, a catalogue.An
 
 // --- the member's side ---
 
+// notPublishing sends a member back when publishing is switched off on
+// this Workbench, and reports whether it did.
+func (s *Server) notPublishing(w http.ResponseWriter, r *http.Request, a catalogue.Analysis) bool {
+	if s.cfg.Publishing {
+		return false
+	}
+	s.redirect(w, r, analysisPath(a), "Publishing is not open on this Workbench yet.")
+	return true
+}
+
 func (s *Server) publishForm(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)
 	a, ok := s.ownAnalysis(w, r)
-	if !ok {
+	if !ok || s.notPublishing(w, r, a) {
 		return
 	}
 	d, err := s.researchView(r.Context(), a, true)
@@ -142,7 +152,7 @@ func (s *Server) publishForm(w http.ResponseWriter, r *http.Request) {
 func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)
 	a, ok := s.ownAnalysis(w, r)
-	if !ok {
+	if !ok || s.notPublishing(w, r, a) {
 		return
 	}
 	back := analysisPath(a) + "/publish"

@@ -349,6 +349,7 @@ type streamData struct {
 	Consents  map[int64]bool   // who of them may publish analyses of it
 	Errs      map[string]string
 	Texts     textsForm
+	Publish   bool // members may publish on this Workbench
 	Err       string
 }
 
@@ -391,7 +392,7 @@ func (s *Server) ownStream(w http.ResponseWriter, r *http.Request) (catalogue.St
 
 func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, error) {
 	sess, _ := sessionFrom(r)
-	d := streamData{Stream: st, Texts: textsOf(st.Texts), IsOwner: st.OwnerID == sess.User.ID, Errs: map[string]string{}}
+	d := streamData{Stream: st, Texts: textsOf(st.Texts), IsOwner: st.OwnerID == sess.User.ID, Errs: map[string]string{}, Publish: s.cfg.Publishing}
 	json.Unmarshal(st.Probe, &d.Probe)
 	d.Engine, d.InEngine = s.sync.stream(st.EngineID())
 	if d.IsOwner {

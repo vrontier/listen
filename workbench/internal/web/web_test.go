@@ -44,7 +44,7 @@ func newRig(t *testing.T) *rig {
 	r := &rig{t: t, db: db, mail: m, eng: e, engSrv: es}
 	ws := httptest.NewUnstartedServer(nil)
 	ws.Start()
-	r.srv, err = New(Config{BaseURL: ws.URL, DatasetDir: t.TempDir()}, db, engine.NewClient(&http.Client{}, es.URL), m)
+	r.srv, err = New(Config{BaseURL: ws.URL, DatasetDir: t.TempDir(), Publishing: true}, db, engine.NewClient(&http.Client{}, es.URL), m)
 	if err != nil {
 		t.Fatal(err)
 	}

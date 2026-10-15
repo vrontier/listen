@@ -130,6 +130,7 @@ type analysisData struct {
 	Errs        map[string]string
 	Warnings    []string
 	MaxSources  int
+	Publishing  bool // members may publish on this Workbench
 	Err         string
 }
 
@@ -331,7 +332,7 @@ func (s *Server) ownAnalysis(w http.ResponseWriter, r *http.Request) (catalogue.
 }
 
 func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisData, error) {
-	d := analysisData{Analysis: a, Name: a.Name, Description: a.Description, Errs: map[string]string{}, MaxSources: maxSources}
+	d := analysisData{Analysis: a, Name: a.Name, Description: a.Description, Errs: map[string]string{}, MaxSources: maxSources, Publishing: s.cfg.Publishing}
 	base := analysisPath(a)
 	_, inRun, err := s.db.ActiveRun(r.Context(), a.ID)
 	if err != nil {

@@ -6,6 +6,7 @@
   <span class="state state-{{.Stream.State}}">{{.Stream.State}}</span>
 </div>
 <p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz · registered {{when .Stream.Created}} by {{.Stream.OwnerName}}</p>
+<p class="meta">{{if .IsOwner}}Your source: its connection, who uses it, its description, with whom you share it, and every change made to it. Its settings for analysis live in each analysis, not here.{{else}}A source {{.Stream.OwnerName}} shares with you: its connection and who uses it. You can use it in your own analyses; its description and state stay with {{.Stream.OwnerName}}.{{end}}</p>
 
 <div class="grid">
 <section>
@@ -84,9 +85,9 @@
   <h2>Shared with</h2>
   {{if .Shares}}
   <table>
-    <thead><tr><th>Member</th><th>May publish</th><th></th></tr></thead>
+    <thead><tr><th>Member</th>{{if .Publish}}<th>May publish</th>{{end}}<th></th></tr></thead>
     <tbody>{{$consents := .Consents}}{{range .Shares}}<tr><td>{{.Name}}</td>
-      <td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/consent" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}">{{if index $consents .ID}}yes · <button class="link" name="agree" value="0">no longer</button>{{else}}no · <button class="link" name="agree" value="1">agree</button>{{end}}</form></td>
+      {{if $.Data.Publish}}<td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/consent" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}">{{if index $consents .ID}}yes · <button class="link" name="agree" value="0">no longer</button>{{else}}no · <button class="link" name="agree" value="1">agree</button>{{end}}</form></td>{{end}}
       <td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/unshare" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}"><button class="link">stop sharing</button></form></td></tr>{{end}}</tbody>
   </table>
   {{else}}<p class="meta">Nobody else. Only you can use this source.</p>{{end}}
@@ -95,7 +96,7 @@
     <label>Member's address <input type="email" name="email" required></label>
     <button class="secondary">Share</button>
   </form>
-  <p class="meta">A member you share the source with may use it in their own analyses and sees this page and who is connected; they cannot change it. The source keeps one connection however many use it, and its cost is split among those whose analyses run on it. Share only what your operator's agreement covers. Pausing the source stops it for everyone. A member may publish an analysis that uses the source only once you agree; when you no longer agree, or stop sharing, their published analyses that use it are withdrawn and they are told.</p>
+  <p class="meta">A member you share the source with may use it in their own analyses and sees this page and who is connected; they cannot change it. The source keeps one connection however many use it, and its cost is split among those whose analyses run on it. Share only what your operator's agreement covers. Pausing the source stops it for everyone.{{if .Publish}} A member may publish an analysis that uses the source only once you agree; when you no longer agree, or stop sharing, their published analyses that use it are withdrawn and they are told.{{end}}</p>
 </section>
 {{end}}
 

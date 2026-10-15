@@ -2,6 +2,7 @@
 {{$csrf := .CSRF}}
 <section>
 <h1>New analysis</h1>
+<p class="meta">Give it a title and choose its sources. Each source starts with the engine's default settings; you set its range and filter rules on the analysis's page afterwards. Nothing connects until you start a run or a preview.</p>
 {{with .Data}}
 {{if not .Picks}}
   <p class="empty">You have no sources yet. <a href="/sources/new">Register a source</a> first.</p>

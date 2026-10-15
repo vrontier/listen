@@ -54,6 +54,8 @@ LOW_BASE_URL=$SCHEME://$HOST
 # LOW_SMTP_FROM=workbench@example.org
 # LOW_SMTP_USER=
 # LOW_SMTP_PASSWORD=
+# Let members publish analyses at /research:
+# LOW_PUBLISHING=on
 EOF
 fi
 sed -i "s#^LOW_BASE_URL=.*#LOW_BASE_URL=$SCHEME://$HOST#" "$ENV"

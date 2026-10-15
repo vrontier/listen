@@ -44,6 +44,8 @@ func main() {
 		smtpAddr = flag.String("smtp", env("LOW_SMTP", ""), "mail server host:port; empty: mails are written to the log [env LOW_SMTP]")
 		smtpFrom = flag.String("smtp-from", env("LOW_SMTP_FROM", ""), "sender address of mails [env LOW_SMTP_FROM]")
 		smtpUser = flag.String("smtp-user", env("LOW_SMTP_USER", ""), "mail server login; the password is read from LOW_SMTP_PASSWORD.\nMembers' language-model keys are sealed with LOW_KEYS_SECRET (32 bytes in base64, as made by openssl rand -base64 32)")
+
+		publishing = flag.Bool("publishing", env("LOW_PUBLISHING", "") == "on", "let members publish analyses at /research [env LOW_PUBLISHING=on]")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "usage: workbench [flags]\n       workbench [flags] admin -email ADDRESS -name NAME\n\n")
@@ -88,7 +90,7 @@ func main() {
 	} else {
 		log.Printf("LOW_KEYS_SECRET not set: members cannot save language-model keys")
 	}
-	srv, err := web.New(web.Config{BaseURL: *baseURL, DatasetDir: *dataDir, Seal: seal}, db, engine.Dial(*engAddr), sender)
+	srv, err := web.New(web.Config{BaseURL: *baseURL, DatasetDir: *dataDir, Seal: seal, Publishing: *publishing}, db, engine.Dial(*engAddr), sender)
 	if err != nil {
 		log.Fatal(err)
 	}
