@@ -192,6 +192,12 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/runs", stream(s.apiRuns))
 	m.HandleFunc("GET /api/v1/runs/{run}/{file}", stream(s.apiRunFile))
 
+	m.HandleFunc("POST /mcp", s.mcp)
+	m.HandleFunc("GET /mcp", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", "POST")
+		apiError(w, http.StatusMethodNotAllowed, "method", "This MCP endpoint answers POST requests only; it sends nothing of its own accord.")
+	})
+
 	m.HandleFunc("GET /library", s.member(s.libraryPage))
 	m.HandleFunc("POST /library", s.member(s.libraryAdd))
 	m.HandleFunc("POST /library/{set}/take", s.member(s.libraryTake))
