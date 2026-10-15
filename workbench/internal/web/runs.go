@@ -117,6 +117,14 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request, a catalogue.An
 		s.redirect(w, r, back, "Not started: choose how long the run should last.")
 		return
 	}
+	if why, err := s.capRefusal(r.Context(), sess.User.ID, a, true); err != nil || why != "" {
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.redirect(w, r, back, "Not started: "+why)
+		return
+	}
 	var ends time.Time
 	if length > 0 {
 		ends = time.Now().UTC().Add(length)
@@ -213,6 +221,15 @@ func (s *Server) analysisPreviewStart(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); inRun {
 		s.redirect(w, r, analysisPath(a), "The analysis is running; its live view is on.")
+		return
+	}
+	sess, _ := sessionFrom(r)
+	if why, err := s.capRefusal(r.Context(), sess.User.ID, a, false); err != nil || why != "" {
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.redirect(w, r, analysisPath(a), "No preview: "+why)
 		return
 	}
 	s.sync.startPreview(a.ID, time.Now().Add(previewLength))

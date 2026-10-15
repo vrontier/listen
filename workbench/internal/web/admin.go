@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vrontier/listen-workbench/internal/catalogue"
 	"github.com/vrontier/listen-workbench/internal/engine"
@@ -25,11 +26,24 @@ type adminData struct {
 	Host        engine.Host
 	CapForm     struct{ CPU, Memory string }
 	CapErrs     map[string]string
+	MemberCap   catalogue.ServerCap // the default
+	Members     []memberUse
+	Day         []usageBar // the engine's CPU per hour
+	DayMax      float64
 	Link        string // a just-made invitation link, shown once
 	Err         string
 }
 
 func (d adminData) FormError() string { return d.Err }
+
+// memberUse is a member on the admin page, with their use and cap.
+type memberUse struct {
+	catalogue.User
+	Now    catalogue.Usage
+	Cap    catalogue.ServerCap
+	OwnCap bool
+	Disk   int64
+}
 
 func (s *Server) adminData(r *http.Request) (adminData, error) {
 	var d adminData
@@ -58,7 +72,111 @@ func (s *Server) adminData(r *http.Request) (adminData, error) {
 		d.CapForm.Memory = strconv.Itoa(d.Cap.MemoryMB)
 	}
 	d.CapErrs = map[string]string{}
+	if d.MemberCap, err = s.db.DefaultMemberCap(r.Context()); err != nil {
+		return d, err
+	}
+	for _, u := range d.Users {
+		m := memberUse{User: u, Now: s.acct.now(u.ID)}
+		if m.Cap, m.OwnCap, err = s.db.MemberCap(r.Context(), u.ID); err != nil {
+			return d, err
+		}
+		if m.Disk, err = s.db.DatasetBytesOf(r.Context(), u.ID); err != nil {
+			return d, err
+		}
+		d.Members = append(d.Members, m)
+	}
+	now := time.Now().UTC()
+	samples, err := s.db.UsageSince(r.Context(), 0, now.Add(-25*time.Hour))
+	if err != nil {
+		return d, err
+	}
+	d.Day, d.DayMax = bars(samples, now.Truncate(time.Hour).Add(time.Hour), time.Hour, 24, "Jan 2 15:00")
 	return d, nil
+}
+
+// parseCap reads a cap from a form; empty fields leave that part unset.
+func parseCap(r *http.Request, host engine.Host, errs map[string]string) catalogue.ServerCap {
+	var c catalogue.ServerCap
+	if v := strings.TrimSpace(r.PostFormValue("cpu_cores")); v != "" {
+		f, err := strconv.ParseFloat(strings.Replace(v, ",", ".", 1), 64)
+		switch {
+		case err != nil || f <= 0:
+			errs["cpu"] = "a number of cores above 0, for example 4 or 2.5"
+		case host.Cores > 0 && f > float64(host.Cores):
+			errs["cpu"] = fmt.Sprintf("the host has %d cores", host.Cores)
+		default:
+			c.CPUCores = f
+		}
+	}
+	if v := strings.TrimSpace(r.PostFormValue("memory_mb")); v != "" {
+		n, err := strconv.Atoi(v)
+		switch {
+		case err != nil || n <= 0:
+			errs["memory"] = "megabytes, a whole number above 0"
+		case host.MemoryMB > 0 && n > host.MemoryMB:
+			errs["memory"] = fmt.Sprintf("the host has %d MB", host.MemoryMB)
+		default:
+			c.MemoryMB = n
+		}
+	}
+	return c
+}
+
+// adminMemberCap sets the cap of every member without one of their own.
+func (s *Server) adminMemberCap(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	_, host := s.sync.used()
+	errs := map[string]string{}
+	c := parseCap(r, host, errs)
+	if len(errs) > 0 {
+		s.redirect(w, r, "/admin", "Member cap not saved: "+strings.Join(values(errs), "; ")+".")
+		return
+	}
+	if err := s.db.SetDefaultMemberCap(r.Context(), sess.User.ID, c); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.redirect(w, r, "/admin", "Member cap saved.")
+}
+
+// adminOneCap gives one member a cap of their own, or with "default"
+// returns them to the default.
+func (s *Server) adminOneCap(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	id, _ := strconv.ParseInt(r.PathValue("user"), 10, 64)
+	u, err := s.db.User(r.Context(), id)
+	if err != nil {
+		s.notFound(w, r)
+		return
+	}
+	if r.PostFormValue("default") != "" {
+		if err := s.db.SetMemberCap(r.Context(), sess.User.ID, u.ID, nil); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.redirect(w, r, "/admin", u.Name+" has the default cap again.")
+		return
+	}
+	_, host := s.sync.used()
+	errs := map[string]string{}
+	c := parseCap(r, host, errs)
+	if len(errs) > 0 {
+		s.redirect(w, r, "/admin", "Cap of "+u.Name+" not saved: "+strings.Join(values(errs), "; ")+".")
+		return
+	}
+	if err := s.db.SetMemberCap(r.Context(), sess.User.ID, u.ID, &c); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.redirect(w, r, "/admin", "Cap of "+u.Name+" saved.")
+}
+
+func values(m map[string]string) []string {
+	var out []string
+	for _, v := range m {
+		out = append(out, v)
+	}
+	return out
 }
 
 func (s *Server) adminPage(w http.ResponseWriter, r *http.Request) {
@@ -121,29 +239,7 @@ func (s *Server) adminCap(w http.ResponseWriter, r *http.Request) {
 	}
 	d.CapForm.CPU = strings.TrimSpace(r.PostFormValue("cpu_cores"))
 	d.CapForm.Memory = strings.TrimSpace(r.PostFormValue("memory_mb"))
-	var c catalogue.ServerCap
-	if d.CapForm.CPU != "" {
-		v, err := strconv.ParseFloat(strings.Replace(d.CapForm.CPU, ",", ".", 1), 64)
-		switch {
-		case err != nil || v <= 0:
-			d.CapErrs["cpu"] = "a number of cores above 0, for example 4 or 2.5"
-		case d.Host.Cores > 0 && v > float64(d.Host.Cores):
-			d.CapErrs["cpu"] = fmt.Sprintf("the host has %d cores", d.Host.Cores)
-		default:
-			c.CPUCores = v
-		}
-	}
-	if d.CapForm.Memory != "" {
-		v, err := strconv.Atoi(d.CapForm.Memory)
-		switch {
-		case err != nil || v <= 0:
-			d.CapErrs["memory"] = "megabytes, a whole number above 0"
-		case d.Host.MemoryMB > 0 && v > d.Host.MemoryMB:
-			d.CapErrs["memory"] = fmt.Sprintf("the host has %d MB", d.Host.MemoryMB)
-		default:
-			c.MemoryMB = v
-		}
-	}
+	c := parseCap(r, d.Host, d.CapErrs)
 	if len(d.CapErrs) > 0 {
 		d.Err = "Please check the server cap."
 		s.render(w, r, 400, "admin", "Admin", d)

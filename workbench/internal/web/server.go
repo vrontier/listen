@@ -55,6 +55,7 @@ type Server struct {
 	sync   *engineSync
 	live   *fanout
 	data   *datasets
+	acct   *accounting
 	pages  map[string]*template.Template
 	mux    *http.ServeMux
 	secure bool
@@ -82,6 +83,8 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 	}
 	s.data = newDatasets(s, cfg.DatasetDir)
 	s.sync.onState = s.data.noteState
+	s.acct = newAccounting(s)
+	s.sync.onUsage = s.acct.report
 	if err := s.parseTemplates(); err != nil {
 		return nil, err
 	}
@@ -120,6 +123,9 @@ func (s *Server) Start(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
+				if err := s.db.SweepUsage(ctx); err != nil {
+					log.Printf("sweep usage: %v", err)
+				}
 				if err := s.db.Sweep(ctx); err != nil {
 					log.Printf("sweep: %v", err)
 				}
@@ -169,6 +175,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /analyses/{id}/delete", s.member(s.analysisDelete))
 	m.HandleFunc("POST /analyses/{id}/run", s.member(s.analysisRunStart))
 	m.HandleFunc("POST /analyses/{id}/stop", s.member(s.analysisRunStop))
+	m.HandleFunc("GET /account/usage", s.member(s.usagePage))
 	m.HandleFunc("GET /runs", s.member(s.runsPage))
 	m.HandleFunc("POST /runs", s.member(s.runsStart))
 	m.HandleFunc("GET /runs/{run}", s.member(s.runPage))
@@ -189,6 +196,8 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /admin", s.admin(s.adminPage))
 	m.HandleFunc("POST /admin/invitations", s.admin(s.adminInvite))
 	m.HandleFunc("POST /admin/cap", s.admin(s.adminCap))
+	m.HandleFunc("POST /admin/member-cap", s.admin(s.adminMemberCap))
+	m.HandleFunc("POST /admin/members/{user}/cap", s.admin(s.adminOneCap))
 	s.mux = m
 }
 

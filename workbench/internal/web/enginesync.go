@@ -37,6 +37,8 @@ type engineSync struct {
 	// onState, if set, is told every change of a stream's state; "removed"
 	// when the engine dropped it.
 	onState func(stream, state string, at time.Time)
+	// onUsage, if set, is given every usage report (every 10 s).
+	onUsage func(engine.UsageReport)
 }
 
 func newEngineSync(eng *engine.Client, db *catalogue.DB) *engineSync {
@@ -153,7 +155,11 @@ func (s *engineSync) session(ctx context.Context) error {
 			if json.Unmarshal(ev.Data, &u) == nil {
 				s.mu.Lock()
 				s.usage = u
+				onUsage := s.onUsage
 				s.mu.Unlock()
+				if onUsage != nil {
+					onUsage(u)
+				}
 			}
 		}
 	})

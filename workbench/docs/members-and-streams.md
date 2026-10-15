@@ -124,6 +124,16 @@ any state ──► suspended (master admin)
 - **Disk.** The quota counts the memories and history of the member's analyses and their captures. At 80 % the member is warned. At 100 % nothing new that writes to disk can start (a rule change starts a new memory, a capture). Running analyses continue; whether they keep writing history is **open**. Nothing is deleted automatically; the member deletes old memories on the analysis page.
 - **The view.** `/account/usage` shows the member's running streams and analyses with CPU, RAM, bandwidth and disk, against their cap, over the last day and month. `/admin` shows the same for the whole server.
 
+**Built** against the stand-in (2026-10-15), **proposed** in every detail:
+
+- **Attribution.** The engine's usage report (every 10 s) is attributed as the decided rule says: each engine analysis, with its preview and trial, to its member; each stream's connection and decode in equal parts to the members with something running on it, or to the stream's owner when nothing is. The engine as a whole is counted for the server.
+- **History.** The attributed use is averaged per minute and kept for 32 days, per member and for the engine.
+- **Caps.** The master admin sets the server cap, a member cap for every member, and, where needed, a cap of a member's own; each as CPU cores and memory in MB, empty meaning none. The admin page shows each member's use now, their data sets and their cap.
+- **Reservation.** Starting a run, a preview or a trial is refused when the member's use now plus an estimate of what it adds would go over the member's cap, or the engine's use plus the estimate over the server cap; the refusal says by how much. The estimate, until the engine measures per analysis before it starts: one analysis per running source at 1 % of a core and 8 MB, plus the connection of each source not yet connected at 1.5 % and 25 MB, both at 22 050 Hz and scaled with the rate. The comparison's cost is not in the engine's report yet and not counted.
+- **Disk.** Data sets count against the 0.5 GB quota (decided). A run is refused while they fill it; previews and trials, which write nothing, are not. From 80 % the usage page says so. The engine's memories are not counted yet: the engine reports their size only during a run.
+- **The view.** `/account/usage` (menu "Usage"): use now against the cap, what runs and what it costs, the disk, and CPU per hour over the last 24 hours and per day over the last 30. The admin page shows the engine's CPU per hour.
+- **Not stopped.** What runs is never stopped when its measured use rises above a cap.
+
 ### Measurement limits
 
 **Assumed** from the engine's code (checked 2026-10-14), to be confirmed by the engine session:

@@ -64,6 +64,16 @@ func (s *Server) analysisTrialStart(w http.ResponseWriter, r *http.Request) {
 		s.renderAnalysis(w, r, 422, d)
 		return
 	}
+	if _, running := s.sync.trialOf(a.ID); !running {
+		if why, err := s.capRefusal(r.Context(), sess.User.ID, a, false); err != nil || why != "" {
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			s.redirect(w, r, analysisPath(a), "No trial: "+why)
+			return
+		}
+	}
 	s.sync.startTrial(a.ID, settings)
 	note, _ := json.Marshal(map[string]any{"settings": settings})
 	s.db.Note(r.Context(), sess.User.ID, "analysis", a.ID, "trial start", string(note))

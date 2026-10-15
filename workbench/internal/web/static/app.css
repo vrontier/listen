@@ -161,3 +161,5 @@ fieldset[disabled] { opacity: 0.75; }
 .trial-block canvas.spectrogram { height: 120px; }
 .compare-map { height: 300px; border: 1px solid var(--line); border-radius: 4px; margin: 0.4rem 0; }
 .pair-label { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; font-size: 11px; white-space: nowrap; }
+.usage-bars { width: 100%; height: 100px; display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
+.usage-bars rect { fill: var(--accent); }

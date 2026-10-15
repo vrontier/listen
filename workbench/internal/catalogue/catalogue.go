@@ -115,6 +115,14 @@ CREATE TABLE IF NOT EXISTS runs (
 	summary       TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS runs_analysis ON runs(analysis_id);
+CREATE TABLE IF NOT EXISTS usage_minutes (
+	user_id     INTEGER NOT NULL,            -- 0: the whole engine
+	minute      TEXT NOT NULL,
+	cpu_percent REAL NOT NULL,               -- 100 is one core, averaged over the minute
+	memory_mb   REAL NOT NULL,
+	in_kbps     REAL NOT NULL,
+	PRIMARY KEY (user_id, minute)
+);
 CREATE TABLE IF NOT EXISTS audit (
 	id        INTEGER PRIMARY KEY AUTOINCREMENT,
 	at        TEXT NOT NULL,

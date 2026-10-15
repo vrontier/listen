@@ -32,10 +32,29 @@
     <label>Memory, MB {{with index .CapErrs "memory"}}<span class="field-error">{{.}}</span>{{end}}<input name="memory_mb" value="{{.CapForm.Memory}}" inputmode="numeric" size="8" placeholder="no cap"></label>
     <button>Save</button>
   </form>
-  <p class="meta">{{if or .Cap.CPUCores .Cap.MemoryMB}}Set: {{if .Cap.CPUCores}}{{.Cap.CPUCores}} cores{{else}}no CPU cap{{end}}, {{if .Cap.MemoryMB}}{{.Cap.MemoryMB}} MB{{else}}no memory cap{{end}}.{{else}}No cap set.{{end}} Not enforced yet: refusing new streams and analyses at the cap comes with the resource accounting.</p>
+  <p class="meta">{{if or .Cap.CPUCores .Cap.MemoryMB}}Set: {{if .Cap.CPUCores}}{{.Cap.CPUCores}} cores{{else}}no CPU cap{{end}}, {{if .Cap.MemoryMB}}{{.Cap.MemoryMB}} MB{{else}}no memory cap{{end}}.{{else}}No cap set.{{end}} A run, preview or trial that would go over it is refused; what runs is not stopped.</p>
+  <svg class="usage-bars" viewBox="0 0 600 100" preserveAspectRatio="none" role="img" aria-label="The engine's CPU per hour over the last 24 hours">{{range .Day}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Title}}</title></rect>{{end}}</svg>
+  <p class="meta">The engine's CPU per hour over the last 24 hours, on average; the highest bar is {{cores .DayMax}} cores.</p>
+
+  <h3>Member cap</h3>
+  <form method="post" action="/admin/member-cap" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>CPU cores <input name="cpu_cores" value="{{if .MemberCap.CPUCores}}{{.MemberCap.CPUCores}}{{end}}" inputmode="decimal" size="6" placeholder="no cap"></label>
+    <label>Memory, MB <input name="memory_mb" value="{{if .MemberCap.MemoryMB}}{{.MemberCap.MemoryMB}}{{end}}" inputmode="numeric" size="8" placeholder="no cap"></label>
+    <button>Save</button>
+  </form>
+  <p class="meta">For every member without a cap of their own. A shared source's connection counts in equal parts against the members whose analyses run on it.</p>
+
   <h3>Members</h3>
-  <table><thead><tr><th>Name</th><th>Address</th><th>Since</th></tr></thead>
-  <tbody>{{range .Users}}<tr><td>{{.Name}}{{if .Admin}} <span class="meta">admin</span>{{end}}</td><td>{{.Email}}</td><td>{{when .Created}}</td></tr>{{end}}</tbody></table>
+  <table><thead><tr><th>Name</th><th>Address</th><th>Since</th><th>Now</th><th>Data sets</th><th>Cap</th></tr></thead>
+  <tbody>{{range .Members}}<tr><td>{{.Name}}{{if .Admin}} <span class="meta">admin</span>{{end}}</td><td>{{.Email}}</td><td>{{when .Created}}</td>
+    <td>{{cores .Now.CPUPercent}} cores, {{printf "%.0f" .Now.MemoryMB}} MB</td><td>{{bytes .Disk}}</td>
+    <td><form method="post" action="/admin/members/{{.ID}}/cap" class="inline-form">
+      <input type="hidden" name="csrf" value="{{$csrf}}">
+      <input name="cpu_cores" value="{{if .OwnCap}}{{if .Cap.CPUCores}}{{.Cap.CPUCores}}{{end}}{{end}}" inputmode="decimal" size="4" placeholder="{{if .Cap.CPUCores}}{{.Cap.CPUCores}}{{else}}—{{end}}" aria-label="CPU cores">
+      <input name="memory_mb" value="{{if .OwnCap}}{{if .Cap.MemoryMB}}{{.Cap.MemoryMB}}{{end}}{{end}}" inputmode="numeric" size="6" placeholder="{{if .Cap.MemoryMB}}{{.Cap.MemoryMB}}{{else}}—{{end}}" aria-label="Memory, MB">
+      <button class="secondary">Set</button>{{if .OwnCap}} <button class="link" name="default" value="1">default</button>{{else}} <span class="meta">default</span>{{end}}
+    </form></td></tr>{{end}}</tbody></table>
   <h3>Streams</h3>
   <table><thead><tr><th>Name</th><th>Owner</th><th>State</th></tr></thead>
   <tbody>{{range .Streams}}<tr><td>{{.Texts.Name}}</td><td>{{.OwnerName}}</td><td>{{.State}}</td></tr>{{end}}</tbody></table>
