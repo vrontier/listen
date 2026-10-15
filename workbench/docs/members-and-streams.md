@@ -94,6 +94,13 @@ any state ──► suspended (master admin)
 - Publishing asks once more for the rights attestation and shows the page as visitors will see it. A research page carries the name, place and credit of each of its sources.
 - **Proposed:** publishing an analysis that uses a source someone else owns needs that owner's consent, given once per member.
 - Withdrawing takes effect at once.
+- **Built** against the stand-in (2026-10-15), **proposed** in every detail:
+  - **Publishing.** The analysis page has a section "Publication". "Publish…" shows the page as visitors will see it, says what they will and will not see, and asks for the rights once more (the confirmation is stored with the time in the audit trail) and whether to offer the data sets of finished runs. The page is public at once at `/research/<slug>`; the slug is made from the title the first time and kept.
+  - **What visitors see.** The title and description, the member's display name, each source's name, place, description, credit and owner if it is someone else, the settings and filter rules in words, the live view (spectrograms, events, motifs and the comparison) while the analysis is in a run, and the finished runs, with their files when offered. Not shown: stream addresses, coordinates (also no map), email addresses. `/research` lists everything published; "Research" is in the menu for everyone.
+  - **Others' sources.** The owner of a shared source agrees per member on the source's page ("May publish"). Without it, publishing is refused and says whose agreement is missing. When the owner no longer agrees, or stops sharing, that member's published analyses using the source are withdrawn and the member is told by mail.
+  - **Withdrawn.** The member withdraws on the analysis page; the public address then answers `410` with "This work was withdrawn on …". Publishing again uses the same address.
+  - **Reports.** Every public page has a report form (message, optional contact; a hidden field and a limit of five reports an hour per address, fifty in all, keep robots out). Each report is mailed to the master admins and listed on the admin page, where they close it. The admin page also lists what is published, and the master admin can withdraw an analysis with a reason, which is mailed to its member.
+- **Open:** whether rounded coordinates, or a map, should appear on public pages; limits on the number of visitors reading live at once; a privacy notice and legal notice before anything is public beyond the intranet (see [Rights and privacy](#rights-and-privacy)).
 - The Workbench process checks who is asking, on every data path: the session of a logged-in member, or a token. The engine is reachable on a local socket only and checks nothing.
 
 ## Sharing
@@ -246,6 +253,7 @@ No user-written code or expressions run on the server: filters and motif definit
 | `/account/tokens` | create and revoke tokens |
 | `/account/keys` | own API keys for the language-model interpretation |
 | `/library` | shared filter rule sets |
+| `/research` | everything published |
 | `/research/<slug>` | a published research page |
 | `/admin` | invitations, caps, usage of the server, suspensions, audit log |
 

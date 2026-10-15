@@ -80,10 +80,14 @@ CREATE TABLE IF NOT EXISTS analyses (
 	owner_id    INTEGER NOT NULL REFERENCES users(id),
 	name        TEXT NOT NULL,
 	description TEXT NOT NULL DEFAULT '',
-	state       TEXT NOT NULL DEFAULT 'private',
+	state       TEXT NOT NULL DEFAULT 'private',  -- private, published, withdrawn
 	revision    INTEGER NOT NULL DEFAULT 1,
 	created     TEXT NOT NULL,
-	updated     TEXT NOT NULL
+	updated     TEXT NOT NULL,
+	slug         TEXT UNIQUE,                   -- its public address, once published
+	published    TEXT,
+	withdrawn    TEXT,
+	publish_data INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS analysis_sources (
 	analysis_id INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
@@ -128,7 +132,18 @@ CREATE TABLE IF NOT EXISTS stream_shares (
 	user_id    INTEGER NOT NULL REFERENCES users(id),
 	created    TEXT NOT NULL,
 	created_by INTEGER NOT NULL REFERENCES users(id),
+	publish_ok TEXT,                         -- when the owner agreed to the member publishing analyses of it
 	PRIMARY KEY (stream_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS reports (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	analysis_id INTEGER REFERENCES analyses(id) ON DELETE SET NULL,
+	title       TEXT NOT NULL,               -- of the analysis when reported
+	message     TEXT NOT NULL,
+	contact     TEXT NOT NULL DEFAULT '',
+	created     TEXT NOT NULL,
+	closed      TEXT,
+	closed_by   INTEGER REFERENCES users(id)
 );
 CREATE TABLE IF NOT EXISTS memory_sizes (
 	analysis_id INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
@@ -235,7 +250,40 @@ func migrate(db *sql.DB) error {
 	if err := migrateAnalyses(db); err != nil {
 		return err
 	}
+	if err := migratePublishing(db); err != nil {
+		return err
+	}
 	return migrateRuns(db)
+}
+
+// migratePublishing adds what publishing needs (2026-10-15) to tables made
+// before.
+func migratePublishing(db *sql.DB) error {
+	has := func(table, col string) (bool, error) {
+		var n int
+		err := db.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, col).Scan(&n)
+		return n > 0, err
+	}
+	for _, c := range []struct{ table, col, def string }{
+		{"analyses", "slug", "TEXT"},
+		{"analyses", "published", "TEXT"},
+		{"analyses", "withdrawn", "TEXT"},
+		{"analyses", "publish_data", "INTEGER NOT NULL DEFAULT 0"},
+		{"stream_shares", "publish_ok", "TEXT"},
+	} {
+		ok, err := has(c.table, c.col)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			if _, err := db.Exec(`ALTER TABLE ` + c.table + ` ADD COLUMN ` + c.col + ` ` + c.def); err != nil {
+				return err
+			}
+		}
+	}
+	// SQLite cannot add a UNIQUE column; the index does the same.
+	_, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS analyses_slug ON analyses(slug)`)
+	return err
 }
 
 // migrateRuns adds the data set columns to runs made before 2026-10-15

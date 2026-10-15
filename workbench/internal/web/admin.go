@@ -30,6 +30,8 @@ type adminData struct {
 	Members     []memberUse
 	Day         []usageBar // the engine's CPU per hour
 	DayMax      float64
+	Reports     []catalogue.Report
+	Published   []catalogue.Analysis
 	Link        string // a just-made invitation link, shown once
 	Err         string
 }
@@ -58,6 +60,12 @@ func (s *Server) adminData(r *http.Request) (adminData, error) {
 		return d, err
 	}
 	if d.Streams, err = s.db.AllStreams(r.Context()); err != nil {
+		return d, err
+	}
+	if d.Reports, err = s.db.OpenReports(r.Context()); err != nil {
+		return d, err
+	}
+	if d.Published, err = s.db.PublishedAnalyses(r.Context()); err != nil {
 		return d, err
 	}
 	d.EngineReady, d.EngineNote, d.EngineInfo = s.sync.status()

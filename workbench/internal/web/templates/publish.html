@@ -1,0 +1,26 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+{{with .Data}}
+<p><a href="/analyses/{{.Analysis.ID}}">← {{.Analysis.Name}}</a></p>
+<h1>Publish</h1>
+<p>Publishing makes the page below public at once, without review, at <code>/research/{{if .Analysis.Slug}}{{.Analysis.Slug}}{{else}}…{{end}}</code>. Visitors see the title and description, your display name, each source's name, place, description and credit, the settings and filter rules in words, the live view while the analysis is in a run, and its finished runs. They do not see the sources' addresses or coordinates, your address, or anything else of yours. You can withdraw it at any time; the page then says that the work was withdrawn.</p>
+
+{{if .Problems}}
+<div class="note warn-note"><p>It cannot be published yet:</p><ul>{{range .Problems}}<li>{{.}}</li>{{end}}</ul></div>
+{{else}}
+<form method="post" action="/analyses/{{.Analysis.ID}}/publish" class="stack">
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+  <label class="check"><input type="checkbox" name="attest" required> I run these streams, or their operators have agreed to the analysis being published here, and the texts are mine to publish.</label>
+  <label class="check"><input type="checkbox" name="data" {{if .Analysis.PublishData}}checked{{end}}> Offer the data sets of finished runs for download too</label>
+  <button>Publish now</button>
+</form>
+{{end}}
+
+<h2>As visitors will see it</h2>
+<div class="preview-frame">
+{{template "research-body" .}}
+<p class="note">Here the live view follows while the analysis is in a run, and the report form at the foot of the page.</p>
+{{template "research-runs" .}}
+</div>
+{{end}}
+{{end}}

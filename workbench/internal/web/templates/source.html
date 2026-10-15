@@ -84,8 +84,10 @@
   <h2>Shared with</h2>
   {{if .Shares}}
   <table>
-    <thead><tr><th>Member</th><th></th></tr></thead>
-    <tbody>{{range .Shares}}<tr><td>{{.Name}}</td><td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/unshare" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}"><button class="link">stop sharing</button></form></td></tr>{{end}}</tbody>
+    <thead><tr><th>Member</th><th>May publish</th><th></th></tr></thead>
+    <tbody>{{$consents := .Consents}}{{range .Shares}}<tr><td>{{.Name}}</td>
+      <td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/consent" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}">{{if index $consents .ID}}yes · <button class="link" name="agree" value="0">no longer</button>{{else}}no · <button class="link" name="agree" value="1">agree</button>{{end}}</form></td>
+      <td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/unshare" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}"><button class="link">stop sharing</button></form></td></tr>{{end}}</tbody>
   </table>
   {{else}}<p class="meta">Nobody else. Only you can use this source.</p>{{end}}
   <form method="post" action="/sources/{{.Stream.Slug}}/share" class="inline-form">
@@ -93,7 +95,7 @@
     <label>Member's address <input type="email" name="email" required></label>
     <button class="secondary">Share</button>
   </form>
-  <p class="meta">A member you share the source with may use it in their own analyses and sees this page and who is connected; they cannot change it. The source keeps one connection however many use it, and its cost is split among those whose analyses run on it. Share only what your operator's agreement covers. Pausing the source stops it for everyone.</p>
+  <p class="meta">A member you share the source with may use it in their own analyses and sees this page and who is connected; they cannot change it. The source keeps one connection however many use it, and its cost is split among those whose analyses run on it. Share only what your operator's agreement covers. Pausing the source stops it for everyone. A member may publish an analysis that uses the source only once you agree; when you no longer agree, or stop sharing, their published analyses that use it are withdrawn and they are told.</p>
 </section>
 {{end}}
 

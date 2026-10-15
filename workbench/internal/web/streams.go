@@ -333,6 +333,7 @@ type streamData struct {
 	Audit     []catalogue.AuditEntry
 	IsOwner   bool
 	Shares    []catalogue.User // whom the owner shared it with
+	Consents  map[int64]bool   // who of them may publish analyses of it
 	Errs      map[string]string
 	Texts     textsForm
 	Err       string
@@ -383,6 +384,9 @@ func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, e
 	if d.IsOwner {
 		var err error
 		if d.Shares, err = s.db.StreamShares(r.Context(), st.ID); err != nil {
+			return d, err
+		}
+		if d.Consents, err = s.db.PublishConsents(r.Context(), st.ID); err != nil {
 			return d, err
 		}
 	}
@@ -562,5 +566,11 @@ func (s *Server) streamUnshare(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.redirect(w, r, "/sources/"+st.Slug, "No longer shared. Analyses of that member that use the source cannot start with it any more; a run going on continues until it ends, unless you pause the source.")
+	flash := "No longer shared. Analyses of that member that use the source cannot start with it any more; a run going on continues until it ends, unless you pause the source."
+	if u, err := s.db.User(r.Context(), id); err == nil {
+		if n := s.withdrawUsing(r.Context(), sess.User.ID, u, st); n > 0 {
+			flash += fmt.Sprintf(" %d published analys%s of theirs withdrawn.", n, map[bool]string{true: "is", false: "es"}[n == 1])
+		}
+	}
+	s.redirect(w, r, "/sources/"+st.Slug, flash)
 }

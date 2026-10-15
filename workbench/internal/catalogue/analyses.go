@@ -25,6 +25,14 @@ type Analysis struct {
 	Sources     []AnalysisSource
 	Created     time.Time
 	Updated     time.Time
+
+	// Publication (members-and-streams.md, Of an analysis): State is
+	// private, published or withdrawn. Slug is its public address, kept
+	// once given; PublishData offers its runs' data sets to visitors.
+	Slug        string
+	Published   time.Time
+	Withdrawn   time.Time
+	PublishData bool
 }
 
 // Spec is what a revision holds: the settings of each source, as the engine
@@ -147,11 +155,13 @@ func setSources(ctx context.Context, tx *sql.Tx, id int64, streams []int64, sett
 
 func (d *DB) loadAnalysis(ctx context.Context, row interface{ Scan(...any) error }) (Analysis, error) {
 	var a Analysis
-	var spec, created, updated string
-	if err := row.Scan(&a.ID, &a.OwnerID, &a.OwnerName, &a.Name, &a.Description, &a.State, &a.Revision, &spec, &created, &updated); err != nil {
+	var spec, created, updated, published, withdrawn string
+	if err := row.Scan(&a.ID, &a.OwnerID, &a.OwnerName, &a.Name, &a.Description, &a.State, &a.Revision, &spec, &created, &updated,
+		&a.Slug, &published, &withdrawn, &a.PublishData); err != nil {
 		return a, notFound(err)
 	}
 	a.Created, a.Updated = parseStamp(created), parseStamp(updated)
+	a.Published, a.Withdrawn = parseStamp(published), parseStamp(withdrawn)
 	json.Unmarshal([]byte(spec), &a.Spec)
 	if a.Spec.Sources == nil {
 		a.Spec.Sources = map[string]json.RawMessage{}
@@ -159,7 +169,8 @@ func (d *DB) loadAnalysis(ctx context.Context, row interface{ Scan(...any) error
 	return a, nil
 }
 
-const analysisSelect = `SELECT a.id, a.owner_id, u.name, a.name, a.description, a.state, a.revision, r.spec, a.created, a.updated
+const analysisSelect = `SELECT a.id, a.owner_id, u.name, a.name, a.description, a.state, a.revision, r.spec, a.created, a.updated,
+	coalesce(a.slug, ''), coalesce(a.published, ''), coalesce(a.withdrawn, ''), a.publish_data
 	FROM analyses a JOIN users u ON u.id = a.owner_id JOIN revisions r ON r.analysis_id = a.id AND r.revision = a.revision `
 
 // withSources fills in the sources of analyses.

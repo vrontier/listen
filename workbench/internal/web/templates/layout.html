@@ -11,6 +11,7 @@
   <a class="brand" href="/">{{.Site}}</a>
   <nav>
     {{if .User}}
+      <a href="/research">Research</a>
       <a href="/sources">Sources</a>
       <a href="/analyses">Analyses</a>
       <a href="/runs">Runs</a>
@@ -21,6 +22,7 @@
       <span class="who">{{.User.Name}}</span>
       <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link">Log out</button></form>
     {{else}}
+      <a href="/research">Research</a>
       <a href="/login">Log in</a>
     {{end}}
   </nav>
@@ -58,3 +60,38 @@
 <script src="{{asset "mappicker.js"}}" defer></script>
 {{end}}
 {{define "dataset-link"}}{{if eq .Dataset "ready"}}<a href="/runs/{{.ID}}">data set</a> <span class="meta">{{bytes .DatasetBytes}}</span>{{else if eq .Dataset "recording"}}<a href="/runs/{{.ID}}">recording</a>{{else if eq .Dataset "freezing"}}<a href="/runs/{{.ID}}">being put together</a>{{else if eq .Dataset "failed"}}<a href="/runs/{{.ID}}">failed</a>{{else if eq .Dataset "deleted"}}<span class="meta">deleted</span>{{else}}<span class="meta">none</span>{{end}}{{end}}
+{{define "research-body"}}
+<div class="heading-row">
+  <h1>{{.Analysis.Name}}</h1>
+  {{if .Live}}<span class="state state-production">running</span>{{end}}
+</div>
+<p class="meta">By {{.Analysis.OwnerName}}{{if not .Analysis.Published.IsZero}} · published {{when .Analysis.Published}}{{end}} · revision {{.Analysis.Revision}}</p>
+{{if .Analysis.Description}}<p class="prose">{{.Analysis.Description}}</p>{{end}}
+
+<section>
+  <h2>Sources</h2>
+  {{range .Sources}}
+  <article class="card">
+    <h3>{{.Stream.Texts.Name}}</h3>
+    <p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz{{if ne .Stream.OwnerID $.Analysis.OwnerID}} · run by {{.Stream.OwnerName}}{{end}}</p>
+    {{if .Stream.Texts.Description}}<p>{{.Stream.Texts.Description}}</p>{{end}}
+    {{if or .Stream.Texts.Credit .Stream.Texts.CreditURL}}<p class="meta">Credit: {{.Stream.Texts.Credit}}{{with .Stream.Texts.CreditURL}} · <a href="{{.}}" rel="noopener nofollow">{{.}}</a>{{end}}</p>{{end}}
+    <p>Analysed: {{.Settings}}. {{if .Rules}}Filter rules, which remove spectral peaks at known interference before resonances and motifs are derived from them:{{else}}No filter rules: nothing is left out.{{end}}</p>
+    {{if .Rules}}<ul>{{range .Rules}}<li>{{.}}</li>{{end}}</ul>{{end}}
+  </article>
+  {{end}}
+</section>
+{{end}}
+{{define "research-runs"}}
+<section>
+  <h2>Runs</h2>
+  {{if .Runs}}
+  <table>
+    <thead><tr><th>Run</th><th>From</th><th>To</th><th>Length</th><th>Revision</th>{{if .Analysis.PublishData}}<th>Data set</th>{{end}}</tr></thead>
+    <tbody>{{range .Runs}}<tr><td>{{.Number}}</td><td>{{when .Started}}</td><td>{{if .Stopped.IsZero}}{{when .Ends}}{{else}}{{when .Stopped}}{{end}}</td><td>{{.Duration}}</td><td>{{.Revision}}{{if ne .RevTo .Revision}}–{{.RevTo}}{{end}}</td>
+      {{if $.Analysis.PublishData}}<td>{{if eq .Dataset "ready"}}<a href="{{$.Base}}/runs/{{.ID}}/events.csv">events.csv</a> · <a href="{{$.Base}}/runs/{{.ID}}/dataset.json">dataset.json</a> <span class="meta">{{bytes .DatasetBytes}} compressed</span>{{else}}<span class="meta">{{.Dataset}}</span>{{end}}</td>{{end}}</tr>{{end}}</tbody>
+  </table>
+  {{if .Analysis.PublishData}}<p class="meta">Times are UTC, wall time at the engine. events.csv holds the events of all sources, a column naming the source; dataset.json everything, with the settings of every revision.</p>{{end}}
+  {{else}}<p class="meta">No run has finished yet.</p>{{end}}
+</section>
+{{end}}

@@ -163,7 +163,7 @@ Deployment is not a reason either way. A Go binary needs a one-time root step on
 
 | Feature | What it means | State of the detail |
 |---|---|---|
-| Public presentation of research | Pages that show ongoing work: the stream, the researcher's analysis, their notes | decided: the member publishes at once, no review; proposed: an analysis is what is published; open: page design |
+| Public presentation of research | Pages that show ongoing work: the stream, the researcher's analysis, their notes | decided: the member publishes at once, no review; an analysis is what is published (question 21); built against the stand-in (2026-10-15), detail proposed in [members-and-streams.md](members-and-streams.md#of-an-analysis); open: page design |
 | Member area | Log in, manage streams, filters, motifs and tokens through forms | decided: comes first, kept narrow (question 5); an analysis page shows the spectrogram, the events, the motifs and an export (question 13); detail proposed in [members-and-streams.md](members-and-streams.md) |
 | Sources | Register a stream, probe it, move it from draft to production, pause it, share it with invited members; see who is connected; it connects only for runs and previews | decided in outline (questions 1 to 3); detail proposed, same document. Called "Sources" in the menu (decided 2026-10-14) |
 | Filters and motifs | Define what an analysis ignores and what it looks for; a shared library; a trial mode | filters: rule syntax exists in the listener; library and trial mode decided (questions 9, 16); motifs: drafted as "defined motifs" in the Observatory's spec |

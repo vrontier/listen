@@ -126,6 +126,7 @@ type apiAnalysis struct {
 	Sources     []apiSource `json:"sources"`
 	Compare     []string    `json:"compare,omitempty"`
 	Comparing   bool        `json:"comparing"`
+	Published   string      `json:"published,omitempty"` // its public page, while published
 }
 
 func timePtr(t time.Time) *time.Time {
@@ -160,6 +161,9 @@ func (s *Server) toAPIAnalysis(ctx context.Context, a catalogue.Analysis) apiAna
 		out.State = "preview"
 	}
 	out.Comparing = out.State == "run" && s.compares(a)
+	if a.State == catalogue.AnalysisPublished {
+		out.Published = s.cfg.BaseURL + "/research/" + a.Slug
+	}
 	for _, src := range a.Sources {
 		var settings any
 		json.Unmarshal(src.Spec, &settings)
