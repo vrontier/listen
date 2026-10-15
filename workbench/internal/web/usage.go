@@ -212,6 +212,15 @@ func coresOf(percent float64) string { return strconv.FormatFloat(math.Round(per
 // capRefusal tells why the member may not start the analysis now (as a run
 // if run is true, else as a preview or trial), or returns "".
 func (s *Server) capRefusal(ctx context.Context, user int64, a catalogue.Analysis, run bool) (string, error) {
+	for _, src := range a.Sources {
+		ok, err := s.db.MayUseStream(ctx, user, src.Stream)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return src.Stream.Texts.Name + " is no longer shared with you; take it out of the analysis to go on without it.", nil
+		}
+	}
 	est := s.estimate(a)
 	mc, _, err := s.db.MemberCap(ctx, user)
 	if err != nil {

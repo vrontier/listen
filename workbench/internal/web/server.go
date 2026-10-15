@@ -165,6 +165,8 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /sources/{slug}", s.member(s.streamEdit))
 	m.HandleFunc("POST /sources/{slug}/state", s.member(s.streamState))
 	m.HandleFunc("POST /sources/{slug}/delete", s.member(s.streamDelete))
+	m.HandleFunc("POST /sources/{slug}/share", s.member(s.streamShare))
+	m.HandleFunc("POST /sources/{slug}/unshare", s.member(s.streamUnshare))
 
 	m.HandleFunc("GET /analyses", s.member(s.analyses))
 	m.HandleFunc("GET /analyses/new", s.member(s.analysisNewForm))

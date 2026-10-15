@@ -33,7 +33,7 @@
     </tbody>
   </table>
 
-  {{if ne .Stream.State "suspended"}}
+  {{if and .IsOwner (ne .Stream.State "suspended")}}
   <h3>Mode</h3>
   <div class="actions">
     {{if eq .Stream.State "paused"}}
@@ -52,6 +52,11 @@
 
 <section>
   <h2>Description</h2>
+  {{if not .IsOwner}}
+  <p>{{if .Stream.Texts.Description}}{{.Stream.Texts.Description}}{{else}}<span class="meta">No description.</span>{{end}}</p>
+  <p class="meta">{{with .Stream.Texts.Credit}}Credit: {{.}}{{end}}{{with .Stream.Texts.CreditURL}} · <a href="{{.}}" rel="noopener">{{.}}</a>{{end}}</p>
+  <p class="meta">{{.Stream.OwnerName}} shares this source with you. Its settings, state and texts stay with them; your analyses of it are your own.</p>
+  {{else}}
   <form method="post" action="/sources/{{.Stream.Slug}}" class="stack">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <label>Name {{with index .Errs "name"}}<span class="field-error">{{.}}</span>{{end}}<input name="name" value="{{.Texts.Name}}" required maxlength="80"></label>
@@ -70,9 +75,29 @@
     <button>Save</button>
   </form>
   <p class="meta">Address: <code>{{.Stream.Input}}</code><br>Checked: {{.Probe.Codec}}, {{.Probe.SampleRate}} Hz, {{.Probe.BitrateKbps}} kbit/s. The address and the sample rate cannot be changed.</p>
+  {{end}}
 </section>
 </div>
 
+{{if .IsOwner}}
+<section>
+  <h2>Shared with</h2>
+  {{if .Shares}}
+  <table>
+    <thead><tr><th>Member</th><th></th></tr></thead>
+    <tbody>{{range .Shares}}<tr><td>{{.Name}}</td><td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/unshare" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}"><button class="link">stop sharing</button></form></td></tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="meta">Nobody else. Only you can use this source.</p>{{end}}
+  <form method="post" action="/sources/{{.Stream.Slug}}/share" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Member's address <input type="email" name="email" required></label>
+    <button class="secondary">Share</button>
+  </form>
+  <p class="meta">A member you share the source with may use it in their own analyses and sees this page and who is connected; they cannot change it. The source keeps one connection however many use it, and its cost is split among those whose analyses run on it. Share only what your operator's agreement covers. Pausing the source stops it for everyone.</p>
+</section>
+{{end}}
+
+{{if .IsOwner}}
 <section>
   <h2>Changes</h2>
   <table class="audit">
@@ -83,13 +108,14 @@
 
 <section class="danger">
   <h2>Delete</h2>
-  <p>Deleting removes the source and its memories. Analyses that use it lose this source and keep their others. The change log keeps a record.</p>
+  <p>Deleting removes the source and its memories. Analyses that use it, also those of members you share it with, lose this source and keep their others. The change log keeps a record.</p>
   <form method="post" action="/sources/{{.Stream.Slug}}/delete" class="inline-form">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <label>Type the name to confirm <input name="confirm" autocomplete="off"></label>
     <button class="danger">Delete</button>
   </form>
 </section>
+{{end}}
 {{end}}
 {{template "mappicker"}}
 {{end}}

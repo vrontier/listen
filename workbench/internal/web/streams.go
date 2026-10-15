@@ -26,6 +26,7 @@ const probeValid = 15 * time.Minute
 
 type accountData struct {
 	Streams []streamRow
+	Shared  []streamRow // shared with the member by others
 }
 
 type streamRow struct {
@@ -43,15 +44,26 @@ func (s *Server) sources(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	shared, err := s.db.SharedWith(r.Context(), sess.User.ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var d accountData
-	for _, st := range streams {
-		row := streamRow{Stream: st}
-		row.Engine, row.InEngine = s.sync.stream(st.EngineID())
-		if row.Analyses, err = s.db.AnalysesUsing(r.Context(), st.ID); err != nil {
-			s.fail(w, r, err)
-			return
+	for i, list := range [][]catalogue.Stream{streams, shared} {
+		for _, st := range list {
+			row := streamRow{Stream: st}
+			row.Engine, row.InEngine = s.sync.stream(st.EngineID())
+			if row.Analyses, err = s.db.AnalysesUsing(r.Context(), st.ID); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			if i == 0 {
+				d.Streams = append(d.Streams, row)
+			} else {
+				d.Shared = append(d.Shared, row)
+			}
 		}
-		d.Streams = append(d.Streams, row)
 	}
 	s.render(w, r, 200, "sources", "Sources", d)
 }
@@ -320,6 +332,7 @@ type streamData struct {
 	Consumers []consumer
 	Audit     []catalogue.AuditEntry
 	IsOwner   bool
+	Shares    []catalogue.User // whom the owner shared it with
 	Errs      map[string]string
 	Texts     textsForm
 	Err       string
@@ -327,8 +340,27 @@ type streamData struct {
 
 func (d streamData) FormError() string { return d.Err }
 
-// ownStream finds a stream the member may see. For now that is its owner;
-// invited members follow with sharing.
+// viewStream finds a stream the member may see: their own, or one shared
+// with them.
+func (s *Server) viewStream(w http.ResponseWriter, r *http.Request) (catalogue.Stream, bool) {
+	sess, _ := sessionFrom(r)
+	st, err := s.db.StreamBySlug(r.Context(), r.PathValue("slug"))
+	ok := err == nil
+	if ok {
+		ok, err = s.db.MayUseStream(r.Context(), sess.User.ID, st)
+	}
+	if !ok {
+		if err != nil && !isNotFound(err) {
+			s.fail(w, r, err)
+			return st, false
+		}
+		s.notFound(w, r)
+	}
+	return st, ok
+}
+
+// ownStream finds a stream the member owns, for what only its owner may
+// do.
 func (s *Server) ownStream(w http.ResponseWriter, r *http.Request) (catalogue.Stream, bool) {
 	sess, _ := sessionFrom(r)
 	st, err := s.db.StreamBySlug(r.Context(), r.PathValue("slug"))
@@ -344,10 +376,16 @@ func (s *Server) ownStream(w http.ResponseWriter, r *http.Request) (catalogue.St
 }
 
 func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, error) {
-	d := streamData{Stream: st, Texts: textsOf(st.Texts), IsOwner: true, Errs: map[string]string{}}
+	sess, _ := sessionFrom(r)
+	d := streamData{Stream: st, Texts: textsOf(st.Texts), IsOwner: st.OwnerID == sess.User.ID, Errs: map[string]string{}}
 	json.Unmarshal(st.Probe, &d.Probe)
 	d.Engine, d.InEngine = s.sync.stream(st.EngineID())
-	sess, _ := sessionFrom(r)
+	if d.IsOwner {
+		var err error
+		if d.Shares, err = s.db.StreamShares(r.Context(), st.ID); err != nil {
+			return d, err
+		}
+	}
 	analyses, err := s.db.AnalysesUsing(r.Context(), st.ID)
 	if err != nil {
 		return d, err
@@ -360,12 +398,14 @@ func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, e
 		d.Consumers = append(d.Consumers, consumer{Analysis: a, Owner: a.OwnerName,
 			Readers: s.live.readers(st.EngineID(), a.EngineID()).add(s.live.readers(st.EngineID(), previewID(a))), State: state, Mine: a.OwnerID == sess.User.ID})
 	}
-	d.Audit, err = s.db.AuditOf(r.Context(), "stream", st.ID)
+	if d.IsOwner {
+		d.Audit, err = s.db.AuditOf(r.Context(), "stream", st.ID)
+	}
 	return d, err
 }
 
 func (s *Server) streamPage(w http.ResponseWriter, r *http.Request) {
-	st, ok := s.ownStream(w, r)
+	st, ok := s.viewStream(w, r)
 	if !ok {
 		return
 	}
@@ -469,4 +509,58 @@ func (s *Server) streamDelete(w http.ResponseWriter, r *http.Request) {
 		msg += fmt.Sprintf(" %d analys%s lost this source.", len(using), map[bool]string{true: "is", false: "es"}[len(using) == 1])
 	}
 	s.redirect(w, r, "/sources", msg)
+}
+
+// --- sharing ---
+
+// streamShare shares the stream with a member, by their address.
+func (s *Server) streamShare(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	st, ok := s.ownStream(w, r)
+	if !ok {
+		return
+	}
+	back := "/sources/" + st.Slug
+	email := strings.TrimSpace(r.PostFormValue("email"))
+	u, err := s.db.UserByEmail(r.Context(), email)
+	switch {
+	case isNotFound(err):
+		s.redirect(w, r, back, email+" is not a member. The master admin can invite them; then share the source.")
+		return
+	case err != nil:
+		s.fail(w, r, err)
+		return
+	case u.ID == sess.User.ID:
+		s.redirect(w, r, back, "The source is yours already.")
+		return
+	}
+	if err := s.db.ShareStream(r.Context(), st.ID, u.ID, sess.User.ID); err != nil {
+		if errors.Is(err, catalogue.ErrAlreadyShared) {
+			s.redirect(w, r, back, "Already shared with "+u.Name+".")
+			return
+		}
+		s.fail(w, r, err)
+		return
+	}
+	body := fmt.Sprintf("Hello %s,\n\n%s has shared the source \"%s\" with you in the %s. You may use it in your own analyses; its settings stay with %s.\n\n%s/sources/%s\n",
+		u.Name, sess.User.Name, st.Texts.Name, s.cfg.SiteName, sess.User.Name, s.cfg.BaseURL, st.Slug)
+	if err := s.mail.Send(u.Email, "A source shared with you: "+st.Texts.Name, body); err != nil {
+		log.Printf("share mail: %v", err)
+	}
+	s.redirect(w, r, back, "Shared with "+u.Name+", who has been told by mail.")
+}
+
+// streamUnshare ends a member's use of the stream.
+func (s *Server) streamUnshare(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	st, ok := s.ownStream(w, r)
+	if !ok {
+		return
+	}
+	id, _ := strconv.ParseInt(r.PostFormValue("member"), 10, 64)
+	if err := s.db.UnshareStream(r.Context(), st.ID, id, sess.User.ID); err != nil && !isNotFound(err) {
+		s.fail(w, r, err)
+		return
+	}
+	s.redirect(w, r, "/sources/"+st.Slug, "No longer shared. Analyses of that member that use the source cannot start with it any more; a run going on continues until it ends, unless you pause the source.")
 }

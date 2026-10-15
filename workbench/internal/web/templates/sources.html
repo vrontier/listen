@@ -17,5 +17,18 @@
   <p class="meta">{{if .Analyses}}Used by {{range $i, $a := .Analyses}}{{if $i}}, {{end}}{{$a.Name}} ({{$a.OwnerName}}){{end}}.{{else}}No analysis uses it yet.{{end}}</p>
 </article>
 {{end}}
+{{if .Shared}}
+<h2>Shared with you</h2>
+<p class="meta">Sources other members share with you. You may use them in your own analyses; their settings, state and texts stay with their owners.</p>
+{{range .Shared}}
+<article class="card">
+  <div class="heading-row">
+    <h2><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></h2>
+    <span class="state state-{{.State}}">{{.State}}</span>
+  </div>
+  <p class="meta">{{.OwnerName}}'s · {{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: <span class="conn conn-{{.Engine.State}}">{{.Engine.State}}</span>{{else}}not in the engine{{end}}</p>
+</article>
+{{end}}
+{{end}}
 {{end}}
 {{end}}

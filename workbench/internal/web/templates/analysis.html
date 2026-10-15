@@ -201,7 +201,7 @@
     <legend>Sources</legend>
     {{with index .Errs "source"}}<p class="field-error">{{.}}</p>{{end}}
     {{range .Picks}}
-      <label class="check"><input form="settings" type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{.Stream.SampleRate}} Hz, {{.Stream.State}}</span></label>
+      <label class="check"><input form="settings" type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{.Stream.SampleRate}} Hz, {{.Stream.State}}{{if .Shared}}, shared by {{.Stream.OwnerName}}{{end}}</span></label>
     {{end}}
     <p class="meta">Up to {{.MaxSources}}. A source added here starts with the default settings; a source taken out loses its settings and memories in this analysis.</p>
   </fieldset>

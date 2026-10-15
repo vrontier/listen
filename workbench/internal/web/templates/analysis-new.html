@@ -17,7 +17,7 @@
     <p class="meta">One source or several, up to {{.MaxSources}}. Each gets its own range and filter rules in the analysis. Several sources are also compared on one time axis.</p>
     {{with index .Errs "source"}}<p class="field-error">{{.}}</p>{{end}}
     {{range .Picks}}
-      <label class="check"><input type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}}, {{end}}{{.Stream.SampleRate}} Hz, {{.Stream.State}}</span></label>
+      <label class="check"><input type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}}, {{end}}{{.Stream.SampleRate}} Hz, {{.Stream.State}}{{if .Shared}}, shared by {{.Stream.OwnerName}}{{end}}</span></label>
     {{end}}
   </fieldset>
   <button>Create the analysis</button>

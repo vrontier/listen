@@ -30,7 +30,7 @@ func TestAccounting(t *testing.T) {
 		Streams: map[string]engine.Usage{st.EngineID(): {CPUPercent: 4, MemoryMB: 20, InKbps: 128}},
 		Analyses: map[string]engine.Usage{
 			st.EngineID() + "/" + a1.EngineID(): {CPUPercent: 1, MemoryMB: 6},
-			st.EngineID() + "/" + previewID(a2):  {CPUPercent: 2, MemoryMB: 8},
+			st.EngineID() + "/" + previewID(a2): {CPUPercent: 2, MemoryMB: 8},
 		},
 	}
 	acct.report(rep)

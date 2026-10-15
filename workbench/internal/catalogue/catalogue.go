@@ -123,6 +123,13 @@ CREATE TABLE IF NOT EXISTS usage_minutes (
 	in_kbps     REAL NOT NULL,
 	PRIMARY KEY (user_id, minute)
 );
+CREATE TABLE IF NOT EXISTS stream_shares (
+	stream_id  INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+	user_id    INTEGER NOT NULL REFERENCES users(id),
+	created    TEXT NOT NULL,
+	created_by INTEGER NOT NULL REFERENCES users(id),
+	PRIMARY KEY (stream_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS audit (
 	id        INTEGER PRIMARY KEY AUTOINCREMENT,
 	at        TEXT NOT NULL,

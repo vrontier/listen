@@ -106,6 +106,7 @@ type sourceView struct {
 type pick struct {
 	Stream  catalogue.Stream
 	Checked bool
+	Shared  bool // shared with the member by its owner
 }
 
 type analysisData struct {
@@ -175,17 +176,22 @@ type newAnalysisData struct {
 
 func (d newAnalysisData) FormError() string { return d.Err }
 
-// picks lists the sources a member may use, marking the chosen ones. For
-// now these are their own; sources shared with them follow with sharing.
+// picks lists the sources a member may use, marking the chosen ones: their
+// own and those shared with them.
 func (s *Server) picks(r *http.Request, chosen map[int64]bool) ([]pick, error) {
 	sess, _ := sessionFrom(r)
 	streams, err := s.db.StreamsOf(r.Context(), sess.User.ID)
 	if err != nil {
 		return nil, err
 	}
+	shared, err := s.db.SharedWith(r.Context(), sess.User.ID)
+	if err != nil {
+		return nil, err
+	}
+	streams = append(streams, shared...)
 	var out []pick
 	for _, st := range streams {
-		out = append(out, pick{Stream: st, Checked: chosen[st.ID]})
+		out = append(out, pick{Stream: st, Checked: chosen[st.ID], Shared: st.OwnerID != sess.User.ID})
 	}
 	return out, nil
 }

@@ -102,6 +102,12 @@ any state ──► suspended (master admin)
 
 - **Proposed:** a stream's owner invites members by name. An invited member may add their own analyses to the stream and sees its page and its list of consumers. They cannot change the stream's settings or texts.
 - **Proposed:** each analysis belongs to one member. Others see it only if it is published or its member shares it with the stream's invited members.
+- **Built** against the stand-in (2026-10-15), **proposed** in its detail:
+  - The owner shares a source on its page by a member's address. Only existing members can be chosen; for others the page points to the master admin's invitation. The member is told by mail.
+  - The member finds it under "Shared with you" in Sources, may choose it for their own analyses (marked "shared by …"), and sees its page read-only: connection, who is connected, description and credit, no settings, state, texts, change log or delete.
+  - The owner sees whom it is shared with and can stop sharing at any time. The other member's analyses keep the source but cannot start a run, preview or trial with it any more; the refusal says why. A run going on continues until it ends; the owner can pause the source to stop it at once.
+  - Deleting a source takes it out of every analysis, also other members'. Sharing and stopping it are in the source's change log.
+  - The connection's cost is split among the members whose analyses run on it, as decided.
 - **Decided:** there is a shared library for all members. **Proposed:** it is a part of the Workbench, not a git repository. A member puts a set of filter rules into it with a name and a note; others take a copy into their own analysis. A copy, not a link, so that a later change in the library never changes someone's analysis or starts a new memory behind their back. Motif definitions, captures and detections can go into the library in the same way once they exist (members' question 7).
 
 ## Resources and caps
