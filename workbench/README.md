@@ -8,7 +8,7 @@ The Observatory is a small, curated, public exhibit: a handful of streams, each 
 
 First part of the member area, built against a stand-in for the engine; the engine process itself does not exist yet. The specs in [`docs/`](docs/) record what has been decided, what is proposed and what is still open.
 
-Working: invitation by the master admin, login by email link, registering a stream with a probe, draft and production modes, pausing and deleting, the analysis page (live spectrogram, events, motifs, export as CSV or JSON), the filter form with validation by the engine and revisions, the list of who is connected, the audit trail. Not yet: sharing a stream with invited members, the filter library, trial mode, resource accounting and caps, tokens, the data stream for programs, MCP, publishing.
+Working: invitation by the master admin, login by email link, registering a source with a probe, draft and production modes, pausing and deleting, analyses with one or more sources and settings per source, the analysis page (live spectrogram, events, motifs per source, export as CSV or JSON), the filter form with validation by the engine and revisions, runs that keep an analysis going without an open page, the list of who is connected, the audit trail. Not yet: comparing sources on one time axis, sharing a stream with invited members, the filter library, trial mode, resource accounting and caps, tokens, the data stream for programs, MCP, publishing.
 
 ## Running it for development
 

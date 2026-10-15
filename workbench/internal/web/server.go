@@ -85,9 +85,22 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 	return s, nil
 }
 
-// Start follows the engine and sweeps old sessions until ctx ends.
+// Start follows the engine, ends runs at their planned end and sweeps old
+// sessions until ctx ends.
 func (s *Server) Start(ctx context.Context) {
 	go s.sync.run(ctx)
+	go func() {
+		t := time.NewTicker(30 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				s.endRuns(ctx)
+			}
+		}
+	}()
 	go func() {
 		t := time.NewTicker(time.Hour)
 		defer t.Stop()
@@ -143,6 +156,8 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /analyses/{id}", s.member(s.analysisTexts))
 	m.HandleFunc("POST /analyses/{id}/settings", s.member(s.analysisSettings))
 	m.HandleFunc("POST /analyses/{id}/delete", s.member(s.analysisDelete))
+	m.HandleFunc("POST /analyses/{id}/run", s.member(s.analysisRunStart))
+	m.HandleFunc("POST /analyses/{id}/stop", s.member(s.analysisRunStop))
 	m.HandleFunc("GET /analyses/{id}/live/{source}", s.member(s.analysisLive))
 	m.HandleFunc("GET /analyses/{id}/data/{source}/{what...}", s.member(s.analysisProxy))
 	m.HandleFunc("GET /analyses/{id}/export", s.member(s.analysisExport))

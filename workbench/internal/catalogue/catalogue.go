@@ -101,6 +101,17 @@ CREATE TABLE IF NOT EXISTS revisions (
 	created_by  INTEGER NOT NULL REFERENCES users(id),
 	PRIMARY KEY (analysis_id, revision)
 );
+CREATE TABLE IF NOT EXISTS runs (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	analysis_id INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+	started     TEXT NOT NULL,
+	started_by  INTEGER NOT NULL REFERENCES users(id),
+	ends        TEXT,                        -- planned end; NULL: until stopped
+	stopped     TEXT,                        -- NULL while it runs
+	stopped_by  INTEGER REFERENCES users(id), -- NULL when it ended at its planned end
+	revision    INTEGER NOT NULL             -- the analysis's revision at the start
+);
+CREATE INDEX IF NOT EXISTS runs_analysis ON runs(analysis_id);
 CREATE TABLE IF NOT EXISTS audit (
 	id        INTEGER PRIMARY KEY AUTOINCREMENT,
 	at        TEXT NOT NULL,

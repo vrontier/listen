@@ -16,7 +16,7 @@ const (
 	bandCount    = 48
 	maxPeaks     = 12
 	recentEvents = 40
-	historyMax   = 5000
+	historyMax   = 100000
 )
 
 // analysis is one made-up analysis of a stream.

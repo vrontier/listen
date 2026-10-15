@@ -11,7 +11,7 @@
 <article class="card">
   <div class="heading-row">
     <h2><a href="/analyses/{{.ID}}">{{.Name}}</a></h2>
-    <span class="state state-{{.State}}">{{.State}} · {{.Label}}</span>
+    <span class="state state-{{.State}}">{{if index $.Data.Running .ID}}running · {{end}}{{.State}} · {{.Label}}</span>
   </div>
   {{if .Description}}<p>{{.Description}}</p>{{end}}
   <p class="meta">{{len .Sources}} source{{if ne (len .Sources) 1}}s{{end}}: {{range $i, $s := .Sources}}{{if $i}}, {{end}}{{$s.Stream.Texts.Name}}{{end}}</p>

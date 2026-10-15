@@ -192,6 +192,25 @@ What exists today that these build on:
 
 This replaces the earlier drafts in which an analysis was made under a stream, and "groups" as a separate object in the Workbench.
 
+## Runs
+
+**Decided** (2026-10-15): a member starts and stops an analysis as a **run**.
+
+- **A run keeps the analysis's sources connected** from its start until it is stopped or reaches its planned end, whether or not anyone has a page open. This adds a third reason for a source in draft to run, next to an open page and a reading token (question 2).
+- **A source's state says how far along the source is** (draft, production, paused). Whether it runs is decided by what uses it: a run, an open page, a token, or "always on" in production.
+- **Start and stop.** A run is started with a planned length or "until stopped", and can be stopped at any time.
+- **Runs are listed** on the analysis page, each with its start and end, the revisions in force during it, who started and stopped it, and an export of its period.
+
+**Proposed** (built against the stand-in on 2026-10-15):
+
+- **One run at a time** per analysis. The lengths offered are 1 hour, 6 hours, 24 hours (preselected), 3 days, 7 days and until stopped. Three days or more covers the premise test of [groups.md](groups.md#the-premise-test).
+- **Settings may change during a run.** Saving makes a new revision as usual; the run goes on, and its list entry shows the range of revisions ("rev-1 to rev-3"). Every event carries its revision, so the parts can be told apart in the export.
+- **A paused source does not run**, even in a run; the analysis page says so. Pausing stays the owner's way to stop a stream for everyone.
+- **A run ends at its planned end on its own**, checked every 30 seconds; the audit trail records start, stop and end.
+- **In the engine** a run needs nothing new: a stream that an analysis in a run uses is put into the engine with `mode` `continuous` instead of `on_demand` ([control-api.md](control-api.md#streams)). When the last run using it ends, it goes back to `on_demand`.
+- **Caps.** A run reserves its sources' and analyses' cost for its length, as in [Resources and caps](members-and-streams.md#resources-and-caps). Starting a run whose reservation would exceed a cap is refused. Not enforced yet, like the caps themselves.
+- **Open:** whether a run should end by itself when a source has been offline for a long time, and whether a member is told by mail when a run ends.
+
 ## What the engine must learn first
 
 **Decided** as a dependency: rule 2 and rule 3 together need "one decode, several analyses" in the listener. Today the only ways to get a second analysis of a stream are to read the first one's (filtered) events or to start a second listener, which opens a second connection to the operator. Neither is acceptable for research use.
@@ -266,7 +285,7 @@ Answers are the maintainer's of 2026-10-14 and are **decided**. Where an answer 
 1. **Whose streams?** Members' own streams only at first, or the Observatory's streams too?
    - **Decided:** members' streams. Members set up and configure new streams themselves. The Observatory's streams and production setup stay outside the Workbench.
 2. **On demand or continuous?** Learned motifs need continuous listening.
-   - **Decided:** a stream in draft runs only while a member watches or a token reads. A stream in production may run always on. The Workbench monitors how many streams run and what bandwidth and compute they need, shows each member their own use, and enforces a cap for the server and a cap per member, both set by the master admin.
+   - **Decided:** a stream in draft runs only while a member watches or a token reads. A stream in production may run always on. **Added** (decided 2026-10-15): a stream in draft also runs while an analysis using it is in a run; see [Runs](#runs). The Workbench monitors how many streams run and what bandwidth and compute they need, shows each member their own use, and enforces a cap for the server and a cap per member, both set by the master admin.
    - Detail, **proposed:** [members-and-streams.md](members-and-streams.md#states), [Resources and caps](members-and-streams.md#resources-and-caps).
 3. **Who may add an analysis to someone else's stream, and what is published?**
    - **Decided:** the shared model. A stream is shared, its analyses are individual. Once connected, a stream goes offline only when all its consumers have stopped. A stream always shows who is connected to it.

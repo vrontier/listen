@@ -80,6 +80,8 @@ footer { max-width: 1100px; margin: 0 auto; padding: 1rem 16px 2rem; color: var(
 
 .state { font-size: 0.85rem; padding: 0.1rem 0.5rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .state-production, .state-published { border-color: var(--ok); color: var(--ok); }
+.run-bar { margin: 0.5rem 0 1rem; }
+.run-on { color: var(--ok); }
 .state-paused, .state-suspended { border-color: var(--warn); color: var(--warn); }
 .conn-connected { color: var(--ok); }
 .conn-reconnecting, .conn-buffering, .conn-refused { color: var(--bad); }

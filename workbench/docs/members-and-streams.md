@@ -46,7 +46,7 @@ browser ──► web server ──► Workbench process ──control API──
    - "I run this stream or have the right to have it analysed" (**decided** as a requirement, see rule 4 in [design.md](design.md)).
    - "Audio may be played in the browser", off by default. Audio is allowed (**decided**, 2026-10-14); the owner switches it on per stream.
 2. **Probe.** On the Workbench's request the engine checks that the stream answers, delivers audio that decodes, and is not silent; it reports the sample rate, the level and the bit rate. The member sees the result at once. The sample rate becomes a property of the stream, the same for all its analyses (see [analyses-and-filters.md](analyses-and-filters.md)). A stream whose probe fails is not saved.
-3. **Draft first.** A new stream is in draft: it runs only while someone watches or a token reads, and is visible only to its owner and the members they invite.
+3. **Draft first.** A new stream is in draft: it runs only while someone watches, a token reads or an analysis using it is in a run (decided 2026-10-15, see [design.md](design.md#runs)), and is visible only to its owner and the members they invite.
 4. **No analysis is made.** **Decided** (2026-10-14): registering a source creates no analysis. The source's page offers "New analysis with this source"; see [design.md](design.md#analyses-and-sources).
 5. **Afterwards.** The owner can edit the texts, move the stream to production, pause or delete it. The engine reports a stream that has been offline for 24 hours; the Workbench pauses it and tells the owner.
 
@@ -56,7 +56,7 @@ browser ──► web server ──► Workbench process ──control API──
 
 ### Of a stream
 
-**Decided** (2026-10-14): a stream in draft runs only while a member watches or a token reads; a stream in production may run always on. The rest of this table is **proposed**.
+**Decided** (2026-10-14): a stream in draft runs only while a member watches or a token reads; a stream in production may run always on. **Decided** (2026-10-15): in either state it also runs while an analysis using it is in a run ([design.md](design.md#runs)). The rest of this table is **proposed**.
 
 ```text
 draft ──► production
@@ -69,7 +69,7 @@ any state ──► suspended (master admin)
 
 | State | Connected | Who sees it |
 |---|---|---|
-| Draft | while at least one consumer is attached | the owner and invited members |
+| Draft | while at least one consumer is attached or an analysis using it is in a run | the owner and invited members |
 | Production | always, if the owner chooses "always on"; otherwise as in draft | the owner and invited members; published analyses are public |
 | Paused | no | the owner and invited members see the last state |
 | Suspended | no | nobody; the owner sees the reason |
@@ -205,7 +205,7 @@ No user-written code or expressions run on the server: filters and motif definit
 | `/sources` | own sources, with state |
 | `/sources/new`, `/sources/<slug>` | register and edit, invite members, move to production, pause, delete; who is connected; new analysis with this source |
 | `/analyses` | own analyses with their sources |
-| `/analyses/new`, `/analyses/<id>` | title, description and sources; per source: spectrogram, events, motifs, settings and filter rules, memories; from two sources the comparison; export, trial, revisions |
+| `/analyses/new`, `/analyses/<id>` | title, description and sources; start and stop a run; per source: spectrogram, events, motifs, settings and filter rules, memories; from two sources the comparison; export, runs with their export, trial, revisions |
 | `/account/usage` | own CPU, RAM, bandwidth and disk against the caps |
 | `/account/tokens` | create and revoke tokens |
 | `/account/keys` | own API keys for the language-model interpretation |

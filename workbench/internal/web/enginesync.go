@@ -139,13 +139,17 @@ func (s *engineSync) session(ctx context.Context) error {
 	})
 }
 
-// wanted reports whether a stream should exist in the engine, and how.
-func wanted(st catalogue.Stream) (engine.StreamSpec, bool) {
+// wanted reports whether a stream should exist in the engine, and how. A
+// stream an analysis in a run uses stays connected, in draft too.
+func wanted(st catalogue.Stream, inRun bool) (engine.StreamSpec, bool) {
 	spec := engine.StreamSpec{Input: st.Input, SampleRate: st.SampleRate, Mode: engine.OnDemand}
 	switch st.State {
 	case catalogue.StreamDraft:
+		if inRun {
+			spec.Mode = engine.Continuous
+		}
 	case catalogue.StreamProduction:
-		if st.AlwaysOn {
+		if st.AlwaysOn || inRun {
 			spec.Mode = engine.Continuous
 		}
 	default:
@@ -169,7 +173,11 @@ func analysisBody(src catalogue.AnalysisSource, a catalogue.Analysis) json.RawMe
 // push puts one stream and its analyses into the engine, or removes it
 // when it should not run.
 func (s *engineSync) push(ctx context.Context, st catalogue.Stream) error {
-	spec, ok := wanted(st)
+	inRun, err := s.db.StreamInRun(ctx, st.ID)
+	if err != nil {
+		return err
+	}
+	spec, ok := wanted(st, inRun)
 	if !ok {
 		err := s.eng.DeleteStream(ctx, st.EngineID(), false)
 		if engine.IsCode(err, "not_found") {
@@ -222,7 +230,7 @@ func (s *engineSync) reconcile(ctx context.Context) error {
 	want := map[string]bool{}
 	var firstErr error
 	for _, st := range streams {
-		if _, ok := wanted(st); ok {
+		if _, ok := wanted(st, false); ok {
 			want[st.EngineID()] = true
 		}
 		if err := s.push(ctx, st); err != nil {

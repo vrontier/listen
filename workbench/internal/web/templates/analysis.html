@@ -5,10 +5,26 @@
 <p class="crumbs"><a href="/analyses">Analyses</a></p>
 <div class="heading-row">
   <h1>{{.Analysis.Name}}</h1>
-  <span class="state state-{{.Analysis.State}}">{{.Analysis.State}} · {{.Analysis.Label}}</span>
+  <span class="state state-{{.Analysis.State}}">{{if .Run}}running · {{end}}{{.Analysis.State}} · {{.Analysis.Label}}</span>
 </div>
 {{if .Analysis.Description}}<p>{{.Analysis.Description}}</p>{{end}}
-<p class="meta">{{len .Sources}} source{{if ne (len .Sources) 1}}s{{end}}. Sources in draft connect while this page is open.</p>
+<div class="run-bar">
+{{with .Run}}
+  <form method="post" action="/analyses/{{$d.Analysis.ID}}/stop" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <span class="run-on">Run {{.Number}} since {{when .Started}}, {{if .Ends.IsZero}}until stopped{{else}}until {{when .Ends}}{{end}}.</span>
+    <button class="secondary">Stop the run</button>
+  </form>
+  <p class="meta">The sources stay connected while the run lasts, whether or not this page is open.{{range $d.Sources}}{{if not .Running}} {{.Stream.Texts.Name}} is {{.Stream.State}} and does not run.{{end}}{{end}}</p>
+{{else}}
+  <form method="post" action="/analyses/{{$d.Analysis.ID}}/run" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Run <select name="length">{{range $d.RunLengths}}<option value="{{.Value}}" {{if eq .Value "24h"}}selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+    <button>Start a run</button>
+  </form>
+  <p class="meta">Not running. Sources in draft connect while this page is open; a run keeps them connected without it, and its results can be found again under Runs.</p>
+{{end}}
+</div>
 
 {{range .Sources}}
 <section class="live" {{if .Running}}data-live="{{.LivePath}}" data-data="{{.DataPath}}"{{end}}>
@@ -138,6 +154,25 @@
   {{end}}
 </section>
 </div>
+
+<section>
+  <h2>Runs</h2>
+  {{if .Runs}}
+  <table>
+    <thead><tr><th>#</th><th>Started</th><th>Ended</th><th>Length</th><th>Revisions</th><th>By</th><th>Export</th></tr></thead>
+    <tbody>{{range .Runs}}<tr>
+      <td>{{.Number}}</td>
+      <td>{{when .Started}}</td>
+      <td>{{if .Active}}<span class="run-on">running</span>{{if not .Ends.IsZero}} <span class="meta">until {{when .Ends}}</span>{{end}}{{else}}{{when .Stopped}}{{if .StoppedBy}} <span class="meta">stopped by {{.StoppedBy}}</span>{{else}} <span class="meta">as planned</span>{{end}}{{end}}</td>
+      <td>{{.Duration}}</td>
+      <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
+      <td>{{.StartedBy}}</td>
+      <td>{{if .TooLong}}<span class="meta">longer than 31 days: export in parts above</span>{{else}}<a href="/analyses/{{$d.Analysis.ID}}/export?{{.Export}}&amp;format=csv">CSV</a> · <a href="/analyses/{{$d.Analysis.ID}}/export?{{.Export}}&amp;format=json">JSON</a>{{end}}</td>
+    </tr>{{end}}</tbody>
+  </table>
+  <p class="meta">Every event carries the revision it was made with, so a run that spans revisions can be told apart in its export.</p>
+  {{else}}<p class="meta">No runs yet.</p>{{end}}
+</section>
 
 <section>
   <h2>Revisions</h2>

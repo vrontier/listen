@@ -110,6 +110,9 @@ type analysisData struct {
 	Sources     []sourceView
 	Picks       []pick
 	Revisions   []catalogue.Revision
+	Runs        []runView
+	Run         *runView // the run going on, if any
+	RunLengths  any
 	Audit       []catalogue.AuditEntry
 	Errs        map[string]string
 	Warnings    []string
@@ -131,6 +134,7 @@ func running(st catalogue.Stream) bool {
 
 type analysesData struct {
 	Analyses []catalogue.Analysis
+	Running  map[int64]bool // in a run now
 }
 
 func (s *Server) analyses(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +144,13 @@ func (s *Server) analyses(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, 200, "analyses", "Analyses", analysesData{Analyses: as})
+	d := analysesData{Analyses: as, Running: map[int64]bool{}}
+	for _, a := range as {
+		if _, ok, err := s.db.ActiveRun(r.Context(), a.ID); err == nil && ok {
+			d.Running[a.ID] = true
+		}
+	}
+	s.render(w, r, 200, "analyses", "Analyses", d)
 }
 
 type newAnalysisData struct {
@@ -333,6 +343,13 @@ func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisDa
 	if d.Revisions, err = s.db.Revisions(r.Context(), a.ID); err != nil {
 		return d, err
 	}
+	if d.Runs, err = s.runViews(r.Context(), a, d.Revisions); err != nil {
+		return d, err
+	}
+	if len(d.Runs) > 0 && d.Runs[0].Active {
+		d.Run = &d.Runs[0]
+	}
+	d.RunLengths = runLengths
 	d.Audit, err = s.db.AuditOf(r.Context(), "analysis", a.ID)
 	return d, err
 }

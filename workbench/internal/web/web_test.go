@@ -356,6 +356,69 @@ func TestMemberFlow(t *testing.T) {
 	}
 }
 
+// A run keeps a draft source connected until it is stopped.
+func TestRunKeepsSourceConnected(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	u, _ := r.db.CreateUser(ctx, "m@example.org", "M", false)
+	st, err := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050,
+		Texts: catalogue.StreamTexts{Name: "A"}, Probe: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := r.db.CreateAnalysis(ctx, u.ID, "Night watch", "", []int64{st.ID}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.srv.sync.reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	cl := engine.NewClient(&http.Client{}, r.engSrv.URL)
+	mode := func() string {
+		es, err := cl.Stream(ctx, st.EngineID())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return es.Mode
+	}
+	if m := mode(); m != engine.OnDemand {
+		t.Fatalf("draft source before the run: %s", m)
+	}
+	member := r.loginAs("m@example.org")
+	aURL := "/analyses/" + strconv.FormatInt(a.ID, 10)
+	_, page, _ := r.get(member, aURL)
+	csrf := csrfOf(t, page)
+	if code, _, _ := r.post(member, aURL+"/run", url.Values{"csrf": {csrf}, "length": {"forever"}}); code != http.StatusSeeOther {
+		t.Fatalf("start with a made-up length: %d", code)
+	}
+	if run, ok, _ := r.db.ActiveRun(ctx, a.ID); ok {
+		t.Fatalf("started with a made-up length: %+v", run)
+	}
+	if code, _, _ := r.post(member, aURL+"/run", url.Values{"csrf": {csrf}, "length": {"6h"}}); code != http.StatusSeeOther {
+		t.Fatalf("start: %d", code)
+	}
+	if m := mode(); m != engine.Continuous {
+		t.Fatalf("draft source in a run: %s", m)
+	}
+	_, page, _ = r.get(member, aURL)
+	if !strings.Contains(page, "Stop the run") || !strings.Contains(page, "Run 1 since") {
+		t.Fatal("running analysis page does not offer to stop")
+	}
+	if _, list, _ := r.get(member, "/analyses"); !strings.Contains(list, "running · private") {
+		t.Fatal("analysis list does not show the run")
+	}
+	if code, _, _ := r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}}); code != http.StatusSeeOther {
+		t.Fatalf("stop: %d", code)
+	}
+	if m := mode(); m != engine.OnDemand {
+		t.Fatalf("draft source after the run: %s", m)
+	}
+	_, page, _ = r.get(member, aURL)
+	if !strings.Contains(page, "Start a run") || !strings.Contains(page, "stopped by M") || !strings.Contains(page, "format=csv") {
+		t.Fatal("stopped run not listed")
+	}
+}
+
 // After an engine restart the Workbench sends its whole wanted state again.
 func TestReconcile(t *testing.T) {
 	r := newRig(t)
