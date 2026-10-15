@@ -138,6 +138,16 @@ CREATE TABLE IF NOT EXISTS memory_sizes (
 	updated     TEXT NOT NULL,               -- when the engine last reported it
 	PRIMARY KEY (analysis_id, stream_id, key)
 );
+CREATE TABLE IF NOT EXISTS library_sets (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	owner_id    INTEGER NOT NULL REFERENCES users(id),
+	name        TEXT NOT NULL,
+	note        TEXT NOT NULL DEFAULT '',
+	rules       TEXT NOT NULL,               -- JSON, as the engine takes them
+	sample_rate INTEGER NOT NULL,
+	taken       INTEGER NOT NULL DEFAULT 0,
+	created     TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS audit (
 	id        INTEGER PRIMARY KEY AUTOINCREMENT,
 	at        TEXT NOT NULL,

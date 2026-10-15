@@ -127,7 +127,7 @@ An analysis page states whether filters are applied and lists them in words and 
 - A researcher edits rules in a form: kind, frequency, odd or all harmonics, tolerance, drift. The form writes the syntax above; no expressions or code are accepted.
 - The engine checks every rule before it is saved. The Workbench keeps no copy of the rule syntax of its own; see [design.md](design.md#processes).
 - Saving changed rules starts a fresh motif memory (see Limits). **Decided** (2026-10-14): there is a trial mode that leaves the memory alone. How it runs is proposed in [design.md](design.md#questions-and-answers), question 16.
-- **Decided:** a shared library of filter rule sets for all members. Taking a set from it copies it into one's own analysis; see [members-and-streams.md](members-and-streams.md#sharing).
+- **Decided:** a shared library of filter rule sets for all members. Taking a set from it copies it into one's own analysis; see [members-and-streams.md](members-and-streams.md#sharing), where what is built is described.
 - **Decided:** every change of an analysis's settings and filters is recorded in the audit trail.
 - Rules are stored per analysis, with revisions. A result can be traced to the revision it was made with.
 - A cap on the number of rules per analysis keeps the cost bounded.

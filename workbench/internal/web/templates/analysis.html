@@ -147,6 +147,18 @@
         </tbody>
       </table>
       <input form="settings" type="hidden" name="{{$p}}rule_count" value="{{len .Form.Rules}}" class="rule-count">
+      {{if .SavedRules}}
+      <details class="library-put">
+        <summary>Put these rules in the library</summary>
+        <form method="post" action="/library" class="stack">
+          <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="analysis" value="{{$d.Analysis.ID}}"><input type="hidden" name="source" value="{{.Stream.ID}}">
+          <p class="meta">The {{.SavedRules}} saved rule{{if ne .SavedRules 1}}s{{end}} of revision {{$d.Analysis.Revision}} go in, with a name and a note; every member can then take a copy. Your name is shown with it.</p>
+          <label>Name <input name="name" required maxlength="80"></label>
+          <label>Note <small>what the rules remove, and where they were found to work</small><textarea name="note" rows="2" maxlength="1000"></textarea></label>
+          <button class="secondary">Put in the library</button>
+        </form>
+      </details>
+      {{end}}
 
       <h3>Memory</h3>
       {{$mm := .Form.MemoryMode}}

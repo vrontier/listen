@@ -87,19 +87,20 @@ func (f *settingsForm) padRules() {
 
 // sourceView is one source on an analysis page.
 type sourceView struct {
-	Stream    catalogue.Stream
-	Prefix    string // of its form fields
-	Form      settingsForm
-	Running   bool   // the stream is in a state that connects
-	Live      bool   // and the page shows it live: in a run or a preview
-	TrialLive bool   // a trial runs next to the run on this source
-	TrialPath string // of its live data, …/trial/live/<source>
-	TrialData string // …/trial/data/<source>/
-	Engine    *engine.Analysis
-	EngineErr string
-	Memories  []engine.Memory
-	LivePath  string
-	DataPath  string
+	Stream     catalogue.Stream
+	Prefix     string // of its form fields
+	Form       settingsForm
+	Running    bool   // the stream is in a state that connects
+	Live       bool   // and the page shows it live: in a run or a preview
+	TrialLive  bool   // a trial runs next to the run on this source
+	TrialPath  string // of its live data, …/trial/live/<source>
+	TrialData  string // …/trial/data/<source>/
+	SavedRules int    // rules in the saved revision, for the library
+	Engine     *engine.Analysis
+	EngineErr  string
+	Memories   []engine.Memory
+	LivePath   string
+	DataPath   string
 }
 
 // pick is one source the member may add to an analysis.
@@ -348,7 +349,7 @@ func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisDa
 		chosen[src.Stream.ID] = true
 		sid := strconv.FormatInt(src.Stream.ID, 10)
 		v := sourceView{Stream: src.Stream, Prefix: prefixOf(src.Stream.ID), Form: formFromSpec(src.Spec), Running: running(src.Stream),
-			LivePath: base + "/live/" + sid, DataPath: base + "/data/" + sid + "/"}
+			LivePath: base + "/live/" + sid, DataPath: base + "/data/" + sid + "/", SavedRules: len(rulesOf(src.Spec))}
 		v.Live = v.Running && (inRun || !d.Preview.IsZero())
 		if d.Trial != nil {
 			// The form shows what is on trial, to be changed further.

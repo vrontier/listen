@@ -109,6 +109,11 @@ any state ──► suspended (master admin)
   - Deleting a source takes it out of every analysis, also other members'. Sharing and stopping it are in the source's change log.
   - The connection's cost is split among the members whose analyses run on it, as decided.
 - **Decided:** there is a shared library for all members. **Proposed:** it is a part of the Workbench, not a git repository. A member puts a set of filter rules into it with a name and a note; others take a copy into their own analysis. A copy, not a link, so that a later change in the library never changes someone's analysis or starts a new memory behind their back. Motif definitions, captures and detections can go into the library in the same way once they exist (members' question 7).
+- **Built** against the stand-in (2026-10-15), **proposed** in its detail:
+  - "Library" in the menu lists every set: name, note, the member who put it in, when, the rate of the source it came from, how often it was taken, and its rules in words.
+  - A member puts a set in from a source of their own analysis ("Put these rules in the library" under its filter rules): the rules of the saved revision, with a name and a note. Their display name is shown with it.
+  - Taking a set copies its rules into a source of one's own analysis, added to its rules (without duplicates) or in their place. The engine checks them at that source's rate first; the result is the analysis's next revision, so a new memory begins as with any change of rules. Not during a run, which is fixed. When the set was made at another rate, the member is told that tolerances left empty are a number of bins, whose width differs.
+  - The member who put a set in, or the master admin, can take it out of the library. Copies already taken stay. Putting in, taking and taking out are in the audit trail.
 
 ## Resources and caps
 
