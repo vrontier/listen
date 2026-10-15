@@ -358,7 +358,11 @@ func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisDa
 	_, _, info := s.sync.status()
 	d.Groups = info.Groups()
 	d.Comparing = s.compares(a)
-	d.Compare = compareChoices(info, a.Spec.Compare, len(a.Sources))
+	compare := a.Spec.Compare
+	if compare == nil {
+		compare = catalogue.DefaultCompare // saved before there was a choice
+	}
+	d.Compare = compareChoices(info, compare, len(a.Sources))
 	d.Audit, err = s.db.AuditOf(r.Context(), "analysis", a.ID)
 	return d, err
 }

@@ -469,6 +469,12 @@ func TestComparison(t *testing.T) {
 	if !slices.Equal(a.Spec.Compare, catalogue.DefaultCompare) {
 		t.Fatalf("new analysis compares %v", a.Spec.Compare)
 	}
+	// One saved before there was a choice shows the default as chosen.
+	older := a
+	older.Spec.Compare = nil
+	if d, err := r.srv.analysisData(httptest.NewRequest("GET", "/", nil), older); err != nil || len(d.Compare) == 0 || !d.Compare[0].Checked {
+		t.Fatalf("an older analysis does not show activity as chosen: %v %+v", err, d.Compare)
+	}
 	if err := r.srv.sync.reconcile(ctx); err != nil {
 		t.Fatal(err)
 	}
