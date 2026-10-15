@@ -180,6 +180,18 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /analyses/{id}/stop", s.member(s.analysisRunStop))
 	m.HandleFunc("POST /analyses/{id}/memories/{source}/delete", s.member(s.analysisMemoryDelete))
 	m.HandleFunc("GET /account/usage", s.member(s.usagePage))
+	m.HandleFunc("GET /account/tokens", s.member(s.tokensPage))
+	m.HandleFunc("POST /account/tokens", s.member(s.tokenCreate))
+	m.HandleFunc("POST /account/tokens/{token}/revoke", s.member(s.tokenRevoke))
+
+	stream := func(h http.HandlerFunc) http.HandlerFunc { return s.bearer(catalogue.ScopeStream, h) }
+	m.HandleFunc("GET /api/v1/analyses", stream(s.apiAnalyses))
+	m.HandleFunc("GET /api/v1/analyses/{id}", stream(s.apiAnalysis))
+	m.HandleFunc("GET /api/v1/analyses/{id}/events", stream(s.apiEvents))
+	m.HandleFunc("GET /api/v1/analyses/{id}/sources/{source}/{what...}", stream(s.apiSourceData))
+	m.HandleFunc("GET /api/v1/runs", stream(s.apiRuns))
+	m.HandleFunc("GET /api/v1/runs/{run}/{file}", stream(s.apiRunFile))
+
 	m.HandleFunc("GET /library", s.member(s.libraryPage))
 	m.HandleFunc("POST /library", s.member(s.libraryAdd))
 	m.HandleFunc("POST /library/{set}/take", s.member(s.libraryTake))

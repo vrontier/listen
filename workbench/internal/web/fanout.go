@@ -32,6 +32,9 @@ type reader struct {
 	ch     chan []byte
 	person bool
 	who    string
+	// frame, if set, writes an event the reader's own way, or drops it by
+	// returning nil; a program's data stream names the source of each.
+	frame func(engine.SSE) []byte
 }
 
 func newFanout(eng *engine.Client) *fanout {
@@ -84,8 +87,14 @@ func (f *fanout) run(ctx context.Context, t *topic) {
 			msg := sseFrame(ev)
 			f.mu.Lock()
 			for r := range t.readers {
+				m := msg
+				if r.frame != nil {
+					if m = r.frame(ev); m == nil {
+						continue
+					}
+				}
 				select {
-				case r.ch <- msg:
+				case r.ch <- m:
 				default: // a slow reader loses events, as at the engine
 				}
 			}

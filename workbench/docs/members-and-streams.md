@@ -181,6 +181,17 @@ A member creates tokens for programs and AI assistants. A token:
 - The token carries a recognisable prefix, for example `low_`, so that a token pasted into a public repository can be found by secret scanning.
 - A browser page uses the session cookie instead.
 
+**Built** against the stand-in (2026-10-15), **proposed** in every detail:
+
+- **The page.** "Tokens" in the menu (`/account/tokens`): a member makes a token with a name and what it is for (data stream, MCP, or both), sees it once, and later sees each token's first characters, what it is for, when it was made and last used, and can revoke it. At most 20 valid tokens per member. Making and revoking are in the audit trail.
+- **The token.** `low_` and 43 random characters; stored as a SHA-256 hash. A token in the address (`?token=`) is refused with a note to use the header. A revoked token, or one of a suspended member, is refused.
+- **It reads, it does not start.** A token reads the member's own analyses only, and never starts, stops or changes anything. So it never connects a source: this settles how tokens fit with "a source connects only for runs and previews". Live data and events are there while the analysis is in a run or a preview; otherwise the answer is `409 not_running`. A data set can be read at any time.
+- **What it reads** (scope "data stream"):
+  - `GET /api/v1/analyses` and `/api/v1/analyses/<id>`: title, description, revision, whether it is in a run or a preview, its sources with place, coordinates, rate and settings, and what is compared.
+  - `GET /api/v1/analyses/<id>/events`: the live events as Server-Sent Events. Each event keeps the engine's type, and its data is `{"source": <id>, "data": <the engine's event>}`, or `{"comparison": true, "data": …}` for the comparison. `?types=` limits the types, `?source=` the sources. When the run or preview ends, an `end` event says so and the stream closes. At most four such streams per token at once. A token reading counts in the source's list of who is connected.
+  - `GET /api/v1/analyses/<id>/sources/<source>/state` (also `motifs`, `motifs/<id>`, `memories`, `history/events`, `history/features`): the engine's data, during a run or a preview.
+  - `GET /api/v1/runs` and `GET /api/v1/runs/<id>/<file>`: the runs and their data sets' files, uncompressed.
+
 ## Language-model keys
 
 **Decided** (2026-10-14): a member who wants the language-model interpretation of their analyses registers their own API key, for the OpenAI API or the Anthropic API. The use is billed to the member's account with that provider; the Workbench handles no money.

@@ -16,6 +16,7 @@
       <a href="/runs">Runs</a>
       <a href="/library">Library</a>
       <a href="/account/usage">Usage</a>
+      <a href="/account/tokens">Tokens</a>
       {{if .User.Admin}}<a href="/admin">Admin</a>{{end}}
       <span class="who">{{.User.Name}}</span>
       <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link">Log out</button></form>

@@ -1,7 +1,6 @@
 package web
 
 import (
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -358,26 +356,16 @@ func (s *Server) runFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("file")
-	ctype := map[string]string{fileJSON: "application/json", fileEvents: "text/csv; charset=utf-8", fileCompare: "text/csv; charset=utf-8"}[name]
-	if ctype == "" || run.Dataset != catalogue.DatasetReady {
-		s.notFound(w, r)
-		return
-	}
-	f, err := os.Open(filepath.Join(s.data.runDir(run.ID), name+".gz"))
+	rc, err := s.openDataset(run, name)
 	if err != nil {
 		s.notFound(w, r)
 		return
 	}
-	defer f.Close()
-	zr, err := gzip.NewReader(f)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
+	defer rc.Close()
 	download := fmt.Sprintf("%s-run-%d-%s", catalogue.Slugify(a.Name), run.Number, name)
-	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("Content-Type", datasetTypes[name])
 	w.Header().Set("Content-Disposition", `attachment; filename="`+download+`"`)
-	io.Copy(w, zr)
+	io.Copy(w, rc)
 }
 
 func (s *Server) runDatasetDelete(w http.ResponseWriter, r *http.Request) {

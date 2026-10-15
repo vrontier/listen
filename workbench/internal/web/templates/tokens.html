@@ -1,0 +1,54 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+<h1>Tokens</h1>
+{{with .Data}}
+<p class="meta">A token lets a program or an AI assistant read your analyses: their settings, their live events while they are in a run or a preview, and your runs' data sets. It never starts or changes anything, so it never connects a source by itself. It reads only your own analyses.</p>
+
+{{if .Secret}}
+<section class="notice">
+  <h2>Your new token</h2>
+  <p><code class="secret">{{.Secret}}</code></p>
+  <p>Copy it now: it is shown only this once and kept here only as a hash. Treat it like a password. If it gets out, revoke it below.</p>
+</section>
+{{end}}
+
+<section>
+  <h2>Your tokens</h2>
+  {{if .Tokens}}
+  <table>
+    <thead><tr><th>Name</th><th>Begins</th><th>For</th><th>Made</th><th>Last used</th><th></th></tr></thead>
+    <tbody>{{range .Tokens}}<tr{{if not .Revoked.IsZero}} class="meta"{{end}}>
+      <td>{{.Name}}</td><td><code>{{.Hint}}…</code></td>
+      <td>{{range $i, $s := .Scopes}}{{if $i}}, {{end}}{{if eq $s "stream"}}data stream{{else if eq $s "mcp"}}MCP{{else}}{{$s}}{{end}}{{end}}</td>
+      <td>{{when .Created}}</td><td>{{if .LastUsed.IsZero}}never{{else}}{{when .LastUsed}}{{end}}</td>
+      <td>{{if .Revoked.IsZero}}<form method="post" action="/account/tokens/{{.ID}}/revoke" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="link">revoke</button></form>{{else}}revoked {{when .Revoked}}{{end}}</td>
+    </tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="meta">None yet.</p>{{end}}
+
+  <h3>New token</h3>
+  <form method="post" action="/account/tokens" class="stack">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Name <small>where it is used, so that you know which to revoke</small><input name="name" value="{{.Name}}" required maxlength="60"></label>
+    <label class="check"><input type="checkbox" name="stream" checked> Data stream: JSON and live events over HTTP, for programs</label>
+    <label class="check"><input type="checkbox" name="mcp"> MCP: the same data for AI assistants</label>
+    <button>Make a token</button>
+  </form>
+</section>
+
+<section>
+  <h2>Using a token</h2>
+  <p>Send it in the request header <code>Authorization: Bearer low_…</code>, never in the address, where it would end up in logs.</p>
+  <table class="facts">
+    <tr><th><code>GET /api/v1/analyses</code></th><td>your analyses, their sources and settings, and whether each is in a run</td></tr>
+    <tr><th><code>GET /api/v1/analyses/&lt;id&gt;/events</code></th><td>live events while the analysis is in a run or a preview, as Server-Sent Events; each names its source. <code>?types=event.resonance,motif.detected</code> limits the kinds, <code>?source=&lt;id&gt;</code> the sources. An <code>end</code> event comes when the run ends.</td></tr>
+    <tr><th><code>GET /api/v1/analyses/&lt;id&gt;/sources/&lt;source&gt;/state</code></th><td>also <code>motifs</code>, <code>history/events</code>, <code>history/features</code>, during a run or a preview</td></tr>
+    <tr><th><code>GET /api/v1/runs</code></th><td>your runs and their data sets</td></tr>
+    <tr><th><code>GET /api/v1/runs/&lt;id&gt;/events.csv</code></th><td>a file of a finished data set: also <code>dataset.json</code>, <code>comparison.csv</code></td></tr>
+    <tr><th><code>POST /mcp</code></th><td>MCP over HTTP (streamable HTTP), for AI assistants</td></tr>
+  </table>
+  <p>For example:</p>
+  <pre><code>curl -N -H "Authorization: Bearer $LOW_TOKEN" {{.Base}}/api/v1/analyses/{{.Example}}/events?types=event.resonance</code></pre>
+</section>
+{{end}}
+{{end}}

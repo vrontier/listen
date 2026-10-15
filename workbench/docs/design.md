@@ -167,7 +167,7 @@ Deployment is not a reason either way. A Go binary needs a one-time root step on
 | Member area | Log in, manage streams, filters, motifs and tokens through forms | decided: comes first, kept narrow (question 5); an analysis page shows the spectrogram, the events, the motifs and an export (question 13); detail proposed in [members-and-streams.md](members-and-streams.md) |
 | Sources | Register a stream, probe it, move it from draft to production, pause it, share it with invited members; see who is connected; it connects only for runs and previews | decided in outline (questions 1 to 3); detail proposed, same document. Called "Sources" in the menu (decided 2026-10-14) |
 | Filters and motifs | Define what an analysis ignores and what it looks for; a shared library; a trial mode | filters: rule syntax exists in the listener; library and trial mode decided (questions 9, 16); motifs: drafted as "defined motifs" in the Observatory's spec |
-| Data stream by token | The analysis events of one's own analyses | decided: SSE, follows the member area; proposed: token in the `Authorization` header (question 14) |
+| Data stream by token | The analysis events of one's own analyses | decided: SSE, follows the member area; proposed: token in the `Authorization` header (question 14); built against the stand-in (2026-10-15), see [members-and-streams.md](members-and-streams.md#tokens) |
 | MCP by token | The same data and the motif memory for AI assistants | decided: an HTTP endpoint in the Workbench process, after the data stream; proposed: the same token header |
 | Analyses | A member's analysis of 1 to n sources: settings and filter rules per source; from two sources, the sources aligned on one time axis and compared (activity side by side, station clocks, impulses shared between stations) | decided, see [Analyses and sources](#analyses-and-sources); the comparison is proposed in [groups.md](groups.md) |
 
@@ -196,7 +196,7 @@ This replaces the earlier drafts in which an analysis was made under a stream, a
 
 **Decided** (2026-10-15): a member starts and stops an analysis as a **run**, and each run produces a **data set**.
 
-- **A source connects only while an analysis that uses it is in a run or a preview.** An open page alone no longer connects it. This replaces "a stream in draft runs only while a member watches or a token reads" (question 2, decided 2026-10-14); how tokens fit in is to be settled with them.
+- **A source connects only while an analysis that uses it is in a run or a preview.** An open page alone no longer connects it. This replaces "a stream in draft runs only while a member watches or a token reads" (question 2, decided 2026-10-14). **Proposed** (2026-10-15) for tokens: a token reads what runs and never starts anything, so it never connects a source; outside a run or a preview its data stream answers that the analysis is not running ([members-and-streams.md](members-and-streams.md#tokens)).
 - **The live view** of an analysis (spectrograms, events, motifs, comparison) is shown only during its run or a preview.
 - **A source's state says how far along the source is** (draft, production, paused), not whether it runs.
 - **Start and stop.** A run is started with a planned length or "until stopped", and can be stopped at any time.

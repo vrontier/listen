@@ -786,7 +786,13 @@ func (s *Server) liveID(r *http.Request, a catalogue.Analysis, src catalogue.Ana
 		}
 		return "", false
 	}
-	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); inRun {
+	return s.runningID(r.Context(), a)
+}
+
+// runningID is the engine analysis of a run or a preview going on, which
+// is what a page or a program can read.
+func (s *Server) runningID(ctx context.Context, a catalogue.Analysis) (string, bool) {
+	if _, inRun, _ := s.db.ActiveRun(ctx, a.ID); inRun {
 		return a.EngineID(), true
 	}
 	if _, ok := s.sync.preview(a.ID); ok {
