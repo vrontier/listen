@@ -344,12 +344,13 @@ func TestFailedAnalysisStaysAlone(t *testing.T) {
 	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: wav, SampleRate: 22050, Mode: Continuous}, nil)
 	c.do("PUT", "/v1/streams/s-1/analyses/good", map[string]any{}, nil)
 	c.do("PUT", "/v1/streams/s-1/analyses/bad", map[string]any{}, nil)
-	beforeFeed = func(r *run) {
+	inject := func(r *run) {
 		if r.id == "bad" {
 			panic("injected")
 		}
 	}
-	defer func() { beforeFeed = nil }()
+	beforeFeed.Store(&inject)
+	defer beforeFeed.Store(nil)
 
 	var av AnalysisView
 	waitFor(t, "the bad analysis to fail", func() bool {
@@ -371,7 +372,7 @@ func TestFailedAnalysisStaysAlone(t *testing.T) {
 	}
 
 	// A PUT starts it again.
-	beforeFeed = nil
+	beforeFeed.Store(nil)
 	c.do("PUT", "/v1/streams/s-1/analyses/bad", map[string]any{}, &av)
 	waitFor(t, "the analysis to run again", func() bool {
 		var now AnalysisView // fresh: last_error is left out once cleared

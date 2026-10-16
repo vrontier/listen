@@ -17,16 +17,10 @@ import (
 	"github.com/vrontier/listen/listener/internal/memory"
 )
 
-// queueChunks is how many chunks of decoded audio (about 2048 samples
-// each) wait for an analysis. A slower analysis loses chunks; it never
-// holds up the decode or the other analyses of its stream.
-const queueChunks = 256
-
-// chunk is decoded audio at a position on the stream's timeline.
-type chunk struct {
-	x  []float32 // shared by all analyses of the stream: read only
-	at int64     // index of x[0] on the stream's timeline
-}
+// queueFrames is how many frames (20 a second) wait for an analysis. A
+// slower analysis loses frames; it never holds up the decode or the other
+// analyses of its stream.
+const queueFrames = 100
 
 // sub is one subscriber to an analysis's live events.
 type sub struct {
@@ -39,7 +33,7 @@ type sub struct {
 type run struct {
 	s  *stream
 	id string
-	q  chan chunk
+	q  chan *analysis.Frame // shared with the stream's other analyses: read only
 
 	mu        sync.Mutex
 	c         checked
@@ -53,7 +47,7 @@ type run struct {
 	done      chan struct{}
 	started   time.Time
 	busyNs    atomic.Int64 // time spent analysing
-	dropped   atomic.Int64 // chunks lost because the queue was full
+	dropped   atomic.Int64 // frames lost because the queue was full
 	lastUsage Usage
 
 	// Owned by the worker while it runs; replaced only while paused.
@@ -63,8 +57,8 @@ type run struct {
 	first   bool
 }
 
-// beforeFeed, if set, runs before every chunk an analysis takes (tests).
-var beforeFeed func(r *run)
+// beforeFeed, if set, runs before every frame an analysis takes (tests).
+var beforeFeed atomic.Pointer[func(r *run)]
 
 type anchorReq struct {
 	t  time.Time
@@ -72,7 +66,7 @@ type anchorReq struct {
 }
 
 func newRun(s *stream, id string) *run {
-	return &run{s: s, id: id, q: make(chan chunk, queueChunks), subs: map[*sub]struct{}{}, started: time.Now()}
+	return &run{s: s, id: id, q: make(chan *analysis.Frame, queueFrames), subs: map[*sub]struct{}{}, started: time.Now()}
 }
 
 func (r *run) source() string { return r.s.id + "/" + r.id }
@@ -97,7 +91,9 @@ func (r *run) apply(c checked) error {
 			return err
 		}
 		r.mem, r.key = mem, key
-		r.a = analysis.New(r.s.rate, r.stamper, r.emit, c.options(r.s.viewOptions()))
+		// The stream's front end computes the spectrum and the view once
+		// for all its analyses.
+		r.a = analysis.New(r.s.rate, r.stamper, r.emit, c.options(nil))
 		r.a.Live(true)
 		r.a.OnFrame(r.s.setDelay)
 		r.first = true
@@ -119,15 +115,6 @@ func (r *run) apply(c checked) error {
 	}
 	r.c = c
 	return nil
-}
-
-// setView gives the analyzer the stream's new spectrogram view.
-func (r *run) setView(v *analysis.View) {
-	r.pause()
-	defer r.resume()
-	if r.a != nil {
-		r.a.SetView(v)
-	}
 }
 
 func (r *run) memoryDir(key string) string {
@@ -233,49 +220,44 @@ func (r *run) work(stop, done chan struct{}) {
 		select {
 		case <-stop:
 			return
-		case c := <-r.q:
-			if !r.feed(c) {
+		case fr := <-r.q:
+			if !r.feed(fr) {
 				return
 			}
 		}
 	}
 }
 
-// feed analyses one chunk. A panic in the analysis stops this analysis
+// feed analyses one frame. A panic in the analysis stops this analysis
 // only: it reports failed, its stream and the other analyses go on.
-func (r *run) feed(c chunk) (ok bool) {
+func (r *run) feed(fr *analysis.Frame) (ok bool) {
 	defer func() {
 		if p := recover(); p != nil {
 			r.fail(p)
 			ok = false
 		}
 	}()
-	if beforeFeed != nil {
-		beforeFeed(r)
+	if f := beforeFeed.Load(); f != nil {
+		(*f)(r)
 	}
 	r.mu.Lock()
 	anc := r.anchor
-	if anc != nil && c.at >= anc.at {
+	if anc != nil && fr.End >= anc.at {
 		r.anchor = nil
 	} else {
 		anc = nil
 	}
 	r.mu.Unlock()
-	switch {
-	case r.first:
-		// Joining a stream already running: positions count on the
-		// stream's timeline, the clock from now.
-		r.a.SeekTo(c.at)
-		r.a.Anchor(time.Now())
+	if r.first {
+		// Joining a stream already running: the clock starts from now.
+		r.a.AnchorAt(time.Now(), fr.End)
 		r.first = false
-	case r.a.Samples() != c.at:
-		r.a.SeekTo(c.at) // chunks were lost
 	}
 	if anc != nil {
-		r.a.Anchor(anc.t)
+		r.a.AnchorAt(anc.t, anc.at) // a new connection
 	}
 	t0 := time.Now()
-	r.a.Feed(c.x)
+	r.a.Analyse(fr)
 	r.busyNs.Add(int64(time.Since(t0)))
 	return true
 }
@@ -291,11 +273,11 @@ func (r *run) fail(p any) {
 	r.emitStatus()
 }
 
-// push queues decoded audio for the analysis, or drops it if the queue is
-// full or the analysis has stopped.
-func (r *run) push(c chunk) {
+// push queues a frame for the analysis, or drops it if the queue is full or
+// the analysis has stopped.
+func (r *run) push(fr *analysis.Frame) {
 	select {
-	case r.q <- c:
+	case r.q <- fr:
 	default:
 		r.dropped.Add(1)
 	}

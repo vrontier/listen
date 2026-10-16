@@ -28,7 +28,7 @@ type Limits struct {
 
 // DefaultLimits are the limits without flags.
 var DefaultLimits = Limits{
-	Streams: 40, AnalysesPerStream: 4, RulesPerAnalysis: 16, SubscriptionsPerAnalysis: 4,
+	Streams: 40, AnalysesPerStream: 8, RulesPerAnalysis: 16, SubscriptionsPerAnalysis: 4,
 	MaxSampleRate: 48000, MaxBitrateKbps: 512,
 }
 

@@ -51,7 +51,10 @@ type stream struct {
 	retryAt    time.Time // after a refusal
 	lastUsage  Usage
 
-	feedList atomic.Pointer[[]*run] // what OnSamples feeds
+	feMu     sync.Mutex
+	fe       *analysis.FrontEnd     // one window, FFT and view for all analyses
+	feBusyNs atomic.Int64           // time spent in the front end
+	feedList atomic.Pointer[[]*run] // what the front end feeds
 	timeline atomic.Int64           // samples decoded since the stream was created
 	lastData atomic.Int64           // UnixNano of the latest samples
 	delay    atomic.Int64           // ms between observation and now
@@ -65,6 +68,7 @@ func newStream(e *Engine, id string, spec StreamSpec, view *View) *stream {
 		e: e, id: id, input: spec.Input, rate: spec.SampleRate, runs: map[string]*run{},
 		state: StateIdle, since: time.Now().UTC(), quit: make(chan struct{}), supDone: make(chan struct{}),
 	}
+	s.fe = analysis.NewFrontEnd(spec.SampleRate, view.options(), true)
 	s.setSpec(spec, view)
 	s.feedList.Store(&[]*run{})
 	go s.supervise()
@@ -89,12 +93,11 @@ func (s *stream) setSpec(spec StreamSpec, view *View) {
 	}
 	changed := !sameView(s.view, view)
 	s.view = view
-	runs := s.runList()
 	s.mu.Unlock()
 	if changed {
-		for _, r := range runs {
-			r.setView(view.options())
-		}
+		s.feMu.Lock()
+		s.fe.SetView(view.options())
+		s.feMu.Unlock()
 	}
 }
 
@@ -103,12 +106,6 @@ func sameView(a, b *View) bool {
 		return a == b
 	}
 	return *a == *b
-}
-
-func (s *stream) viewOptions() *analysis.View {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.view.options()
 }
 
 // runList is the analyses in identifier order; s.mu must be held.
@@ -349,15 +346,20 @@ func (s *stream) setState(st string, p *Problem) {
 	}
 }
 
-// onSamples hands decoded audio to every analysis of the stream, each
-// through its own queue.
+// onSamples runs the stream's front end once and hands every frame to all
+// its analyses, each through its own queue.
 func (s *stream) onSamples(x []float32) {
-	c := chunk{x: append([]float32(nil), x...)}
-	c.at = s.timeline.Add(int64(len(x))) - int64(len(x))
+	s.timeline.Add(int64(len(x)))
 	s.lastData.Store(time.Now().UnixNano())
-	for _, r := range *s.feedList.Load() {
-		r.push(c)
-	}
+	s.feMu.Lock()
+	t0 := time.Now()
+	s.fe.Feed(x, func(fr *analysis.Frame) {
+		for _, r := range *s.feedList.Load() {
+			r.push(fr)
+		}
+	})
+	s.feBusyNs.Add(int64(time.Since(t0)))
+	s.feMu.Unlock()
 }
 
 // close stops the stream, its source and its analyses.

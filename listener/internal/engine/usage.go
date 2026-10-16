@@ -17,11 +17,12 @@ type meter struct {
 	selfCPU time.Duration
 	procCPU map[int64]time.Duration // ffmpeg by pid
 	runBusy map[*run]int64
+	feBusy  map[*stream]int64
 	engine  Usage
 }
 
 func newMeter(e *Engine) *meter {
-	return &meter{e: e, at: time.Now(), selfCPU: selfCPU(), procCPU: map[int64]time.Duration{}, runBusy: map[*run]int64{}}
+	return &meter{e: e, at: time.Now(), selfCPU: selfCPU(), procCPU: map[int64]time.Duration{}, runBusy: map[*run]int64{}, feBusy: map[*stream]int64{}}
 }
 
 // UsageReport is the data of the usage event.
@@ -53,18 +54,25 @@ func (m *meter) measure() UsageReport {
 		streams = append(streams, m.e.streams[id])
 	}
 	m.e.mu.Unlock()
-	busy := map[*run]int64{}
+	busy, feBusy := map[*run]int64{}, map[*stream]int64{}
 	for _, s := range streams {
 		measured := false
 		su := Usage{InMeasured: &measured}
+		// The stream's own cost: its ffmpeg, and its front end (the FFT
+		// all its analyses share), which runs inside the engine.
+		fb := s.feBusyNs.Load()
+		if prev, ok := m.feBusy[s]; ok {
+			su.CPUPercent = pct(time.Duration(fb - prev))
+		}
+		feBusy[s] = fb
 		if pid := s.pid.Load(); pid > 0 {
 			if cpu, rss, ok := procStat(int(pid)); ok {
 				if prev, ok := m.procCPU[pid]; ok {
-					su.CPUPercent = pct(cpu - prev)
+					su.CPUPercent = round(su.CPUPercent+pct(cpu-prev), 1)
+					total.CPUPercent += pct(cpu - prev)
 				}
 				procs[pid] = cpu
 				su.MemoryMB = round(rss, 1)
-				total.CPUPercent += su.CPUPercent
 				total.MemoryMB += su.MemoryMB
 			}
 		}
@@ -87,7 +95,7 @@ func (m *meter) measure() UsageReport {
 			rep.Analyses[r.source()] = ru
 		}
 	}
-	m.procCPU, m.runBusy, m.at = procs, busy, now
+	m.procCPU, m.runBusy, m.feBusy, m.at = procs, busy, feBusy, now
 	total.CPUPercent = round(total.CPUPercent, 1)
 	total.MemoryMB = round(total.MemoryMB, 1)
 	m.engine = total
