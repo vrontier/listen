@@ -57,6 +57,7 @@ type Analyzer struct {
 	bandDB   []float64
 	prevBand []float64
 	bandNorm []float64
+	view     *viewBands // display bands, when the source configures them
 	pending  []float64
 	binHz    float64
 	lo, hi   int
@@ -84,7 +85,15 @@ type Analyzer struct {
 type signalAcc struct {
 	n                                           int
 	rms, level, peak, zcr, cent, flux, ent, har float64
-	bands                                       []float64
+	bands, view                                 []float64
+}
+
+// viewBands are the spectrogram's own bands (Options.View).
+type viewBands struct {
+	View
+	bands *dsp.Bands
+	db    []float64
+	rng   *detect.AutoRange
 }
 
 type featureAcc struct {
@@ -108,6 +117,17 @@ type Options struct {
 	// Ignore holds further filter rules for known interference of this
 	// source, such as the harmonics of a railway's traction current.
 	Ignore []Ignore
+	// View gives the spectrogram its own bands, independent of the analysed
+	// range. Nil: the spectrogram shows the analysis bands.
+	View *View
+}
+
+// View describes the spectrogram's bands. They are unfiltered: they show
+// the whole range, mains and filter rules included.
+type View struct {
+	Scale        string  // "linear" or "log"
+	MinHz, MaxHz float64 // 0 MaxHz: Nyquist; log needs MinHz > 0 (default 20)
+	Bands        int     // default 240
 }
 
 // New returns an analyzer for mono input at sampleRate (0: the default).
@@ -131,6 +151,9 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 			opt.MainsHz = o.MainsHz
 		}
 		opt.Ignore = append(opt.Ignore, o.Ignore...)
+		if o.View != nil {
+			opt.View = o.View
+		}
 	}
 	if sampleRate <= 0 {
 		sampleRate = DefaultSampleRate
@@ -183,6 +206,10 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 	a.lo = int(math.Ceil(a.minHz / a.binHz))
 	a.hi = int(a.maxHz / a.binHz)
 	a.sig.bands = make([]float64, bandCount)
+	if opt.View != nil {
+		a.view = newViewBands(*opt.View, float64(sampleRate)/2, a.binHz, len(a.mag))
+		a.sig.view = make([]float64, a.view.Bands)
+	}
 	a.Anchor(time.Now())
 	return a
 }
@@ -360,6 +387,12 @@ func (a *Analyzer) hop(x []float64) {
 	for i, b := range a.bandNorm {
 		s.bands[i] += b
 	}
+	if v := a.view; v != nil {
+		v.update(a.mag)
+		for i, b := range v.db {
+			s.view[i] += v.rng.Norm(b)
+		}
+	}
 	if a.frame%framesPerSignal == 0 {
 		a.emitSignal(ts, pos, energy)
 	}
@@ -408,11 +441,20 @@ func (a *Analyzer) emitSignal(ts time.Time, pos, energy float64) {
 		Entropy:          round(s.ent/n, 3),
 		Harmonicity:      round(s.har/n, 3),
 	}))
+	var view *events.SpectrumView
+	if v := a.view; v != nil {
+		vb := make([]float64, len(s.view))
+		for i := range vb {
+			vb[i] = round(s.view[i]/n, 2)
+			s.view[i] = 0
+		}
+		view = &events.SpectrumView{MinHz: v.MinHz, MaxHz: v.MaxHz, Scale: v.Scale, Bands: vb}
+	}
 	a.emit(a.stamper.Stamp(events.TypeSpectrum, ts, pos, events.Spectrum{
-		MinHz: a.minHz, MaxHz: a.maxHz, Scale: "log", Bands: bands, Peaks: peaks,
+		MinHz: a.minHz, MaxHz: a.maxHz, Scale: "log", Bands: bands, Peaks: peaks, View: view,
 	}))
-	bandsBuf := s.bands
-	*s = signalAcc{bands: bandsBuf}
+	bandsBuf, viewBuf := s.bands, s.view
+	*s = signalAcc{bands: bandsBuf, view: viewBuf}
 }
 
 func (a *Analyzer) emitFeature(ts time.Time, pos, novelty float64) {
@@ -463,4 +505,42 @@ func round(x float64, places int) float64 {
 	}
 	p := math.Pow(10, float64(places))
 	return math.Round(x*p) / p
+}
+
+func newViewBands(o View, nyquist, binHz float64, nbins int) *viewBands {
+	if o.Bands <= 0 {
+		o.Bands = 240
+	}
+	if o.MaxHz <= 0 || o.MaxHz > nyquist {
+		o.MaxHz = nyquist
+	}
+	if o.Scale != "linear" {
+		o.Scale = "log"
+		if o.MinHz <= 0 {
+			o.MinHz = minHz
+		}
+	}
+	if o.MinHz < 0 || o.MinHz >= o.MaxHz/2 {
+		o.MinHz = 0
+	}
+	v := &viewBands{View: o, db: make([]float64, o.Bands), rng: detect.NewAutoRange(40, 20*300)}
+	if o.Scale == "linear" {
+		v.bands = dsp.NewLinearBands(o.Bands, o.MinHz, o.MaxHz, binHz, nbins)
+	} else {
+		v.bands = dsp.NewBands(o.Bands, o.MinHz, o.MaxHz, binHz, nbins)
+	}
+	return v
+}
+
+// update computes the bands of one frame and moves their level range like
+// the analysis bands: from the quieter bands (20th percentile) to the loudest.
+func (v *viewBands) update(mag []float64) {
+	if v.Scale == "linear" {
+		v.bands.ComputeMax(mag, v.db)
+	} else {
+		v.bands.Compute(mag, v.db)
+	}
+	sorted := append([]float64(nil), v.db...)
+	sort.Float64s(sorted)
+	v.rng.Update(sorted[len(sorted)/5], sorted[len(sorted)-1])
 }

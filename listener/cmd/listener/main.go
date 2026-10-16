@@ -60,6 +60,10 @@ func main() {
 		minHz         = flag.Float64("min-hz", 0, "bottom of the analysed range (bands, peaks); 0: 20 Hz. VLF radio: 800")
 		maxHz         = flag.Float64("max-hz", 0, "top of the analysed range; 0: just below Nyquist. VLF radio: 12000")
 		mainsHz       = flag.Float64("mains", 0, "mains frequency (50 or 60) whose harmonics are ignored as hum; 0: off")
+		sgScale       = flag.String("spectrogram-scale", "", "give the spectrogram its own bands, unfiltered and independent of the analysed range: linear or log; empty: it shows the analysis bands")
+		sgMinHz       = flag.Float64("spectrogram-min-hz", 0, "with -spectrogram-scale: bottom of the spectrogram (linear default 0, log default 20)")
+		sgMaxHz       = flag.Float64("spectrogram-max-hz", 0, "with -spectrogram-scale: top of the spectrogram; 0: Nyquist")
+		sgBands       = flag.Int("spectrogram-bands", 240, "with -spectrogram-scale: number of bands (rows)")
 		ignore        ignoreFlag
 		onDemand      = flag.Bool("on-demand", false, "connect to the input only while a live page is open (staging); default: listen continuously")
 		idleAfter     = flag.Duration("idle-after", 30*time.Second, "with -on-demand: disconnect this long after the last live page closed")
@@ -129,8 +133,16 @@ func main() {
 		}
 	}
 
+	opts := analysis.Options{TransientK: *transientK, TransientGap: *transientGap, MinHz: *minHz, MaxHz: *maxHz, MainsHz: *mainsHz, Ignore: ignore}
+	switch *sgScale {
+	case "":
+	case "linear", "log":
+		opts.View = &analysis.View{Scale: *sgScale, MinHz: *sgMinHz, MaxHz: *sgMaxHz, Bands: *sgBands}
+	default:
+		log.Fatalf("-spectrogram-scale: %q is neither linear nor log", *sgScale)
+	}
 	if *dump {
-		runDump(ctx, *in, *sampleRate, analysis.Options{TransientK: *transientK, TransientGap: *transientGap, MinHz: *minHz, MaxHz: *maxHz, MainsHz: *mainsHz, Ignore: ignore}, stamper, through, *loop, *realtime, *ffmpeg, rec)
+		runDump(ctx, *in, *sampleRate, opts, stamper, through, *loop, *realtime, *ffmpeg, rec)
 		return
 	}
 
@@ -148,7 +160,7 @@ func main() {
 		go nar.Run(ctx)
 		log.Printf("narrator on: %s (%s, %s, every %s while watched)", *narratorURL, *narratorModel, *narrateMode, *narrateEvery)
 	}
-	a := analysis.New(*sampleRate, stamper, through(broadcast), analysis.Options{TransientK: *transientK, TransientGap: *transientGap, MinHz: *minHz, MaxHz: *maxHz, MainsHz: *mainsHz, Ignore: ignore})
+	a := analysis.New(*sampleRate, stamper, through(broadcast), opts)
 
 	a.Live(live)
 	st := &status{input: describe(*in), started: time.Now(), stream: source.Connecting, sampleRate: *sampleRate}

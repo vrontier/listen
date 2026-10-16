@@ -85,3 +85,19 @@ func TestBandsCoverRange(t *testing.T) {
 		t.Fatalf("top band exceeds spectrum: %d", top)
 	}
 }
+
+func TestLinearBandsKeepNarrowLine(t *testing.T) {
+	nb := n/2 + 1
+	b := NewLinearBands(16, 0, sr/2, sr/n, nb)
+	if b.lo[0] != 0 || b.hi[len(b.hi)-1] != nb-1 && b.hi[len(b.hi)-1] != nb {
+		t.Fatalf("bands do not span the spectrum: %d..%d", b.lo[0], b.hi[len(b.hi)-1])
+	}
+	mag := make([]float64, nb)
+	mag[b.lo[5]+1] = 1 // one bin carries a line
+	mean, max := make([]float64, 16), make([]float64, 16)
+	b.Compute(mag, mean)
+	b.ComputeMax(mag, max)
+	if max[5] <= mean[5] || max[5] < PowerDB(1)-0.01 {
+		t.Fatalf("max %.1f dB should keep the line's level, mean %.1f dB", max[5], mean[5])
+	}
+}

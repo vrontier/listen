@@ -128,7 +128,40 @@ func NewBands(count int, minHz, maxHz, binHz float64, nbins int) *Bands {
 	return b
 }
 
+// NewLinearBands returns count equal-width bands between minHz and maxHz.
+func NewLinearBands(count int, minHz, maxHz, binHz float64, nbins int) *Bands {
+	b := &Bands{MinHz: minHz, MaxHz: maxHz, lo: make([]int, count), hi: make([]int, count)}
+	width := (maxHz - minHz) / float64(count)
+	for i := 0; i < count; i++ {
+		lo := int(math.Round((minHz + float64(i)*width) / binHz))
+		hi := int(math.Round((minHz + float64(i+1)*width) / binHz))
+		if hi <= lo {
+			hi = lo + 1
+		}
+		if hi > nbins {
+			hi = nbins
+		}
+		if lo >= hi {
+			lo = hi - 1
+		}
+		b.lo[i], b.hi[i] = lo, hi
+	}
+	return b
+}
+
 func (b *Bands) Count() int { return len(b.lo) }
+
+// ComputeMax is Compute with the strongest bin of each band instead of the
+// mean, so a narrow line keeps its level in a wide band.
+func (b *Bands) ComputeMax(mag []float64, out []float64) {
+	for i := range b.lo {
+		var p float64
+		for k := b.lo[i]; k < b.hi[i]; k++ {
+			p = math.Max(p, mag[k]*mag[k])
+		}
+		out[i] = PowerDB(p)
+	}
+}
 
 func (b *Bands) Compute(mag []float64, out []float64) {
 	for i := range b.lo {

@@ -29,7 +29,11 @@ while read -r s; do
   port=$(jq -r .listener.port <<<"$s")
   in=$(jq -r '.listener.local_input // .listener.input' <<<"$s")
   args=()
-  while IFS= read -r a; do args+=("$a"); done < <(jq -r '(.listener.args // [])[], (if .audio then "-audio" else empty end)' <<<"$s")
+  while IFS= read -r a; do args+=("$a"); done < <(jq -r 'def sgargs: .spectrogram // {} | if .scale then ["-spectrogram-scale", .scale]
+    + (if .min_hz != null then ["-spectrogram-min-hz", (.min_hz | tostring)] else [] end)
+    + (if .max_hz != null then ["-spectrogram-max-hz", (.max_hz | tostring)] else [] end)
+    + (if .bands != null then ["-spectrogram-bands", (.bands | tostring)] else [] end) else [] end;
+    (.listener.args // [])[], sgargs[], (if .audio then "-audio" else empty end)' <<<"$s")
   bin/listener -source "$slug" -addr "127.0.0.1:$port" -in "$in" -memory-dir bin/dev-memory ${args[@]+"${args[@]}"} \
     2>&1 | sed -u "s/^/[$slug] /" &
   pids+=($!)

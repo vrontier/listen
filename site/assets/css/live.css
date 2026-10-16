@@ -370,7 +370,7 @@ body.live {
 .plot--yaxis { grid-template-columns: 4.4rem 1fr; }
 .plot canvas {
   width: 100%;
-  height: 140px;
+  height: calc(140px * var(--plot-scale, 1));
   display: block;
   background: rgba(255, 255, 255, .015);
   border: 1px solid var(--panel-line);
@@ -558,7 +558,7 @@ body.live {
   .stage { flex: 1 1 auto; height: auto; min-height: 320px; }
   .dial, .panels, .credit { flex: none; }
   .credit { margin-top: 0; }
-  .plot canvas { height: 100px; }
+  .plot canvas { height: calc(100px * var(--plot-scale, 1)); }
   .panel--harmonic canvas { height: 76px; }
   .panels { padding-top: .9rem; padding-bottom: 1rem; gap: 1rem 2rem; }
   .panels__group { gap: 1rem 2rem; }
@@ -567,7 +567,7 @@ body.live {
 @media (min-width: 1101px) and (max-height: 860px) {
   .stage { min-height: 270px; }
   .dial__legend { display: none; }
-  .plot canvas { height: 76px; }
+  .plot canvas { height: calc(76px * var(--plot-scale, 1)); }
   .panel--harmonic canvas { height: 56px; }
   .features div, .events li { padding: .1rem 0; }
   .credit { padding-top: .6rem; padding-bottom: .7rem; }

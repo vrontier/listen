@@ -133,6 +133,19 @@ type Spectrum struct {
 	Scale string    `json:"scale"`
 	Bands []float64 `json:"bands"`
 	Peaks []Peak    `json:"peaks"`
+	// View is a second set of bands for the spectrogram and the spectrum
+	// panel, when the source configures its own display (e.g. linear from
+	// a few Hz for VLF radio). Bands above keep feeding the field and dial.
+	View *SpectrumView `json:"view,omitempty"`
+}
+
+// SpectrumView holds display bands: their range, scale (log or linear) and
+// levels normalised to 0..1 like Bands.
+type SpectrumView struct {
+	MinHz float64   `json:"min_hz"`
+	MaxHz float64   `json:"max_hz"`
+	Scale string    `json:"scale"`
+	Bands []float64 `json:"bands"`
 }
 
 // Feature is the feature.state payload (§8).

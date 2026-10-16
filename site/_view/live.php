@@ -2,8 +2,13 @@
 /** @var array $page */
 $source = $page['source'];
 $filters = analysis_filters($source);
+// The spectrogram's look per source: palette (jet or the default) and a
+// height factor for the spectrogram and spectrum panels.
+$sg = $source['spectrogram'] ?? [];
+$sgPalette = ($sg['palette'] ?? '') === 'jet' ? 'jet' : 'heat';
+$sgHeight = max(1.0, min(2.0, (float) ($sg['height'] ?? 1)));
 ?>
-  <div class="observatory" data-ws="<?= e(live_ws_url($source)) ?>" data-source="<?= e($source['slug']) ?>" data-tz="<?= e($source['timezone']) ?>"<?= $source['audio'] ? ' data-audio="1"' : '' ?>>
+  <div class="observatory" data-ws="<?= e(live_ws_url($source)) ?>" data-source="<?= e($source['slug']) ?>" data-tz="<?= e($source['timezone']) ?>" data-palette="<?= $sgPalette ?>"<?= $source['audio'] ? ' data-audio="1"' : '' ?><?= $sgHeight > 1 ? ' style="--plot-scale: ' . $sgHeight . '"' : '' ?>>
     <section class="stage" aria-label="Live visualization">
       <div id="terrain" class="stage__canvas" aria-hidden="true"></div>
 

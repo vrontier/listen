@@ -7,17 +7,22 @@
   var $ = function (id) { return document.getElementById(id); };
   var fmt = LO.fmt;
 
-  // Inferno-like map for the spectrogram: black → violet → orange → pale yellow.
-  var HEAT = [[0, [8, 6, 16]], [0.3, [62, 20, 96]], [0.55, [168, 52, 96]], [0.75, [236, 118, 50]], [1, [252, 236, 164]]];
-  function heat(v) {
+  // Spectrogram palettes. heat, inferno-like: black → violet → orange → pale
+  // yellow. jet, as in measurement tools and research papers: dark blue →
+  // cyan → yellow → red → dark red (chosen per source, data-palette).
+  var PALETTES = {
+    heat: [[0, [8, 6, 16]], [0.3, [62, 20, 96]], [0.55, [168, 52, 96]], [0.75, [236, 118, 50]], [1, [252, 236, 164]]],
+    jet: [[0, [0, 0, 131]], [0.125, [0, 0, 255]], [0.375, [0, 255, 255]], [0.625, [255, 255, 0]], [0.875, [255, 0, 0]], [1, [128, 0, 0]]]
+  };
+  function colour(map, v) {
     v = v < 0 ? 0 : v > 1 ? 1 : v;
-    for (var i = 1; i < HEAT.length; i++) {
-      if (v <= HEAT[i][0]) {
-        var a = HEAT[i - 1], b = HEAT[i], t = (v - a[0]) / (b[0] - a[0]);
+    for (var i = 1; i < map.length; i++) {
+      if (v <= map[i][0]) {
+        var a = map[i - 1], b = map[i], t = (v - a[0]) / (b[0] - a[0]);
         return [a[1][0] + (b[1][0] - a[1][0]) * t, a[1][1] + (b[1][1] - a[1][1]) * t, a[1][2] + (b[1][2] - a[1][2]) * t];
       }
     }
-    return HEAT[HEAT.length - 1][1];
+    return map[map.length - 1][1];
   }
 
   function ago(s) {
@@ -28,6 +33,21 @@
   }
 
   function logPos(hz, lo, hi) { return Math.log(hz / lo) / Math.log(hi / lo); }
+  function linPos(hz, lo, hi) { return (hz - lo) / (hi - lo); }
+  function posFn(scale) { return scale === 'linear' ? linPos : logPos; }
+
+  // Linear ticks: a 1-2-2.5-5 step that gives four to eight of them.
+  function linearTicks(lo, hi) {
+    var step = 1;
+    for (var dec = 1; dec <= 100000 && (hi - lo) / step > 8; dec *= 10) {
+      for (var k = 0, steps = [1, 2, 2.5, 5]; k < steps.length && (hi - lo) / step > 8; k++) step = dec * steps[k];
+    }
+    var out = [];
+    for (var f = Math.ceil(lo / step) * step; f <= hi; f += step) {
+      if (f > lo + (hi - lo) * 0.04 && f < hi - (hi - lo) * 0.04) out.push(f);
+    }
+    return out;
+  }
 
   // Frequency ticks for lo..hi: 1-3 per decade, or 1-2-5 when that gives
   // fewer than four (a narrow range such as VLF's 0.8–12 kHz).
@@ -50,22 +70,24 @@
     return s;
   }
 
-  function axisY(el, ticks, lo, hi) {
+  function axisY(el, ticks, lo, hi, pos) {
+    pos = pos || logPos;
     el.innerHTML = '';
     ticks.forEach(function (t) {
       var li = document.createElement('li');
       li.textContent = t[1];
-      li.style.top = (100 - logPos(t[0], lo, hi) * 100) + '%';
+      li.style.top = (100 - pos(t[0], lo, hi) * 100) + '%';
       el.appendChild(li);
     });
   }
 
-  function axisX(el, ticks, lo, hi) {
+  function axisX(el, ticks, lo, hi, pos) {
+    pos = pos || logPos;
     el.innerHTML = '';
     ticks.forEach(function (t) {
       var li = document.createElement('li');
       li.textContent = t[1];
-      li.style.left = (logPos(t[0], lo, hi) * 100) + '%';
+      li.style.left = (pos(t[0], lo, hi) * 100) + '%';
       el.appendChild(li);
     });
   }
@@ -74,8 +96,9 @@
     this.state = state;
     this.sg = $('spectrogram');
     this.sgx = this.sg.getContext('2d');
-    this.sgx.fillStyle = '#060509';
-    this.sgx.fillRect(0, 0, this.sg.width, this.sg.height);
+    var root = document.querySelector('.observatory');
+    this.palette = PALETTES[root && root.dataset.palette] || PALETTES.heat;
+    this.clearSpectrogram();
     this.sp = $('spectrum');
     this.spx = this.sp.getContext('2d');
     this.hm = $('harmonic-map');
@@ -90,17 +113,33 @@
     axisY($('hm-yaxis'), this.hmTicks.map(function (f) { return [f, hzLabel(f, true)]; }), this.hmRange[0], this.hmRange[1]);
   }
 
-  Panels.prototype.axes = function (meta) {
-    var key = meta.min_hz + ':' + meta.max_hz;
+  Panels.prototype.clearSpectrogram = function () {
+    var c = colour(this.palette, 0);
+    this.sgx.fillStyle = 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
+    this.sgx.fillRect(0, 0, this.sg.width, this.sg.height);
+  };
+
+  // view: the spectrogram's bands (the payload's own view, or the analysis
+  // bands); meta: the analysed range, for the harmonic map.
+  Panels.prototype.axes = function (view, meta) {
+    var key = view.scale + ':' + view.min_hz + ':' + view.max_hz + ':' + view.bands.length + ':' + meta.min_hz + ':' + meta.max_hz;
     if (this.axesFor === key) return;
     this.axesFor = key;
-    var ticks = freqTicks(meta.min_hz, meta.max_hz);
-    axisY($('sg-yaxis'), ticks.map(function (f) { return [f, hzLabel(f, true)]; }), meta.min_hz, meta.max_hz);
-    axisX($('sp-xaxis'), ticks.map(function (f, i) {
-      return [f, hzLabel(f, false) + (i === ticks.length - 1 ? ' Hz' : '')];
-    }), meta.min_hz, meta.max_hz);
+    // One canvas row per band when the source sends its own (many) bands.
+    var rows = view.bands.length > 160 ? view.bands.length : 160;
+    if (this.sg.height !== rows) {
+      this.sg.height = rows;
+      this.clearSpectrogram();
+    }
+    var pos = posFn(view.scale);
+    var vt = view.scale === 'linear' ? linearTicks(view.min_hz, view.max_hz) : freqTicks(view.min_hz, view.max_hz);
+    axisY($('sg-yaxis'), vt.map(function (f) { return [f, hzLabel(f, true)]; }), view.min_hz, view.max_hz, pos);
+    axisX($('sp-xaxis'), vt.map(function (f, i) {
+      return [f, hzLabel(f, false) + (i === vt.length - 1 ? ' Hz' : '')];
+    }), view.min_hz, view.max_hz, pos);
     // The harmonic map shows fundamentals: 40 Hz–5 kHz by default, the
     // whole range when the source narrows it (e.g. VLF radio).
+    var ticks = freqTicks(meta.min_hz, meta.max_hz);
     if (meta.min_hz > 40) {
       this.hmRange = [meta.min_hz, meta.max_hz];
       this.hmTicks = ticks;
@@ -110,12 +149,13 @@
 
   // signal.spectrum, 10 Hz: one spectrogram column per message (600 px = 60 s).
   Panels.prototype.spectrum = function (p) {
-    this.axes(p);
-    var c = this.sg, x = this.sgx, w = c.width, h = c.height, bands = p.bands, n = bands.length;
+    var view = p.view || { min_hz: p.min_hz, max_hz: p.max_hz, scale: 'log', bands: p.bands };
+    this.axes(view, p);
+    var c = this.sg, x = this.sgx, w = c.width, h = c.height, bands = view.bands, n = bands.length;
     x.drawImage(c, 1, 0, w - 1, h, 0, 0, w - 1, h);
     for (var i = 0; i < n; i++) {
       var y0 = h - Math.round((i + 1) * h / n), y1 = h - Math.round(i * h / n);
-      var col = heat(Math.pow(bands[i], 1.3));
+      var col = colour(this.palette, Math.pow(bands[i], 1.3));
       x.fillStyle = 'rgb(' + (col[0] | 0) + ',' + (col[1] | 0) + ',' + (col[2] | 0) + ')';
       x.fillRect(w - 1, y0, 1, y1 - y0);
     }
@@ -133,7 +173,7 @@
     sx.stroke();
     sx.globalCompositeOperation = 'lighter';
     (p.peaks || []).forEach(function (pk) {
-      var u = logPos(pk.hz, p.min_hz, p.max_hz);
+      var u = posFn(view.scale)(pk.hz, view.min_hz, view.max_hz);
       var px = u * sw, top = sh - 4 - pk.amplitude * (sh * 0.92);
       var g = sx.createLinearGradient(0, sh, 0, top);
       g.addColorStop(0, 'rgba(210,230,255,0.9)');

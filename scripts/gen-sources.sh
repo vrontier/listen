@@ -12,6 +12,10 @@
 # Listening mode: NODE_MODE (continuous | on-demand, default continuous) and
 # NODE_IDLE_AFTER (default 30s) are the node's defaults. A source can override
 # them on every node with "listener": {"mode": …, "idle_after": …}.
+#
+# Spectrogram: "spectrogram": {"scale": "linear" | "log", "min_hz", "max_hz",
+# "bands"} gives the listener -spectrogram-* flags; "palette" and "height"
+# are read by the live page (site/_view/live.php).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -35,13 +39,18 @@ jq -e '
   and ([.sources[] | (.listener.args // [])[] | type == "string" and (test("\\s") | not)] | all)
   and ([.sources[] | .listener.mode // "continuous" | IN("continuous", "on-demand")] | all)
   and ([.sources[] | .listener.idle_after // "30s" | test("^[0-9]+(ms|s|m|h)$")] | all)
-' "$cfg" >/dev/null || { echo "$cfg: invalid (slugs, unique ports, inputs and args without spaces, mode, idle_after)" >&2; exit 1; }
+  and ([.sources[] | .spectrogram // {} | (.scale // "linear" | IN("linear", "log"))
+        and ([.min_hz, .max_hz, .bands, .height | . == null or type == "number"] | all)] | all)
+' "$cfg" >/dev/null || { echo "$cfg: invalid (slugs, unique ports, inputs and args without spaces, mode, idle_after, spectrogram)" >&2; exit 1; }
 
 rm -rf "$out" && mkdir -p "$out/sources"
 jq -c '.sources[]' "$cfg" | while read -r s; do
   slug=$(jq -r .slug <<<"$s")
-  args=$(jq -r --arg mode "$node_mode" --arg idle "$node_idle" '
-    ["-addr", "127.0.0.1:\(.listener.port)", "-in", .listener.input] + (.listener.args // [])
+  args=$(jq -r --arg mode "$node_mode" --arg idle "$node_idle" 'def sgargs: .spectrogram // {} | if .scale then ["-spectrogram-scale", .scale]
+    + (if .min_hz != null then ["-spectrogram-min-hz", (.min_hz | tostring)] else [] end)
+    + (if .max_hz != null then ["-spectrogram-max-hz", (.max_hz | tostring)] else [] end)
+    + (if .bands != null then ["-spectrogram-bands", (.bands | tostring)] else [] end) else [] end;
+    ["-addr", "127.0.0.1:\(.listener.port)", "-in", .listener.input] + (.listener.args // []) + sgargs
     + (if .audio then ["-audio"] else [] end)
     + (if (.listener.mode // $mode) == "on-demand" then ["-on-demand", "-idle-after", (.listener.idle_after // $idle)] else [] end)
     | join(" ")' <<<"$s")
