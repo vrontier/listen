@@ -186,3 +186,5 @@ pre code { background: none; padding: 0; overflow-wrap: normal; }
 .space-warn .space-data { background: var(--bad); }
 .nowrap { white-space: nowrap; }
 th.wide { width: 40%; }
+textarea.guide { width: 100%; font: inherit; font-size: 0.8rem; line-height: 1.4; background: var(--code-bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 0.6rem; }
+.tool pre { overflow-x: auto; }

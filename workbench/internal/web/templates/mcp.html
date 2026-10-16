@@ -1,11 +1,15 @@
 {{define "content"}}
-<h1>MCP activity</h1>
+<h1>MCP</h1>
 {{with .Data}}
 {{$d := .}}
-<p class="meta">Every access made with your tokens over the last 30 days: what AI assistants asked through MCP, and what programs read from the data stream. A token only reads, so nothing here changed anything. Times are UTC. The tokens themselves are never noted.</p>
+<p class="meta">How AI assistants read your analyses through MCP: what they and your programs have read, every tool they can call, a guide to give them, and how to connect. A token only reads, so nothing an assistant does here changes anything.</p>
+<p class="meta"><a href="#activity">Activity</a> · <a href="#tools">Tools</a> · <a href="#guide">Guide for assistants</a> · <a href="#connect">Connecting</a></p>
+
+<h2 id="activity">Activity</h2>
+<p class="meta">Every access made with your tokens over the last 30 days: what AI assistants asked through MCP, and what programs read from the data stream. Times are UTC. The tokens themselves are never noted.</p>
 
 <section>
-  <h2>By token</h2>
+  <h3>By token</h3>
   {{if .Summary}}
   <table>
     <thead><tr><th class="wide">Token</th><th>Last 24 hours</th><th>Failed</th><th>Last 30 days</th><th>Streams open</th><th class="nowrap">Last access (UTC)</th></tr></thead>
@@ -19,7 +23,7 @@
 </section>
 
 <section>
-  <h2>Accesses</h2>
+  <h3>Accesses</h3>
   <form method="get" action="/account/activity" class="inline-form">
     <label>Token <select name="token"><option value="">all</option>{{range .Tokens}}<option value="{{.ID}}" {{if eq .ID $d.Filter.TokenID}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
     <label>Through <select name="via"><option value="">MCP and data stream</option><option value="mcp" {{if eq .Filter.Via "mcp"}}selected{{end}}>MCP</option><option value="stream" {{if eq .Filter.Via "stream"}}selected{{end}}>data stream</option></select></label>
@@ -43,6 +47,42 @@
   <p class="meta">{{if .Newest}}<a href="{{.Newest}}">Newest</a> · {{end}}{{if .Older}}<a href="{{.Older}}">Older</a>{{end}}</p>
   <p class="meta">An MCP client first says who it is ("initialize") and asks for the tools ("tools/list"); then each tool it calls is a row, with its arguments. A data stream row is one request; live events stay "streaming" until the program disconnects, then show how long they ran and how much was sent. Size is what went back.</p>
   {{else}}<p class="meta">Nothing{{if or .Filter.TokenID .Filter.Via .Filter.Failed}} for this choice{{end}}.</p>{{end}}
+</section>
+
+<section>
+  <h2 id="tools">Tools</h2>
+  <p class="meta">What an assistant can call. Each reads only; the examples use ids of your own analyses and runs. An assistant gets this list by itself when it connects ("tools/list").</p>
+  {{range .Tools}}
+  <article class="card tool">
+    <h3><code>{{.Name}}</code> <span class="meta">{{.Title}}</span></h3>
+    <p>{{.Description}}</p>
+    {{if .Args}}
+    <table>
+      <thead><tr><th>Argument</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>{{range .Args}}<tr><td class="nowrap"><code>{{.Name}}</code>{{if .Required}} <span class="meta">required</span>{{end}}</td><td>{{.Type}}</td><td class="meta">{{.Description}}</td></tr>{{end}}</tbody>
+    </table>
+    {{else}}<p class="meta">No arguments.</p>{{end}}
+    <pre><code class="small">{{.Example}}</code></pre>
+  </article>
+  {{end}}
+</section>
+
+<section>
+  <h2 id="guide">Guide for assistants</h2>
+  <p class="meta">A smaller or less capable model may not find its way through the tools on its own. Copy this text into its session first: it says what the Workbench is, in which order to call the tools, and what to do with an error. Every assistant also receives it, without your ids, as the server's instructions when it connects.</p>
+  <textarea class="guide" readonly rows="24" spellcheck="false" aria-label="Guide for assistants">{{.Guide}}</textarea>
+</section>
+
+<section>
+  <h2 id="connect">Connecting</h2>
+  <p class="meta">Make a token with "MCP" ticked under <a href="/account/tokens">Tokens</a>, and keep it out of files you share: the examples read it from the environment variable <code>LOW_WORKBENCH_TOKEN</code>.</p>
+  <table class="facts">
+    <tr><th>Endpoint</th><td><code>{{.Base}}/mcp</code>, MCP over streamable HTTP, header <code>Authorization: Bearer low_…</code></td></tr>
+    <tr><th>Claude Code</th><td><pre><code class="small">claude mcp add --transport http low-workbench {{.Base}}/mcp --header "Authorization: Bearer $LOW_WORKBENCH_TOKEN"</code></pre></td></tr>
+    <tr><th><code>.mcp.json</code></th><td><pre><code class="small">{"mcpServers": {"low-workbench": {"type": "http", "url": "{{.Base}}/mcp",
+  "headers": {"Authorization": "Bearer ${LOW_WORKBENCH_TOKEN}"}}}}</code></pre></td></tr>
+  </table>
+  <p class="meta">The assistant must reach this address: one on your machine or network can, a service in someone's cloud cannot reach an intranet address.</p>
 </section>
 {{end}}
 {{end}}

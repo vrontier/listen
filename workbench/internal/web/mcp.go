@@ -196,10 +196,7 @@ func (s *Server) rpc(r *http.Request, q rpcRequest) (rpcResponse, bool) {
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
 			"serverInfo":      map[string]any{"name": "listen-workbench", "title": s.cfg.SiteName, "version": "1"},
-			"instructions": "Read-only access to the member's own analyses of live audio streams: their sources and settings, " +
-				"the engine's current state, motifs and stored events while an analysis is in a run or a preview, " +
-				"the comparison between sources, and the data sets of finished runs. Times are UTC. " +
-				"Nothing here starts, stops or changes an analysis; the member does that on the Workbench's pages.",
+			"instructions":    mcpGuide(nil),
 		}
 	case "ping":
 		resp.Result = map[string]any{}

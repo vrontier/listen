@@ -80,8 +80,9 @@ func TestActivity(t *testing.T) {
 
 	// The page shows it, filtered; the secrets are nowhere.
 	member := r.loginAs("m@example.org")
-	_, page, _ := r.get(member, "/account/activity")
-	for _, s := range []string{"MCP activity", "laptop", "assistant", "get_analysis", "{&#34;analysis_id&#34;:999}", "test-client 0.1", `href="/account/activity"`} {
+	_, page, _ := r.get(member, "/account/mcp")
+	for _, s := range []string{"<h1>MCP</h1>", "laptop", "assistant", "get_analysis", "{&#34;analysis_id&#34;:999}", "test-client 0.1", `href="/account/mcp"`,
+		"read_dataset_file", "Always start with list_analyses", "claude mcp add"} {
 		if !strings.Contains(page, s) {
 			t.Fatalf("page lacks %q", s)
 		}
@@ -89,14 +90,20 @@ func TestActivity(t *testing.T) {
 	if strings.Contains(page, both) || strings.Contains(page, mcpOnly) {
 		t.Fatal("a secret is on the page")
 	}
-	_, page, _ = r.get(member, "/account/activity?failed=on&via=mcp")
+	_, page, _ = r.get(member, "/account/mcp?failed=on&via=mcp")
+	page = page[strings.Index(page, "<h3>Accesses</h3>"):strings.Index(page, `id="tools"`)] // the tools are listed below
 	if !strings.Contains(page, "get_analysis") || strings.Contains(page, "list_runs") || strings.Contains(page, "events.csv") {
 		t.Fatal("filter: only failed MCP accesses")
 	}
 
+	// The old address leads here.
+	if code, _, hdr := r.get(member, "/account/activity"); code != http.StatusMovedPermanently || hdr.Get("Location") != "/account/mcp" {
+		t.Fatalf("old address: %d", code)
+	}
+
 	// Another member sees none of it.
 	other := r.loginAs("o@example.org")
-	if _, page, _ := r.get(other, "/account/activity"); strings.Contains(page, "laptop") || !strings.Contains(page, "No token has been used") {
+	if _, page, _ := r.get(other, "/account/mcp"); strings.Contains(page, "laptop") || !strings.Contains(page, "No token has been used") {
 		t.Fatal("another member sees the activity")
 	}
 }

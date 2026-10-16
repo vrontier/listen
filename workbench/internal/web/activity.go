@@ -8,8 +8,9 @@ import (
 	"github.com/vrontier/listen-workbench/internal/catalogue"
 )
 
-// The activity page shows a member every access made with their tokens,
-// through MCP and the data stream, over the last 30 days.
+// The MCP page shows a member every access made with their tokens,
+// through MCP and the data stream, over the last 30 days; the MCP tools
+// with examples; the guide for assistants; and how to connect.
 
 const activityPage = 100
 
@@ -20,9 +21,12 @@ type activityData struct {
 	Filter  catalogue.AccessFilter
 	Older   string // the address of the next older page, or ""
 	Newest  string // the address of the newest page, when not on it
+	Tools   []toolDoc
+	Guide   string
+	Base    string
 }
 
-func (s *Server) activityPage(w http.ResponseWriter, r *http.Request) {
+func (s *Server) mcpPage(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)
 	ctx := r.Context()
 	q := r.URL.Query()
@@ -62,9 +66,9 @@ func (s *Server) activityPage(w http.ResponseWriter, r *http.Request) {
 			v.Set("before", strconv.FormatInt(before, 10))
 		}
 		if len(v) == 0 {
-			return "/account/activity"
+			return "/account/mcp"
 		}
-		return "/account/activity?" + v.Encode()
+		return "/account/mcp?" + v.Encode()
 	}
 	if len(d.Rows) > activityPage {
 		d.Rows = d.Rows[:activityPage]
@@ -75,5 +79,9 @@ func (s *Server) activityPage(w http.ResponseWriter, r *http.Request) {
 	}
 	f.Limit = activityPage
 	d.Filter = f
-	s.render(w, r, 200, "activity", "MCP activity", d)
+	ids := s.guideIDsOf(ctx, sess.User.ID)
+	d.Tools = toolDocs(ids)
+	d.Guide = mcpGuide(&ids)
+	d.Base = s.cfg.BaseURL
+	s.render(w, r, 200, "mcp", "MCP", d)
 }

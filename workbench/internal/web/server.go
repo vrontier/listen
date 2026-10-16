@@ -213,7 +213,10 @@ func (s *Server) routes() {
 		http.Redirect(w, r, "/results", http.StatusMovedPermanently)
 	})
 	m.HandleFunc("GET /account/tokens", s.member(s.tokensPage))
-	m.HandleFunc("GET /account/activity", s.member(s.activityPage))
+	m.HandleFunc("GET /account/mcp", s.member(s.mcpPage))
+	m.HandleFunc("GET /account/activity", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/account/mcp", http.StatusMovedPermanently)
+	})
 	m.HandleFunc("POST /account/tokens", s.member(s.tokenCreate))
 	m.HandleFunc("POST /account/tokens/{token}/revoke", s.member(s.tokenRevoke))
 	keys := func(h http.HandlerFunc) http.HandlerFunc {
