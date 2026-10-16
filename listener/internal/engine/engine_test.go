@@ -975,3 +975,79 @@ func TestThroughTheIngest(t *testing.T) {
 		return now.State == StateConnected
 	})
 }
+
+func TestTwoRatesOneConnectionThroughTheIngest(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	mp3 := filepath.Join(dir, "a.mp3")
+	if out, err := exec.Command("ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=60",
+		"-c:a", "libmp3lame", "-b:a", "64k", mp3).CombinedOutput(); err != nil {
+		t.Skipf("no mp3 encoder: %v %s", err, out)
+	}
+	var conns atomic.Int64
+	station := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conns.Add(1)
+		b, _ := os.ReadFile(mp3)
+		w.Header().Set("Content-Type", "audio/mpeg")
+		for i := 0; i < len(b); i += 400 {
+			if _, err := w.Write(b[i:min(i+400, len(b))]); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+	}))
+	defer station.Close()
+	host := strings.TrimPrefix(station.URL, "http://")
+	sockDir, _ := os.MkdirTemp("/tmp", "ing")
+	defer os.RemoveAll(sockDir)
+	sock := filepath.Join(sockDir, "s")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := ingest.New(ingest.Options{Policy: fetch.NewPolicy(false, false, host), IdleAfter: time.Second})
+	isrv := &http.Server{Handler: in.Handler()}
+	go isrv.Serve(ln)
+	defer func() { isrv.Close(); in.Close() }()
+
+	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), AllowHosts: []string{host}, Ingest: sock, Callers: []string{"workbench", "internal"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cs []client
+	for _, n := range []string{"workbench", "internal"} {
+		srv := httptest.NewServer(e.Caller(n).Handler())
+		defer srv.Close()
+		cs = append(cs, client{t, srv.URL})
+	}
+	defer e.Close()
+	url := station.URL + "/a.mp3"
+	// The same station at two rates: two decodes, one connection.
+	if st := cs[1].do("PUT", "/v1/streams/premise", StreamSpec{Input: url, SampleRate: 32000, Mode: Continuous}, nil); st != 200 {
+		t.Fatalf("internal at 32 kHz: %d", st)
+	}
+	var er map[string]map[string]any
+	if st := cs[0].do("PUT", "/v1/streams/s-1", StreamSpec{Input: url, SampleRate: 44100, Mode: Continuous}, &er); st != 200 {
+		t.Fatalf("workbench at 44.1 kHz: %d %v", st, er)
+	}
+	cs[1].do("PUT", "/v1/streams/premise/analyses/a", map[string]any{}, nil)
+	cs[0].do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	a := cs[0].sse(ctx, "/v1/streams/s-1/analyses/a-1/events?types=signal.spectrum", "signal.spectrum", 3)
+	b := cs[1].sse(ctx, "/v1/streams/premise/analyses/a/events?types=signal.spectrum", "signal.spectrum", 3)
+	if len(a) < 3 || len(b) < 3 {
+		t.Fatalf("spectra %d %d", len(a), len(b))
+	}
+	if n := len(e.sourceList()); n != 2 {
+		t.Errorf("%d decodes, want 2", n)
+	}
+	if n := conns.Load(); n != 1 {
+		t.Errorf("%d connections to the station, want 1", n)
+	}
+}

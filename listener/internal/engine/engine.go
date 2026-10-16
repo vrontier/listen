@@ -216,12 +216,24 @@ func version() string {
 
 // --- sources ---
 
-// acquireSource returns the source of an address, made if it is new. Its
-// rate is fixed by the first stream: another rate is a conflict.
+// sourceKey identifies a source. Through the ingest, an address may be
+// decoded at several rates: each rate is a decode of its own, and the
+// station still sees the ingest's one connection. An engine connecting
+// itself decodes an address at one rate only.
+func (e *Engine) sourceKey(input string, rate int) string {
+	if e.ingest != nil {
+		return fmt.Sprintf("%s|%d", input, rate)
+	}
+	return input
+}
+
+// acquireSource returns the source of an address at a rate, made if it is
+// new. Without the ingest, a second rate is a conflict.
 func (e *Engine) acquireSource(input string, rate int) (*sourceConn, *apiError) {
 	e.smu.Lock()
 	defer e.smu.Unlock()
-	if s := e.sources[input]; s != nil {
+	key := e.sourceKey(input, rate)
+	if s := e.sources[key]; s != nil {
 		if s.rate != rate {
 			return nil, &apiError{status: 409, code: "rate_conflict",
 				message: fmt.Sprintf("this address is already decoded at %d Hz, shared with other streams; use that rate", s.rate)}
@@ -229,7 +241,8 @@ func (e *Engine) acquireSource(input string, rate int) (*sourceConn, *apiError) 
 		return s, nil
 	}
 	s := newSource(e, input, rate)
-	e.sources[input] = s
+	s.key = key
+	e.sources[key] = s
 	return s, nil
 }
 
@@ -239,8 +252,8 @@ func (e *Engine) releaseSource(st *stream) {
 	e.smu.Lock()
 	src := st.src
 	left := src.detach(st)
-	if left == 0 && e.sources[src.input] == src {
-		delete(e.sources, src.input)
+	if left == 0 && e.sources[src.key] == src {
+		delete(e.sources, src.key)
 	}
 	e.smu.Unlock()
 	if left == 0 {
@@ -248,10 +261,19 @@ func (e *Engine) releaseSource(st *stream) {
 	}
 }
 
+// source returns a source of the address, at any rate, or nil.
 func (e *Engine) source(input string) *sourceConn {
 	e.smu.Lock()
 	defer e.smu.Unlock()
-	return e.sources[input]
+	if s := e.sources[input]; s != nil {
+		return s
+	}
+	for _, s := range e.sources {
+		if s.input == input {
+			return s
+		}
+	}
+	return nil
 }
 
 func (e *Engine) sourceList() []*sourceConn {

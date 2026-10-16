@@ -21,6 +21,7 @@ import (
 // name the address attach to it; it connects while any of them wants it.
 type sourceConn struct {
 	e       *Engine
+	key     string // in the engine's registry
 	input   string
 	rate    int
 	created time.Time
