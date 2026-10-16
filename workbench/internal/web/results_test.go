@@ -45,7 +45,7 @@ func TestResults(t *testing.T) {
 	member := r.loginAs("m@example.org")
 	_, page, _ := r.get(member, "/results")
 	csrf := csrfOf(t, page)
-	for _, want := range []string{"Your space", "of 512.0 MB used", runURL + "/all.zip", "Hum watch", "Last 30 days", ">now<", ">-23<", "<br>" + time.Now().UTC().Format("Jan") + "</span>"} {
+	for _, want := range []string{"Your space", "of 512.0 MB used", `(<a href="` + runURL + `">Results</a>)`, "Hum watch", "Last 30 days", ">now<", ">-23<", "<br>" + time.Now().UTC().Format("Jan") + "</span>"} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("results page lacks %q", want)
 		}
@@ -117,7 +117,7 @@ func TestResults(t *testing.T) {
 	if k, _ := r.db.DiskOf(ctx, u.ID); k.Total() != 0 {
 		t.Fatalf("still counted: %d", k.Total())
 	}
-	if _, page, _ = r.get(member, "/results"); strings.Contains(page, runURL+"/all.zip") || !strings.Contains(page, "No data sets yet") {
+	if _, page, _ = r.get(member, "/results"); strings.Contains(page, `href="`+runURL+`"`) || !strings.Contains(page, "No data sets yet") {
 		t.Fatal("a deleted data set is still listed")
 	}
 	if _, page, _ = r.get(member, "/runs"); !strings.Contains(page, "(results deleted)") {
