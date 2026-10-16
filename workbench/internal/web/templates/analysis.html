@@ -70,9 +70,9 @@
   <p class="compare-map-note meta small" hidden>Stations, the distance between each pair with the time a radio wave needs for it, and the night side of the earth (shaded), which matters for long paths at low frequencies. Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, loaded by your browser from openstreetmap.org.</p>
   <div class="lanes-bar">
     <div class="compare-controls" role="radiogroup" aria-label="What the lanes show">
-      <label class="check"><input type="radio" name="lane-metric" value="impulse_rate" checked> impulse rate</label>
+      <label class="check"><input type="radio" name="lane-metric" value="flux" checked> flux</label>
       <label class="check"><input type="radio" name="lane-metric" value="level_db"> level</label>
-      <label class="check"><input type="radio" name="lane-metric" value="flux"> flux</label>
+      <label class="check" hidden><input type="radio" name="lane-metric" value="impulse_rate"> impulse rate</label>
     </div>
     <span class="paused-note" hidden>Display paused; the comparison goes on.</span>
     <button type="button" class="seg pause" aria-pressed="false">Pause</button>
@@ -81,9 +81,9 @@
     <canvas class="lanes" width="960" height="240" tabindex="0" role="img" aria-label="Activity of each source per second over the last ten minutes, one lane per source, on one time axis in UTC. Arrow keys read values."></canvas>
     <div class="readout" hidden></div>
   </div>
-  <h3>Correlation</h3>
+  <h3>Correlation <span class="meta corr-series"></span></h3>
   <table class="correlations"><thead><tr><th>Pair</th><th>r</th><th title="Positive: the second source hears the same later">Lag</th><th title="The same pair shifted 150 s apart: what chance alone gives">Baseline r</th><th>Above baseline</th></tr></thead><tbody><tr><td colspan="5" class="meta">The first correlation comes after five minutes of activity.</td></tr></tbody></table>
-  <p class="meta">Lanes show each source's activity per second over the last ten minutes, on one time axis in UTC; gaps are seconds in which a source was not heard. Each lane is scaled to its own range. The times are wall time at the engine, so the sources are aligned to a few seconds, not to their stations' clocks: the lag of a correlation is mostly the difference of the streams' delays on their way here. The correlation compares the impulse rates of the last five minutes, at lags up to 30 s, and is worth something only well above its baseline, the same pair shifted 150 s apart.</p>
+  <p class="meta">Lanes show each source's activity per second over the last ten minutes, on one time axis in UTC; gaps are seconds in which a source was not heard. Each lane is scaled to its own range. The times are wall time at the engine, so the sources are aligned to a few seconds, not to their stations' clocks: the lag of a correlation is mostly the difference of the streams' delays on their way here. The correlation compares one series of each pair over the last five minutes (named above the table: flux, until the engine measures impulses), at lags up to 30 s, and is worth something only well above its baseline, the same pair shifted 150 s apart.</p>
   <link rel="stylesheet" href="{{asset "leaflet/leaflet.css"}}">
   <script src="{{asset "leaflet/leaflet.js"}}" defer></script>
   <script src="{{asset "compare.js"}}" defer></script>
@@ -108,7 +108,7 @@
 <section class="live source-block" {{if .Live}}data-live="{{.LivePath}}" data-data="{{.DataPath}}"{{end}}>
   <div class="live-head">
     <h2 class="live-title"><a href="/sources/{{.Stream.Slug}}">{{.Stream.Texts.Name}}</a></h2>
-    {{if .Live}}<span class="status conn conn-info">Connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else if not .Running}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{else}}<span class="meta">{{.Stream.SampleRate}} Hz · live during a run or a preview</span>{{end}}
+    {{if .Live}}<span class="status conn conn-info">Connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else if .Reserved}}<span class="meta">The Listening Observatory listens to this stream; it is not analysed here until its operator has agreed to the Workbench.</span>{{else if not .Running}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{else}}<span class="meta">{{.Stream.SampleRate}} Hz · live during a run or a preview</span>{{end}}
   </div>
   {{if .Failed}}<div class="note bad-note">
     <p>{{template "status" (status "activity" "failed")}} The analysis of this source failed in {{.FailedIn}}: {{.Failed.Message}}. Its other sources go on; nothing of this source is recorded until it runs again.</p>
@@ -224,7 +224,7 @@
     {{range .}}
       <label class="check"><input form="settings" type="checkbox" name="compare" value="{{.ID}}" {{if .Checked}}checked{{end}} {{if .Blocked}}disabled{{end}}> {{.Label}}{{if .Blocked}} <span class="meta">({{.Blocked}})</span>{{end}}</label>
     {{end}}
-    <p class="meta">How the sources are compared on one time axis, during runs.</p>
+    <p class="meta">How the sources are compared on one time axis, during runs. These are the comparisons the engine offers now; station clocks and coincidence of impulses follow once it reads the stations' own time.</p>
   </fieldset>
   {{end}}
   {{if not .Run}}

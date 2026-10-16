@@ -347,7 +347,9 @@ func (e *Engine) reportSecond(g *group, t time.Time) {
 			if st, ok := s.second(t); ok {
 				sec.vals[i] = &st
 				v["present"] = true
-				v["level_db"], v["flux"], v["impulse_rate"] = round(st.LevelDB, 1), round(st.Flux, 3), round(st.ImpulseRate, 1)
+				// No impulse rate, as in the engine until it measures
+				// impulses (with station time).
+				v["level_db"], v["flux"] = round(st.LevelDB, 1), round(st.Flux, 3)
 			}
 		}
 		members = append(members, v)
@@ -382,7 +384,7 @@ func (g *group) correlations() map[string]any {
 			if s.vals[i] == nil {
 				out[k] = math.NaN()
 			} else {
-				out[k] = s.vals[i].ImpulseRate
+				out[k] = s.vals[i].Flux
 			}
 		}
 		return out
@@ -404,7 +406,7 @@ func (g *group) correlations() map[string]any {
 			pairs = append(pairs, p)
 		}
 	}
-	return map[string]any{"window_s": corrWindow, "max_lag_s": corrMaxLag, "series": "impulse_rate", "pairs": pairs}
+	return map[string]any{"window_s": corrWindow, "max_lag_s": corrMaxLag, "series": "flux", "pairs": pairs}
 }
 
 // bestLag finds the lag at which b follows a most closely: a over

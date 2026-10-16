@@ -575,7 +575,7 @@ func (s *Server) measureMemories(ctx context.Context) {
 			continue
 		}
 		for _, src := range a.Sources {
-			if running(src.Stream) {
+			if s.running(src.Stream) {
 				s.memories(ctx, a, src)
 			}
 		}
@@ -590,7 +590,7 @@ func (s *Server) analysisMemoryDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); !inRun || !running(src.Stream) {
+	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); !inRun || !s.running(src.Stream) {
 		s.redirect(w, r, analysisPath(a), "Memories can be deleted while the analysis runs, when the engine has them at hand.")
 		return
 	}

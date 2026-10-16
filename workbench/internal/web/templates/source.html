@@ -11,6 +11,7 @@
 <div class="grid">
 <section>
   <h2>Connection</h2>
+  {{if .Reserved}}<p class="note warn-note">The Listening Observatory listens to this stream already. It is not connected to from the Workbench, so that the station is not connected to twice; it can be analysed here once its operator has agreed to the Workbench and it reaches the Workbench through the Observatory's own connection.</p>{{end}}
   {{if .InEngine}}
     <p>State: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}} for {{since .Engine.Since}}.
     {{if .Engine.LastData}}Last audio {{since (deref .Engine.LastData)}} ago.{{end}}</p>

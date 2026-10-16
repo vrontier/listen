@@ -20,11 +20,19 @@ if ! getent passwd low >/dev/null; then
 	useradd --system --home-dir /var/lib/low --no-create-home --shell /usr/sbin/nologin --user-group low
 fi
 
-# Programs.
+# Programs. The engine is listen-engine, installed from the listen
+# repository with its own user, unit and socket; the Workbench's stand-in
+# no longer runs here (retired 2026-10-16).
 install -m 0755 -o root -g root low-workbench /usr/local/bin/low-workbench.new
-install -m 0755 -o root -g root low-standin /usr/local/bin/low-standin.new
 mv -f /usr/local/bin/low-workbench.new /usr/local/bin/low-workbench
-mv -f /usr/local/bin/low-standin.new /usr/local/bin/low-standin
+if [ -f /etc/systemd/system/low-engine.service ]; then
+	say "retiring the stand-in (low-engine.service)"
+	systemctl disable --now --quiet low-engine.service || true
+	rm -f /etc/systemd/system/low-engine.service /usr/local/bin/low-standin
+fi
+if ! getent group listen-engine >/dev/null || ! id -nG low | tr ' ' '\n' | grep -qx listen-engine; then
+	say "warning: user low is not in the group listen-engine; install listen-engine first (listen repository, scripts/deploy-engine.sh)"
+fi
 
 # TLS: a key and a signing request for the internal CA, made here once.
 # The certificate itself is signed elsewhere and installed as low.crt.
@@ -66,11 +74,24 @@ if ! grep -q '^LOW_KEYS_SECRET=' "$ENV"; then
 	say "creating the sealing key of language-model keys in $ENV"
 	echo "LOW_KEYS_SECRET=$(openssl rand -base64 32)" >> "$ENV"
 fi
+# Addresses the Observatory listens to, which members cannot register and
+# which are never put into the engine; one host or address per line. Kept
+# on this host only.
+RESERVED=/etc/low/reserved-inputs
+if [ ! -f "$RESERVED" ]; then
+	say "creating $RESERVED (empty)"
+	printf '# Addresses the Listening Observatory listens to: one host or address per line.\n' > "$RESERVED"
+fi
+chown root:low "$RESERVED"
+chmod 0640 "$RESERVED"
+if ! grep -q '^LOW_RESERVED_INPUTS=' "$ENV"; then
+	echo "LOW_RESERVED_INPUTS=$RESERVED" >> "$ENV"
+fi
 chown root:low "$ENV"
 chmod 0640 "$ENV"
 
 # Units.
-install -m 0644 low-engine.service low-workbench.service /etc/systemd/system/
+install -m 0644 low-workbench.service /etc/systemd/system/
 systemctl daemon-reload
 
 # nginx: the HTTPS servers only once the certificate exists.
@@ -97,9 +118,7 @@ nginx -t
 systemctl reload nginx
 
 # Start, or restart with the new programs.
-systemctl enable --quiet low-engine.service low-workbench.service
-systemctl restart low-engine.service
-sleep 1
+systemctl enable --quiet low-workbench.service
 systemctl restart low-workbench.service
 
 for i in $(seq 1 20); do
@@ -110,7 +129,11 @@ for i in $(seq 1 20); do
 done
 curl -fsS -o /dev/null http://127.0.0.1:8110/healthz
 curl -fsS -o /dev/null -H "Host: $HOST" http://127.0.0.1/ || curl -fsS -k -o /dev/null --resolve $HOST:443:127.0.0.1 https://$HOST/
-say "running: $SCHEME://$HOST (engine: stand-in)"
+if [ -S /run/listen-engine/control.sock ]; then
+	say "running: $SCHEME://$HOST (engine: listen-engine)"
+else
+	say "running: $SCHEME://$HOST, but the engine's socket /run/listen-engine/control.sock is missing"
+fi
 if [ "$SCHEME" = http ]; then
 	say "no certificate yet: sign $SSL/low.csr with the internal CA, install it as $SSL/low.crt, deploy again"
 fi

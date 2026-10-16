@@ -109,6 +109,23 @@ func TestReservedInputs(t *testing.T) {
 			t.Fatalf("%s: %d, refused %v", in, code, got)
 		}
 	}
+
+	// A source registered before its address was reserved stays out of
+	// the engine, and its pages say why.
+	u, _ := r.db.UserByEmail(ctx, "m@example.org")
+	st, _ := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://obs.example.org/vlf", SampleRate: 32000,
+		Texts: catalogue.StreamTexts{Name: "Station"}, Probe: []byte(`{}`)})
+	r.db.CreateAnalysis(ctx, u.ID, "Watch", "", []int64{st.ID}, nil)
+	if err := r.srv.sync.reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	cl := engine.NewClient(&http.Client{}, r.engSrv.URL)
+	if _, err := cl.Stream(ctx, st.EngineID()); !engine.IsCode(err, "not_found") {
+		t.Fatalf("a reserved source is in the engine: %v", err)
+	}
+	if _, page, _ := r.get(member, "/sources/"+st.Slug); !strings.Contains(page, "It is not connected to from the Workbench") {
+		t.Fatal("source page does not say why")
+	}
 }
 
 func waitFor(t *testing.T, ok func() bool, what string) {

@@ -346,6 +346,7 @@ type consumer struct {
 type streamData struct {
 	Stream    catalogue.Stream
 	View      engine.ViewSpec // the view as saved, for the form
+	Reserved  bool            // an address the Observatory listens to
 	Engine    engine.Stream
 	InEngine  bool
 	Probe     engine.ProbeResult
@@ -403,6 +404,7 @@ func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, e
 	if d.Stream.View != nil {
 		json.Unmarshal(d.Stream.View, &d.View)
 	}
+	d.Reserved = s.reserved(st.Input)
 	json.Unmarshal(st.Probe, &d.Probe)
 	d.Engine, d.InEngine = s.sync.stream(st.EngineID())
 	if d.IsOwner {

@@ -187,7 +187,7 @@ func (d *datasets) record(run catalogue.Run, a catalogue.Analysis) {
 		// Where a source stands when the recording begins to follow it.
 		rec.streams[id] = true
 		state := "removed"
-		if !running(src.Stream) {
+		if !d.s.running(src.Stream) {
 			state = src.Stream.State
 		} else if es, ok := d.s.sync.stream(id); ok {
 			state = es.State
@@ -197,7 +197,7 @@ func (d *datasets) record(run catalogue.Run, a catalogue.Analysis) {
 	}
 	want := map[string]func(context.Context){}
 	for _, src := range a.Sources {
-		if running(src.Stream) {
+		if d.s.running(src.Stream) {
 			st := src.Stream
 			want[st.EngineID()] = func(ctx context.Context) { d.follow(ctx, rec, st.EngineID(), a) }
 		}

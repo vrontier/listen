@@ -15,9 +15,9 @@
   <p class="compare-map-note meta small" hidden>Stations, placed to about 10 km, the distance between each pair with the time a radio wave needs for it, and the night side of the earth (shaded). Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, loaded by your browser from openstreetmap.org.</p>
   <div class="lanes-bar">
     <div class="compare-controls" role="radiogroup" aria-label="What the lanes show">
-      <label class="check"><input type="radio" name="lane-metric" value="impulse_rate" checked> impulse rate</label>
+      <label class="check"><input type="radio" name="lane-metric" value="flux" checked> flux</label>
       <label class="check"><input type="radio" name="lane-metric" value="level_db"> level</label>
-      <label class="check"><input type="radio" name="lane-metric" value="flux"> flux</label>
+      <label class="check" hidden><input type="radio" name="lane-metric" value="impulse_rate"> impulse rate</label>
     </div>
     <span class="paused-note" hidden>Display paused; the comparison goes on.</span>
     <button type="button" class="seg pause" aria-pressed="false">Pause</button>
@@ -26,7 +26,7 @@
     <canvas class="lanes" width="960" height="240" tabindex="0" role="img" aria-label="Activity of each source per second over the last ten minutes, one lane per source, on one time axis in UTC. Arrow keys read values."></canvas>
     <div class="readout" hidden></div>
   </div>
-  <h3>Correlation</h3>
+  <h3>Correlation <span class="meta corr-series"></span></h3>
   <table class="correlations"><thead><tr><th>Pair</th><th>r</th><th title="Positive: the second source hears the same later">Lag</th><th title="The same pair shifted 150 s apart: what chance alone gives">Baseline r</th><th>Above baseline</th></tr></thead><tbody><tr><td colspan="5" class="meta">The first correlation comes after five minutes of activity.</td></tr></tbody></table>
   <p class="meta">Lanes show each source's activity per second over the last ten minutes, on one time axis in UTC. The times are wall time at the engine, so the sources are aligned to a few seconds, not to their stations' clocks. A correlation is worth something only well above its baseline, the same pair shifted 150 s apart.</p>
   <link rel="stylesheet" href="{{asset "leaflet/leaflet.css"}}">

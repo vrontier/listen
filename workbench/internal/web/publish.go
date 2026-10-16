@@ -81,7 +81,7 @@ func (s *Server) researchView(ctx context.Context, a catalogue.Analysis, preview
 		v := researchSource{Stream: src.Stream}
 		v.Settings, v.Rules = describeSettings(src.Spec)
 		sid := strconv.FormatInt(src.Stream.ID, 10)
-		v.Live = d.Live && running(src.Stream)
+		v.Live = d.Live && s.running(src.Stream)
 		v.LivePath, v.DataPath = d.Base+"/live/"+sid, d.Base+"/data/"+sid+"/"
 		d.Sources = append(d.Sources, v)
 	}
@@ -304,7 +304,7 @@ func (s *Server) publicSource(w http.ResponseWriter, r *http.Request) (catalogue
 		return a, catalogue.AnalysisSource{}, false
 	}
 	src, ok := a.Source(pathID(r, "source"))
-	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); !ok || !inRun || !running(src.Stream) {
+	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); !ok || !inRun || !s.running(src.Stream) {
 		http.Error(w, "not live now", http.StatusConflict)
 		return a, src, false
 	}

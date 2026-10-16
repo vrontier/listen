@@ -96,9 +96,10 @@ engine
   "engine_version": "0.9.0",
   "instance": "c1f0a7e2",
   "started": "2026-10-13T08:00:00Z",
+  "resumed": true,
   "limits": {
     "streams": 40,
-    "analyses_per_stream": 4,
+    "analyses_per_stream": 8,
     "rules_per_analysis": 16,
     "subscriptions_per_analysis": 4,
     "max_sample_rate": 48000,
@@ -116,7 +117,8 @@ engine
 }
 ```
 
-- `limits` are set by the engine's operator when it is started. The engine enforces them. Limits per member are the Workbench's business and unknown to the engine.
+- `resumed` is `true` when the engine started from its saved configuration, as in `engine.hello` (**decided** 2026-10-16).
+- `limits` are set by the engine's operator when it is started. **Decided (engine)** (2026-10-16): `analyses_per_stream` is 8 by default, measured with the one spectrum per stream (about 4 % of one core for 8 analyses of a 32 kHz stream), room for trials beside the analyses of two members. The engine enforces them. Limits per member are the Workbench's business and unknown to the engine.
 - `capabilities` lets the Workbench build its forms from what this engine can do. `detectors` is empty until defined motifs exist.
 - `host` and `usage` are for the Workbench's caps, see [Usage](#usage).
 
@@ -204,6 +206,7 @@ The engine, not the Workbench, enforces what may be connected to, because only t
 - Not a loopback, private or link-local address, and not one of the server's own. The check is made on the address actually connected to, at the first connection, at every redirect and at every reconnect.
 - **Decided (engine)** (2026-10-16), from the first version: ffmpeg runs with its protocols limited to what HTTP and HTTPS need, so neither an address nor a redirect reaches a file or another protocol; before every start of ffmpeg (the first connection and every reconnect the engine makes) the host is resolved and refused if any of its addresses is loopback, private, link-local, multicast, unspecified or the server's own; the probe makes the same check. That is `"address_check": "initial"`.
 - A refusal sets the state `refused` with `last_error.code` `address_not_allowed` or `protocol_not_allowed`.
+- **Decided (engine)** (2026-10-16): a host that does not resolve is accepted at the `PUT`; only an address that resolves to loopback, private, link-local, multicast, unspecified or the server's own is refused there. Every connection attempt checks again, so a name that later resolves to such an address is refused when it is reached.
 
 **The rest needs an engine change** (the engine's phase 4). ffmpeg follows redirects and reconnects inside a connection by itself. Until the engine opens the HTTP connection itself, those are not checked, and `GET /v1/engine` reports `"address_check": "initial"` instead of `"every_connection"` under `capabilities`.
 
@@ -538,8 +541,8 @@ A new event type of an analysis, `signal.impulses`, once per second: the second,
 **Proposed** (2026-10-15): the shapes below are what the stand-in engine serves and the Workbench reads. They fill in what the tables above leave open; the engine session may change them, with this document.
 
 - **Envelope:** as for an analysis, plus `label` and `time_source`. The `timestamp` of `group.activity` is the second it describes.
-- **`group.activity`:** `{"second": "…Z", "members": [{"stream", "analysis", "present", "level_db", "flux", "impulse_rate"}]}`; the three values are missing when `present` is false.
-- **`group.correlation`:** `{"window_s": 300, "max_lag_s": 30, "series": "impulse_rate", "pairs": [{"a", "b", "r", "lag_s", "baseline_r", "n"}]}`. `lag_s` positive means `b` hears the same later than `a`. `baseline_r` is the best correlation of the same pair shifted 150 s apart; `null` until there is enough history. `r` is `null` while fewer than half the window's seconds have both members.
+- **`group.activity`:** `{"second": "…Z", "members": [{"stream", "analysis", "present", "level_db", "flux", "impulse_rate"}]}`; the three values are missing when `present` is false. **Decided (engine)** (2026-10-16): `impulse_rate` is present only when the engine measures impulses (with station time and `signal.impulses`, its phase 4); until then a member has `level_db` and `flux` only. A missing value is not a member unheard: `present` says that.
+- **`group.correlation`:** `{"window_s": 300, "max_lag_s": 30, "series": "flux", "pairs": [{"a", "b", "r", "lag_s", "baseline_r", "n"}]}`. **Decided (engine)** (2026-10-16): `series` names what is correlated, `flux` until the engine measures impulses, then `impulse_rate`; the Workbench's comparison shows the lanes of that series first. `lag_s` positive means `b` hears the same later than `a`. `baseline_r` is the best correlation of the same pair shifted 150 s apart; `null` until there is enough history. `r` is `null` while fewer than half the window's seconds have both members.
 - **`group.status`:** `{"members": [{"stream", "analysis", "state", "time_source", "delay_s"}], "watermark", "behind_s", "time_source"}`. On wall time `delay_s` is `null`: the engine cannot know a path delay without station time.
 - **`…/state`:** `{"group": <the group>, "status": <the last status event>, "activity": [<the last 600 activity events>], "correlation": <the last correlation event>, "clock": null, "coincidence": null}`.
 - **The group** as `GET` returns it: the spec's fields, each member with `state` (`present`, `absent`, `removed`), `time_source` and `delay_s`, and the group's `state` (`running` or `idle`) and `subscribers`.

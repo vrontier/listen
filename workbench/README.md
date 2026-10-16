@@ -6,13 +6,13 @@ The Observatory is a small, curated, public exhibit: a handful of streams, each 
 
 ## Status
 
-First part of the member area, built against a stand-in for the engine; the engine process itself does not exist yet. The specs in [`docs/`](docs/) record what has been decided, what is proposed and what is still open.
+The member area, built and tested against a stand-in for the engine; since 2026-10-16 the intranet installation runs on the real engine, `listen-engine` from the listen repository (control API 1.1, without the timing comparisons yet). The specs in [`docs/`](docs/) record what has been decided, what is proposed and what is still open.
 
-Working: invitation by the master admin, login by email link, registering a source with a probe, draft and production, pausing and deleting, analyses with one or more sources and settings per source, the analysis page grouped per source (live spectrogram, events, motifs, settings and filter rules with validation by the engine, memories), revisions, runs that fix one revision and produce a data set each (events and comparison as CSV and JSON) with a Runs page to manage them, a ten-minute preview that records nothing, a trial of changed settings next to a run, comparing two or more sources on one time axis during a run (activity per second, correlations, a map with distances and the night side; on the stand-in's made-up data), usage accounting with caps for the server and per member and a disk quota counting data sets and memories, sharing a source with other members, a Results page with the data sets of runs to download or delete and the disk space they take, tokens for programs with a data stream (JSON and Server-Sent Events) and an MCP endpoint (with a summary and a "since" cursor for assistants, and, for a token the member allows control, making and changing analyses and starting and stopping previews and runs within limits set per token), publishing an analysis as a public research page with reports to the master admin, members' language-model API keys (checked with the provider, stored encrypted), runs that stop by themselves when a source stops sending (with a mail when a run ends), the operator's contact for streams the member does not run, coordinates rounded to about 10 km on public pages, a limit of live visitors per published analysis, the list of who is connected, the audit trail. Not yet: the engine itself, the timing comparisons that need station time, the language-model interpretation, motif definitions and captures.
+Working: invitation by the master admin, login by email link, registering a source with a probe, draft and production, pausing and deleting, analyses with one or more sources and settings per source, the analysis page grouped per source (live spectrogram, events, motifs, settings and filter rules with validation by the engine, memories), revisions, runs that fix one revision and produce a data set each (events and comparison as CSV and JSON) with a Runs page to manage them, a ten-minute preview that records nothing, a trial of changed settings next to a run, comparing two or more sources on one time axis during a run (activity per second, correlations, a map with distances and the night side; on the stand-in's made-up data), usage accounting with caps for the server and per member and a disk quota counting data sets and memories, sharing a source with other members, a Results page with the data sets of runs to download or delete and the disk space they take, tokens for programs with a data stream (JSON and Server-Sent Events) and an MCP endpoint (with a summary and a "since" cursor for assistants, and, for a token the member allows control, making and changing analyses and starting and stopping previews and runs within limits set per token), publishing an analysis as a public research page with reports to the master admin, members' language-model API keys (checked with the provider, stored encrypted), runs that stop by themselves when a source stops sending (with a mail when a run ends), the operator's contact for streams the member does not run, coordinates rounded to about 10 km on public pages, a limit of live visitors per published analysis, the list of who is connected, the audit trail. Not yet: the timing comparisons that need station time, the language-model interpretation, motif definitions and captures.
 
 ## Running it for development
 
-Needs Go 1.26 or later. The stand-in serves the control API of [docs/control-api.md](docs/control-api.md) with made-up data and connects to no stream.
+Needs Go 1.26 or later. The stand-in serves the control API of [docs/control-api.md](docs/control-api.md) with made-up data and connects to no stream. `cmd/engine-check` checks any engine against that contract (see there, "Conformance test").
 
 ```sh
 go build ./cmd/...
@@ -23,22 +23,23 @@ go build ./cmd/...
 
 The last command creates the master admin and prints a login link. Without `-smtp`, login links and invitations are written to the Workbench's log. A Unix socket path may be at most about 100 characters long. The stand-in's probe answers by words in the address: `unreachable`, `notaudio`, `loud` and `silent` give the failures, `.ogg` a 32 kHz stream.
 
-Tests: `go test ./...`. The engine's control API version this Workbench needs: **1.0**.
+Tests: `go test ./...`. The engine's control API version this Workbench needs: **1.0**; groups need **1.1**.
 
 `make run` builds both programs and starts them together.
 
 ## Deploying
 
-`make deploy intranet` runs the tests, builds both programs for Linux and installs them on the intranet host as `low.home.arpa`. That host's SSH name goes in `deploy/local.mk` (ignored by git) as `INTRANET_HOST = …`; the account needs sudo without a password. `make deploy production` is reserved for `low.vrontier.org`, which is not set up yet.
+`make deploy intranet` runs the tests, builds the Workbench for Linux and installs it on the intranet host as `low.home.arpa`. The engine, `listen-engine`, is installed there beforehand from the listen repository (`scripts/deploy-engine.sh`), with its own user and group `listen-engine`, its unit `listen-engine.service` and its socket `/run/listen-engine/control.sock`; the Workbench's user is put in its group. That host's SSH name goes in `deploy/local.mk` (ignored by git) as `INTRANET_HOST = …`; the account needs sudo without a password. `make deploy production` is reserved for `low.vrontier.org`, which is not set up yet.
 
 What `deploy/install.sh` sets up there:
 
 | Part | Where |
 |---|---|
 | User and group `low` | system user, no login |
-| Programs | `/usr/local/bin/low-workbench`, `/usr/local/bin/low-standin` |
-| Engine | `low-engine.service`, socket `/run/low-engine/control.sock`; for now the stand-in, with made-up data |
+| Program | `/usr/local/bin/low-workbench` |
+| Engine | `listen-engine.service` from the listen repository, socket `/run/listen-engine/control.sock`, which the Workbench uses (`LOW_ENGINE` in its unit). The stand-in no longer runs on the host: a deploy removes its earlier unit `low-engine.service` |
 | Workbench | `low-workbench.service` on 127.0.0.1:8110, catalogue `/var/lib/low/workbench.db` |
+| Reserved addresses | `/etc/low/reserved-inputs`: hosts or addresses the Listening Observatory listens to, one per line, kept on the host only. Members cannot register them, and they are never put into the engine (`LOW_RESERVED_INPUTS`) |
 | Settings | `/etc/low/workbench.env` (base address, mail server, the sealing key of language-model keys); created once, then kept. Back up its `LOW_KEYS_SECRET` apart from the catalogue: without it, saved keys cannot be opened. `LOW_PUBLISHING=on` and `LOW_LLM_KEYS=on` there turn on publishing and the keys page; both are off |
 | nginx | `/etc/nginx/sites-available/low.home.arpa` and `snippets/low-workbench-proxy.conf`; only the networks given in `deploy/local.mk` (`INTRANET_ALLOW`), plus the host itself |
 | TLS | key and signing request `/etc/ssl/home-arpa/low.{key,csr}`, made on the host. Until `low.crt`, signed by the internal CA, is installed there, the site is served over plain HTTP; the next deploy after that switches to HTTPS. |

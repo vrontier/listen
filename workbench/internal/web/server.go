@@ -109,6 +109,7 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 	s.acct = newAccounting(s)
 	s.sync.onUsage = s.acct.report
 	s.sync.onFailed = s.analysisFailed
+	s.sync.reserved = s.reserved
 	if err := s.parseTemplates(); err != nil {
 		return nil, err
 	}

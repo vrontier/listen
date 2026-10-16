@@ -16,7 +16,11 @@
   const lanes = Array.from(root.querySelectorAll(".lane-names li")).map((li) => ({ stream: li.dataset.stream, name: li.textContent }));
   const names = Object.fromEntries(lanes.map((l) => [l.stream, l.name]));
   const seconds = new Map(); // ms → {stream: values or null}
-  let latest = 0, metric = "impulse_rate";
+  // The lanes start on flux, or on the series the correlation uses; impulse
+  // rate is offered only once the data carries it (the engine measures
+  // impulses only with station time).
+  let latest = 0, metric = "flux", chosen = false;
+  const impulseChoice = root.querySelector('input[name="lane-metric"][value="impulse_rate"]');
   let frozen = null; // {seconds, latest} while the display is paused
   let cursor = null; // {lane, t}
   const readout = root.querySelector(".lanes-wrap .readout");
@@ -34,7 +38,10 @@
     const t = Date.parse(p.second || e.timestamp);
     if (isNaN(t)) return;
     const row = {};
-    for (const m of p.members || []) row[m.stream] = m.present ? m : null;
+    for (const m of p.members || []) {
+      row[m.stream] = m.present ? m : null;
+      if (m.present && m.impulse_rate != null && impulseChoice && impulseChoice.parentElement.hidden) impulseChoice.parentElement.hidden = false;
+    }
     seconds.set(t, row);
     if (t > latest) latest = t;
     for (const k of seconds.keys()) if (k <= latest - WINDOW * 1000) seconds.delete(k);
@@ -159,6 +166,17 @@
 
   function showCorrelation(p) {
     if (!p || !p.pairs) return;
+    const series = p.series || "impulse_rate";
+    const named = { flux: "flux", level_db: "level", impulse_rate: "impulse rate" };
+    const label = root.querySelector(".corr-series");
+    if (label) label.textContent = "of " + (named[series] || series);
+    // Until the member picks a lane, the lanes show what is correlated.
+    const pick = root.querySelector('input[name="lane-metric"][value="' + series + '"]');
+    if (!chosen && pick && !pick.parentElement.hidden && metric !== series) {
+      pick.checked = true;
+      metric = series;
+      draw();
+    }
     corrBody.textContent = "";
     for (const c of p.pairs) {
       const tr = document.createElement("tr");
@@ -262,7 +280,7 @@
   try { drawMap(); } catch (e) { /* the lanes work without the map */ }
 
   for (const r of root.querySelectorAll('input[name="lane-metric"]')) {
-    r.addEventListener("change", () => { metric = r.value; draw(); });
+    r.addEventListener("change", () => { metric = r.value; chosen = true; draw(); });
   }
   draw();
   loadState().then(connect);

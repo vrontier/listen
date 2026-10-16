@@ -64,7 +64,6 @@ deploy-intranet: test linux
 	@echo "== deploying $(VERSION) to the intranet host"
 	@dir=$$(ssh $(INTRANET_HOST) mktemp -d /tmp/low-deploy.XXXXXX) && \
 	scp -q $(LINUX)/workbench $(INTRANET_HOST):$$dir/low-workbench && \
-	scp -q $(LINUX)/listen-standin $(INTRANET_HOST):$$dir/low-standin && \
 	printf '%s\n' $(INTRANET_ALLOW) | ssh $(INTRANET_HOST) "cat > $$dir/allow.txt" && \
 	scp -q deploy/install.sh deploy/systemd/*.service deploy/nginx/*.conf $(INTRANET_HOST):$$dir/ && \
 	ssh $(INTRANET_HOST) "sudo bash $$dir/install.sh; rc=\$$?; rm -rf $$dir; exit \$$rc"

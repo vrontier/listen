@@ -43,6 +43,15 @@ type engineSync struct {
 	onFailed func(engine.AnalysisState)
 
 	failures map[string]engine.AnalysisState // "stream/analysis" → its failure
+
+	// reserved, if set, names addresses the Observatory listens to: they
+	// are never put into the engine (reserved.go).
+	reserved func(input string) bool
+}
+
+// runs reports whether a stream is to be in the engine at all.
+func (s *engineSync) runs(st catalogue.Stream) bool {
+	return running(st) && (s.reserved == nil || !s.reserved(st.Input))
 }
 
 func newEngineSync(eng *engine.Client, db *catalogue.DB) *engineSync {
@@ -212,6 +221,13 @@ func (s *engineSync) session(ctx context.Context) error {
 // wanted reports whether a stream should exist in the engine, and how: a
 // stream an analysis in a run uses stays connected; otherwise it connects
 // on demand, for a preview.
+func (s *engineSync) wanted(st catalogue.Stream, inRun bool) (engine.StreamSpec, bool) {
+	if !s.runs(st) {
+		return engine.StreamSpec{}, false
+	}
+	return wanted(st, inRun)
+}
+
 func wanted(st catalogue.Stream, inRun bool) (engine.StreamSpec, bool) {
 	spec := engine.StreamSpec{Input: st.Input, SampleRate: st.SampleRate, Mode: engine.OnDemand}
 	if st.View != nil {
@@ -398,7 +414,7 @@ func (s *engineSync) push(ctx context.Context, st catalogue.Stream) error {
 	if err != nil {
 		return err
 	}
-	spec, ok := wanted(st, inRun)
+	spec, ok := s.wanted(st, inRun)
 	if !ok {
 		err := s.eng.DeleteStream(ctx, st.EngineID(), false)
 		if engine.IsCode(err, "not_found") {
@@ -471,7 +487,7 @@ func (s *engineSync) reconcile(ctx context.Context) error {
 	want := map[string]bool{}
 	var firstErr error
 	for _, st := range streams {
-		if _, ok := wanted(st, false); ok {
+		if _, ok := s.wanted(st, false); ok {
 			want[st.EngineID()] = true
 		}
 		if err := s.push(ctx, st); err != nil {
@@ -566,7 +582,7 @@ func (s *engineSync) groupSpec(ctx context.Context, a catalogue.Analysis) (engin
 		spec.Analyses = catalogue.DefaultCompare
 	}
 	for _, src := range a.Sources {
-		if !running(src.Stream) {
+		if !s.runs(src.Stream) {
 			continue
 		}
 		spec.Members = append(spec.Members, engine.GroupMember{Stream: src.Stream.EngineID(), Analysis: a.EngineID(), Lat: src.Stream.Texts.Lat, Lon: src.Stream.Texts.Lon})

@@ -91,6 +91,7 @@ type sourceView struct {
 	Prefix    string // of its form fields
 	Form      settingsForm
 	Running   bool   // the stream is in a state that connects
+	Reserved  bool   // an address the Observatory listens to: not analysed here
 	Live      bool   // and the page shows it live: in a run or a preview
 	TrialLive bool   // a trial runs next to the run on this source
 	TrialPath string // of its live data, …/trial/live/<source>
@@ -144,6 +145,10 @@ func analysisPath(a catalogue.Analysis) string { return "/analyses/" + strconv.F
 func running(st catalogue.Stream) bool {
 	return st.State == catalogue.StreamDraft || st.State == catalogue.StreamProduction
 }
+
+// running reports whether a source is analysed here: in a state that
+// connects, and not an address reserved for the Observatory.
+func (s *Server) running(st catalogue.Stream) bool { return running(st) && !s.reserved(st.Input) }
 
 // --- the list and a new analysis ---
 
@@ -350,7 +355,7 @@ func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisDa
 	for _, src := range a.Sources {
 		chosen[src.Stream.ID] = true
 		sid := strconv.FormatInt(src.Stream.ID, 10)
-		v := sourceView{Stream: src.Stream, Prefix: prefixOf(src.Stream.ID), Form: formFromSpec(src.Spec), Running: running(src.Stream),
+		v := sourceView{Stream: src.Stream, Prefix: prefixOf(src.Stream.ID), Form: formFromSpec(src.Spec), Running: s.running(src.Stream), Reserved: s.reserved(src.Stream.Input),
 			LivePath: base + "/live/" + sid, DataPath: base + "/data/" + sid + "/"}
 		v.Live = v.Running && (inRun || !d.Preview.IsZero())
 		if d.Trial != nil {
@@ -729,7 +734,7 @@ func (s *Server) analysisDelete(w http.ResponseWriter, r *http.Request) {
 	// Outside a run the analysis is not in the engine, but its memories
 	// are: it is put back for a moment so that they can be deleted with it.
 	for _, src := range a.Sources {
-		if !running(src.Stream) {
+		if !s.running(src.Stream) {
 			continue
 		}
 		if _, err := s.eng.PutAnalysis(r.Context(), src.Stream.EngineID(), a.EngineID(), analysisBody(src, a)); err != nil {
@@ -783,7 +788,7 @@ func (s *Server) analysisLive(w http.ResponseWriter, r *http.Request) {
 // during a run, its preview during a preview, none otherwise; under
 // …/trial/… the trial next to the run.
 func (s *Server) liveID(r *http.Request, a catalogue.Analysis, src catalogue.AnalysisSource) (string, bool) {
-	if !running(src.Stream) {
+	if !s.running(src.Stream) {
 		return "", false
 	}
 	if strings.Contains(r.URL.Path, "/trial/") {
@@ -858,7 +863,7 @@ type compareChoice struct {
 }
 
 var compareLabels = map[string]string{
-	"activity":    "activity side by side: level, flux and impulse rate per second, and how the sources correlate",
+	"activity":    "activity side by side: level and flux per second (impulse rate once the engine measures impulses), and how the sources correlate",
 	"clock":       "station clocks: the measured offset between each pair of stations",
 	"coincidence": "coincidence: impulses heard by two or three stations within their travel time",
 }
@@ -928,7 +933,7 @@ func (s *Server) compares(a catalogue.Analysis) bool {
 	}
 	n := 0
 	for _, src := range a.Sources {
-		if running(src.Stream) {
+		if s.running(src.Stream) {
 			n++
 		}
 	}

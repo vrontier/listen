@@ -182,7 +182,7 @@ var (
 func (s *Server) estimate(a catalogue.Analysis) catalogue.Usage {
 	var e catalogue.Usage
 	for _, src := range a.Sources {
-		if !running(src.Stream) {
+		if !s.running(src.Stream) {
 			continue
 		}
 		scale := float64(src.Stream.SampleRate) / 22050

@@ -250,7 +250,7 @@ func (s *Server) sourceData(ctx context.Context, a catalogue.Analysis, sourceID 
 		return nil, http.StatusNotFound, "Unknown data path; there are state, motifs, motifs/<id>, memories, history/events and history/features."
 	}
 	id, ok := s.runningID(ctx, a)
-	if !ok || !running(src.Stream) {
+	if !ok || !s.running(src.Stream) {
 		return nil, http.StatusConflict, "The analysis is neither in a run nor previewed; its data can be read while it runs, and its runs' data sets at any time."
 	}
 	v := make(map[string][]string)
@@ -462,7 +462,7 @@ func (s *Server) apiEvents(w http.ResponseWriter, r *http.Request) {
 	}()
 	who := "token " + tok.Name
 	for _, src := range a.Sources {
-		if !running(src.Stream) || only != nil && !slices.Contains(only, src.Stream.ID) {
+		if !s.running(src.Stream) || only != nil && !slices.Contains(only, src.Stream.ID) {
 			continue
 		}
 		rd := &reader{ch: ch, who: who, frame: wrap(`"source":` + strconv.FormatInt(src.Stream.ID, 10))}
