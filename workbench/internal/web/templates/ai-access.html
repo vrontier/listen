@@ -50,15 +50,15 @@
   <h2>Using a token</h2>
   <p>Send it in the request header <code>Authorization: Bearer low_…</code>, never in the address, where it would end up in logs.</p>
   <table class="facts">
-    <tr><th><code>GET /api/v1/analyses</code></th><td>your analyses, their sources and settings, and whether each is in a run</td></tr>
-    <tr><th><code>GET /api/v1/analyses/&lt;id&gt;/events</code></th><td>live events while the analysis is in a run or a preview, as Server-Sent Events; each names its source. <code>?types=event.resonance,motif.detected</code> limits the kinds, <code>?source=&lt;id&gt;</code> the sources. An <code>end</code> event comes when the run ends.</td></tr>
-    <tr><th><code>GET /api/v1/analyses/&lt;id&gt;/sources/&lt;source&gt;/state</code></th><td>also <code>motifs</code>, <code>history/events</code>, <code>history/features</code>, during a run or a preview</td></tr>
-    <tr><th><code>GET /api/v1/runs</code></th><td>your runs and their data sets</td></tr>
-    <tr><th><code>GET /api/v1/runs/&lt;id&gt;/events.csv</code></th><td>a file of a finished data set: also <code>dataset.json</code>, <code>comparison.csv</code></td></tr>
+    <tr><th><code>GET /data/v1/analyses</code></th><td>your analyses, their sources and settings, and whether each is in a run</td></tr>
+    <tr><th><code>GET /data/v1/analyses/&lt;id&gt;/events</code></th><td>live events while the analysis is in a run or a preview, as Server-Sent Events; each names its source. <code>?types=event.resonance,motif.detected</code> limits the kinds, <code>?source=&lt;id&gt;</code> the sources. An <code>end</code> event comes when the run ends.</td></tr>
+    <tr><th><code>GET /data/v1/analyses/&lt;id&gt;/sources/&lt;source&gt;/state</code></th><td>also <code>motifs</code>, <code>history/events</code>, <code>history/features</code>, during a run or a preview</td></tr>
+    <tr><th><code>GET /data/v1/runs</code></th><td>your runs and their data sets</td></tr>
+    <tr><th><code>GET /data/v1/runs/&lt;id&gt;/events.csv</code></th><td>a file of a finished data set: also <code>dataset.json</code>, <code>comparison.csv</code></td></tr>
     <tr><th><code>POST /mcp</code></th><td>MCP over HTTP (streamable HTTP), for AI assistants; with control also making and changing analyses, previews and runs. The tools are listed under <a href="/ai/mcp#tools">MCP</a>, with how to connect an assistant.</td></tr>
   </table>
   <p>For example:</p>
-  <pre><code>curl -N -H "Authorization: Bearer $LOW_TOKEN" {{.Base}}/api/v1/analyses/{{.Example}}/events?types=event.resonance</code></pre>
+  <pre><code>curl -N -H "Authorization: Bearer $LOW_TOKEN" {{.Base}}/data/v1/analyses/{{.Example}}/events?types=event.resonance</code></pre>
 </section>
 {{end}}
 {{end}}

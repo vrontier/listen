@@ -526,7 +526,7 @@ func (s *Server) adminReportClose(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.redirect(w, r, "/admin", "Report closed.")
+	s.redirect(w, r, "/manage", "Report closed.")
 }
 
 // adminWithdraw withdraws a published analysis, and tells its member.
@@ -539,12 +539,12 @@ func (s *Server) adminWithdraw(w http.ResponseWriter, r *http.Request) {
 	}
 	reason := strings.TrimSpace(r.PostFormValue("reason"))
 	if reason == "" {
-		s.redirect(w, r, "/admin", "Not withdrawn: give the member a reason.")
+		s.redirect(w, r, "/manage", "Not withdrawn: give the member a reason.")
 		return
 	}
 	if err := s.db.WithdrawAnalysis(r.Context(), a.ID, sess.User.ID, "by the master admin: "+reason); err != nil {
 		if isNotFound(err) {
-			s.redirect(w, r, "/admin", "It was not published.")
+			s.redirect(w, r, "/manage", "It was not published.")
 			return
 		}
 		s.fail(w, r, err)
@@ -557,7 +557,7 @@ func (s *Server) adminWithdraw(w http.ResponseWriter, r *http.Request) {
 			log.Printf("withdraw mail: %v", err)
 		}
 	}
-	s.redirect(w, r, "/admin", "Withdrawn; its member has been told.")
+	s.redirect(w, r, "/manage", "Withdrawn; its member has been told.")
 }
 
 // ruleWords says a rule in words, for those who do not read the engine's

@@ -150,18 +150,18 @@ func TestMemberFlow(t *testing.T) {
 
 	// The master admin sets a cap and invites a member.
 	admin := r.loginAs("admin@example.org")
-	_, page, _ := r.get(admin, "/admin")
-	if code, p, _ := r.post(admin, "/admin/cap", url.Values{"csrf": {csrfOf(t, page)}, "cpu_cores": {"0"}}); code != 400 || !strings.Contains(p, "above 0") {
+	_, page, _ := r.get(admin, "/manage")
+	if code, p, _ := r.post(admin, "/manage/cap", url.Values{"csrf": {csrfOf(t, page)}, "cpu_cores": {"0"}}); code != 400 || !strings.Contains(p, "above 0") {
 		t.Fatalf("bad cap: %d", code)
 	}
-	if code, _, _ := r.post(admin, "/admin/cap", url.Values{"csrf": {csrfOf(t, page)}, "cpu_cores": {"1,5"}, "memory_mb": {"512"}}); code != http.StatusSeeOther {
+	if code, _, _ := r.post(admin, "/manage/cap", url.Values{"csrf": {csrfOf(t, page)}, "cpu_cores": {"1,5"}, "memory_mb": {"512"}}); code != http.StatusSeeOther {
 		t.Fatalf("cap: %d", code)
 	}
 	if c, _ := r.db.ServerCap(ctx); c.CPUCores != 1.5 || c.MemoryMB != 512 {
 		t.Fatalf("cap stored: %+v", c)
 	}
-	_, page, _ = r.get(admin, "/admin")
-	code, page, _ := r.post(admin, "/admin/invitations", url.Values{"csrf": {csrfOf(t, page)}, "email": {"researcher@example.org"}})
+	_, page, _ = r.get(admin, "/manage")
+	code, page, _ := r.post(admin, "/manage/invitations", url.Values{"csrf": {csrfOf(t, page)}, "email": {"researcher@example.org"}})
 	if code != 200 || !strings.Contains(page, "Invitation sent") {
 		t.Fatalf("invite: %d", code)
 	}

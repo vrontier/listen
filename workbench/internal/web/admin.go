@@ -141,14 +141,14 @@ func (s *Server) adminMemberCap(w http.ResponseWriter, r *http.Request) {
 	errs := map[string]string{}
 	c := parseCap(r, host, errs)
 	if len(errs) > 0 {
-		s.redirect(w, r, "/admin", "Member cap not saved: "+strings.Join(values(errs), "; ")+".")
+		s.redirect(w, r, "/manage", "Member cap not saved: "+strings.Join(values(errs), "; ")+".")
 		return
 	}
 	if err := s.db.SetDefaultMemberCap(r.Context(), sess.User.ID, c); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.redirect(w, r, "/admin", "Member cap saved.")
+	s.redirect(w, r, "/manage", "Member cap saved.")
 }
 
 // adminOneCap gives one member a cap of their own, or with "default"
@@ -166,21 +166,21 @@ func (s *Server) adminOneCap(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		s.redirect(w, r, "/admin", u.Name+" has the default cap again.")
+		s.redirect(w, r, "/manage", u.Name+" has the default cap again.")
 		return
 	}
 	_, host := s.sync.used()
 	errs := map[string]string{}
 	c := parseCap(r, host, errs)
 	if len(errs) > 0 {
-		s.redirect(w, r, "/admin", "Cap of "+u.Name+" not saved: "+strings.Join(values(errs), "; ")+".")
+		s.redirect(w, r, "/manage", "Cap of "+u.Name+" not saved: "+strings.Join(values(errs), "; ")+".")
 		return
 	}
 	if err := s.db.SetMemberCap(r.Context(), sess.User.ID, u.ID, &c); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.redirect(w, r, "/admin", "Cap of "+u.Name+" saved.")
+	s.redirect(w, r, "/manage", "Cap of "+u.Name+" saved.")
 }
 
 func values(m map[string]string) []string {
@@ -261,7 +261,7 @@ func (s *Server) adminCap(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.redirect(w, r, "/admin", "Server cap saved.")
+	s.redirect(w, r, "/manage", "Server cap saved.")
 }
 
 // adminReaders sets how many visitors may read one published analysis live
@@ -270,12 +270,12 @@ func (s *Server) adminReaders(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)
 	n, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("readers")))
 	if err != nil || n < 1 || n > 10000 {
-		s.redirect(w, r, "/admin", "Not saved: give a whole number of visitors from 1 to 10000.")
+		s.redirect(w, r, "/manage", "Not saved: give a whole number of visitors from 1 to 10000.")
 		return
 	}
 	if err := s.db.SetPublicReaders(r.Context(), sess.User.ID, n); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.redirect(w, r, "/admin", "Saved: "+strconv.Itoa(n)+" visitors may read one published analysis live at once.")
+	s.redirect(w, r, "/manage", "Saved: "+strconv.Itoa(n)+" visitors may read one published analysis live at once.")
 }

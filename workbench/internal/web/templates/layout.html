@@ -30,7 +30,7 @@
       {{if hasPrefix .Path "/ai"}}<li><ul class="nav-sub">{{range aiPages}}{{if ne .Path "/ai"}}<li><a href="{{.Path}}"{{if eq .Path $.Path}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}{{end}}</ul></li>{{end}}
       {{if .Keys}}{{template "nav-item" (navItem .Path "/account/keys" "Keys" "key")}}{{end}}
       {{if .Research}}{{template "nav-item" (navItem .Path "/research" "Research" "research")}}{{end}}
-      {{if .User.Admin}}{{template "nav-item" (navItem .Path "/admin" "Admin" "admin")}}{{end}}
+      {{if .User.Admin}}{{template "nav-item" (navItem .Path "/manage" "Admin" "admin")}}{{end}}
     </ul>
     {{else}}
     <ul class="nav">

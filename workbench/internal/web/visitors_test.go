@@ -50,11 +50,11 @@ func TestVisitorLimit(t *testing.T) {
 	r.srv.pushAll(ctx, a.Sources)
 
 	adm := r.loginAs("admin@example.org")
-	_, page, _ := r.get(adm, "/admin")
+	_, page, _ := r.get(adm, "/manage")
 	if !strings.Contains(page, `name="readers" value="50"`) {
 		t.Fatal("the default of 50 is not shown")
 	}
-	r.post(adm, "/admin/readers", url.Values{"csrf": {csrfOf(t, page)}, "readers": {"1"}})
+	r.post(adm, "/manage/readers", url.Values{"csrf": {csrfOf(t, page)}, "readers": {"1"}})
 	if n, _ := r.db.PublicReaders(ctx); n != 1 {
 		t.Fatalf("readers: %d", n)
 	}

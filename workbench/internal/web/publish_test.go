@@ -113,11 +113,11 @@ func TestPublishing(t *testing.T) {
 		t.Fatal("admin not told")
 	}
 	adm := r.loginAs("admin@example.org")
-	_, apage, _ := r.get(adm, "/admin")
+	_, apage, _ := r.get(adm, "/manage")
 	if !strings.Contains(apage, "not what it claims") {
 		t.Fatal("report not on the admin page")
 	}
-	r.post(adm, "/admin/analyses/"+strconv.FormatInt(a.ID, 10)+"/withdraw", url.Values{"csrf": {csrfOf(t, apage)}, "reason": {"checking a report"}})
+	r.post(adm, "/manage/analyses/"+strconv.FormatInt(a.ID, 10)+"/withdraw", url.Values{"csrf": {csrfOf(t, apage)}, "reason": {"checking a report"}})
 	if code, page, _ := r.get(visitor, "/research/dawn-chorus"); code != http.StatusGone || !strings.Contains(page, "withdrawn") {
 		t.Fatalf("withdrawn page: %d", code)
 	}

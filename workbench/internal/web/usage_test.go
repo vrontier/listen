@@ -81,9 +81,9 @@ func TestCaps(t *testing.T) {
 
 	// The master admin sets a member cap too small for one source.
 	adm := r.loginAs("admin@example.org")
-	_, apage, _ := r.get(adm, "/admin")
+	_, apage, _ := r.get(adm, "/manage")
 	acsrf := csrfOf(t, apage)
-	if code, _, _ := r.post(adm, "/admin/member-cap", url.Values{"csrf": {acsrf}, "cpu_cores": {"0.01"}}); code != http.StatusSeeOther {
+	if code, _, _ := r.post(adm, "/manage/member-cap", url.Values{"csrf": {acsrf}, "cpu_cores": {"0.01"}}); code != http.StatusSeeOther {
 		t.Fatalf("member cap: %d", code)
 	}
 	_, _, hdr := r.post(member, aURL+"/run", url.Values{"csrf": {csrf}, "length": {"1h"}})
@@ -99,7 +99,7 @@ func TestCaps(t *testing.T) {
 	}
 
 	// A cap of the member's own lifts it; the server cap still holds.
-	r.post(adm, "/admin/members/"+strconv.FormatInt(u.ID, 10)+"/cap", url.Values{"csrf": {acsrf}, "cpu_cores": {"2"}})
+	r.post(adm, "/manage/members/"+strconv.FormatInt(u.ID, 10)+"/cap", url.Values{"csrf": {acsrf}, "cpu_cores": {"2"}})
 	if c, own, _ := r.db.MemberCap(ctx, u.ID); !own || c.CPUCores != 2 {
 		t.Fatalf("own cap: %v %+v", own, c)
 	}
@@ -125,7 +125,7 @@ func TestCaps(t *testing.T) {
 	}
 
 	// Back to the default cap.
-	r.post(adm, "/admin/members/"+strconv.FormatInt(u.ID, 10)+"/cap", url.Values{"csrf": {acsrf}, "default": {"1"}})
+	r.post(adm, "/manage/members/"+strconv.FormatInt(u.ID, 10)+"/cap", url.Values{"csrf": {acsrf}, "default": {"1"}})
 	if _, own, _ := r.db.MemberCap(ctx, u.ID); own {
 		t.Fatal("own cap kept")
 	}

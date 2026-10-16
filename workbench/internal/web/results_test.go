@@ -156,7 +156,7 @@ func TestHome(t *testing.T) {
 			t.Fatalf("home lacks %q", want)
 		}
 	}
-	if strings.Contains(page, `href="/admin"`) {
+	if strings.Contains(page, `href="/manage"`) {
 		t.Fatal("a member is shown the admin page")
 	}
 	// Visitors still get the public front page.

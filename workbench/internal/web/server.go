@@ -257,12 +257,12 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /account/keys/{provider}/delete", keys(s.keyDelete))
 
 	stream := func(h http.HandlerFunc) http.HandlerFunc { return s.bearer(catalogue.ScopeStream, h) }
-	m.HandleFunc("GET /api/v1/analyses", stream(s.apiAnalyses))
-	m.HandleFunc("GET /api/v1/analyses/{id}", stream(s.apiAnalysis))
-	m.HandleFunc("GET /api/v1/analyses/{id}/events", stream(s.apiEvents))
-	m.HandleFunc("GET /api/v1/analyses/{id}/sources/{source}/{what...}", stream(s.apiSourceData))
-	m.HandleFunc("GET /api/v1/runs", stream(s.apiRuns))
-	m.HandleFunc("GET /api/v1/runs/{run}/{file}", stream(s.apiRunFile))
+	m.HandleFunc("GET /data/v1/analyses", stream(s.apiAnalyses))
+	m.HandleFunc("GET /data/v1/analyses/{id}", stream(s.apiAnalysis))
+	m.HandleFunc("GET /data/v1/analyses/{id}/events", stream(s.apiEvents))
+	m.HandleFunc("GET /data/v1/analyses/{id}/sources/{source}/{what...}", stream(s.apiSourceData))
+	m.HandleFunc("GET /data/v1/runs", stream(s.apiRuns))
+	m.HandleFunc("GET /data/v1/runs/{run}/{file}", stream(s.apiRunFile))
 
 	m.HandleFunc("POST /mcp", s.mcp)
 	m.HandleFunc("GET /mcp", func(w http.ResponseWriter, r *http.Request) {
@@ -302,14 +302,26 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /research/{slug}/compare/state", s.researchCompareState)
 	m.HandleFunc("GET /research/{slug}/runs/{run}/{file}", s.visitor(s.researchFile))
 
-	m.HandleFunc("GET /admin", s.admin(s.adminPage))
-	m.HandleFunc("POST /admin/reports/{report}/close", s.admin(s.adminReportClose))
-	m.HandleFunc("POST /admin/analyses/{id}/withdraw", s.admin(s.adminWithdraw))
-	m.HandleFunc("POST /admin/invitations", s.admin(s.adminInvite))
-	m.HandleFunc("POST /admin/cap", s.admin(s.adminCap))
-	m.HandleFunc("POST /admin/readers", s.admin(s.adminReaders))
-	m.HandleFunc("POST /admin/member-cap", s.admin(s.adminMemberCap))
-	m.HandleFunc("POST /admin/members/{user}/cap", s.admin(s.adminOneCap))
+	m.HandleFunc("GET /manage", s.admin(s.adminPage))
+	m.HandleFunc("POST /manage/reports/{report}/close", s.admin(s.adminReportClose))
+	m.HandleFunc("POST /manage/analyses/{id}/withdraw", s.admin(s.adminWithdraw))
+	m.HandleFunc("POST /manage/invitations", s.admin(s.adminInvite))
+	m.HandleFunc("POST /manage/cap", s.admin(s.adminCap))
+	m.HandleFunc("POST /manage/readers", s.admin(s.adminReaders))
+	m.HandleFunc("POST /manage/member-cap", s.admin(s.adminMemberCap))
+	m.HandleFunc("POST /manage/members/{user}/cap", s.admin(s.adminOneCap))
+	// The earlier addresses of these and the data stream (until 2026-10-16):
+	// the production web server refuses paths that begin with admin or api.
+	m.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/manage", http.StatusMovedPermanently)
+	})
+	m.HandleFunc("GET /api/v1/{rest...}", func(w http.ResponseWriter, r *http.Request) {
+		to := "/data/v1/" + r.PathValue("rest")
+		if r.URL.RawQuery != "" {
+			to += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, to, http.StatusPermanentRedirect)
+	})
 	s.mux = m
 }
 

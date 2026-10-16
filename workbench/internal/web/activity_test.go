@@ -37,13 +37,13 @@ func TestActivity(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode
 	}
-	if code := streamGet(both, "/api/v1/analyses"); code != 200 {
+	if code := streamGet(both, "/data/v1/analyses"); code != 200 {
 		t.Fatalf("analyses: %d", code)
 	}
-	if code := streamGet(both, "/api/v1/runs/999/events.csv"); code != 404 {
+	if code := streamGet(both, "/data/v1/runs/999/events.csv"); code != 404 {
 		t.Fatalf("missing run: %d", code)
 	}
-	if code := streamGet(mcpOnly, "/api/v1/analyses"); code != 403 {
+	if code := streamGet(mcpOnly, "/data/v1/analyses"); code != 403 {
 		t.Fatalf("token for MCP on the data stream: %d", code)
 	}
 
@@ -54,9 +54,9 @@ func TestActivity(t *testing.T) {
 	// Newest first: refused, missing run, analyses, list_runs, get_analysis,
 	// tools/list, notifications/initialized, initialize.
 	want := []struct{ via, what, status string }{
-		{"stream", "GET /api/v1/analyses", "refused"},
-		{"stream", "GET /api/v1/runs/999/events.csv", "error"},
-		{"stream", "GET /api/v1/analyses", "ok"},
+		{"stream", "GET /data/v1/analyses", "refused"},
+		{"stream", "GET /data/v1/runs/999/events.csv", "error"},
+		{"stream", "GET /data/v1/analyses", "ok"},
 		{"mcp", "list_runs", "ok"},
 		{"mcp", "get_analysis", "error"},
 		{"mcp", "tools/list", "ok"},

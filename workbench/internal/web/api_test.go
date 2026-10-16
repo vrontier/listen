@@ -62,20 +62,20 @@ func TestTokensAndDataStream(t *testing.T) {
 	mcpOnly := r.makeToken(member, "assistant", "mcp")
 	other := r.makeToken(r.loginAs("o@example.org"), "theirs", "stream")
 
-	if code, _ := r.api("", "/api/v1/analyses"); code != http.StatusUnauthorized {
+	if code, _ := r.api("", "/data/v1/analyses"); code != http.StatusUnauthorized {
 		t.Fatalf("no token: %d", code)
 	}
-	if code, _ := r.api("", "/api/v1/analyses?token="+secret); code != http.StatusBadRequest {
+	if code, _ := r.api("", "/data/v1/analyses?token="+secret); code != http.StatusBadRequest {
 		t.Fatalf("token in the address: %d", code)
 	}
-	if code, _ := r.api(mcpOnly, "/api/v1/analyses"); code != http.StatusForbidden {
+	if code, _ := r.api(mcpOnly, "/data/v1/analyses"); code != http.StatusForbidden {
 		t.Fatalf("MCP token on the data stream: %d", code)
 	}
-	code, body := r.api(secret, "/api/v1/analyses")
+	code, body := r.api(secret, "/data/v1/analyses")
 	if code != 200 || !strings.Contains(body, `"title": "Night watch"`) || !strings.Contains(body, `"state": "idle"`) {
 		t.Fatalf("analyses: %d %s", code, body)
 	}
-	aPath := "/api/v1/analyses/" + strconv.FormatInt(a.ID, 10)
+	aPath := "/data/v1/analyses/" + strconv.FormatInt(a.ID, 10)
 	if code, _ := r.api(other, aPath); code != http.StatusNotFound {
 		t.Fatalf("someone else's analysis: %d", code)
 	}
@@ -149,7 +149,7 @@ func TestTokensAndDataStream(t *testing.T) {
 		t.Fatal("no end event")
 	}
 
-	code, body = r.api(secret, "/api/v1/runs")
+	code, body = r.api(secret, "/data/v1/runs")
 	if code != 200 || !strings.Contains(body, `"number": 1`) {
 		t.Fatalf("runs: %d %s", code, body)
 	}
@@ -165,7 +165,26 @@ func TestTokensAndDataStream(t *testing.T) {
 			}
 		}
 	}
-	if code, _ := r.api(secret, "/api/v1/analyses"); code != http.StatusUnauthorized {
+	if code, _ := r.api(secret, "/data/v1/analyses"); code != http.StatusUnauthorized {
 		t.Fatalf("revoked token: %d", code)
+	}
+}
+
+// The earlier addresses forward: the production web server refuses paths
+// that begin with admin or api.
+func TestRenamedPaths(t *testing.T) {
+	r := newRig(t)
+	c := r.browser()
+	for from, want := range map[string]struct {
+		code int
+		to   string
+	}{
+		"/admin":                              {http.StatusMovedPermanently, "/manage"},
+		"/api/v1/analyses":                    {http.StatusPermanentRedirect, "/data/v1/analyses"},
+		"/api/v1/analyses/3/events?types=a,b": {http.StatusPermanentRedirect, "/data/v1/analyses/3/events?types=a,b"},
+	} {
+		if code, _, hdr := r.get(c, from); code != want.code || hdr.Get("Location") != want.to {
+			t.Fatalf("%s: %d %s", from, code, hdr.Get("Location"))
+		}
 	}
 }
