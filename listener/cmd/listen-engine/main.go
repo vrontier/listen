@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -34,6 +35,8 @@ func main() {
 		allowPrivate = flag.Bool("allow-private", false, "accept stream addresses on private networks (an intranet installation, tests)")
 		allowFiles   = flag.Bool("allow-files", false, "accept file paths as stream inputs, looped in real time (development, tests)")
 	)
+	var allowHosts hostList
+	flag.Var(&allowHosts, "allow-host", "a host or host:port accepted although on a private network (repeatable), e.g. a test server")
 	flag.IntVar(&lim.Streams, "max-streams", lim.Streams, "streams the engine holds at most")
 	flag.IntVar(&lim.AnalysesPerStream, "max-analyses-per-stream", lim.AnalysesPerStream, "analyses per stream at most")
 	flag.IntVar(&lim.RulesPerAnalysis, "max-rules", lim.RulesPerAnalysis, "filter rules per analysis at most")
@@ -44,7 +47,7 @@ func main() {
 
 	e, err := engine.New(engine.Options{
 		MemoryDir: *memDir, StateFile: *stateFile, FFmpeg: *ffmpeg,
-		AllowPrivate: *allowPrivate, AllowFiles: *allowFiles, Limits: lim,
+		AllowPrivate: *allowPrivate, AllowFiles: *allowFiles, AllowHosts: allowHosts, Limits: lim,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -98,3 +101,8 @@ func main() {
 		os.Remove(*socket)
 	}
 }
+
+type hostList []string
+
+func (h *hostList) String() string     { return strings.Join(*h, ",") }
+func (h *hostList) Set(v string) error { *h = append(*h, v); return nil }

@@ -64,6 +64,16 @@ func TestAddressPolicy(t *testing.T) {
 			t.Errorf("%s: got %q, want %q", c.in, code, c.want)
 		}
 	}
+	// A host the operator allows passes, private or not; others stay refused.
+	q := newAddressPolicy(false, false, "127.0.0.1:8013")
+	q.own = p.own
+	if pr, _ := q.check(context.Background(), "http://127.0.0.1:8013/test.ogg"); pr != nil {
+		t.Errorf("allowed host refused: %v", pr)
+	}
+	if pr, _ := q.check(context.Background(), "http://127.0.0.1:8080/live"); pr == nil {
+		t.Errorf("other port of an allowed host accepted")
+	}
+
 	// Without a lookup (resuming), a name passes; addresses are still checked.
 	if pr := p.checkStatic("http://unknown.example/s"); pr != nil {
 		t.Errorf("static check of a name: %v", pr)

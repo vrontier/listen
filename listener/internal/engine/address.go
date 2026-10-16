@@ -17,15 +17,20 @@ const protocolWhitelist = "http,https,tcp,tls,crypto"
 
 // addressPolicy decides which stream addresses the engine connects to.
 type addressPolicy struct {
-	allowPrivate bool // intranet installations and tests
-	allowFiles   bool // development and tests
+	allowPrivate bool            // intranet installations and tests
+	allowFiles   bool            // development and tests
+	allowHosts   map[string]bool // host or host:port the operator allows, private or not
 	resolve      func(ctx context.Context, host string) ([]netip.Addr, error)
 	own          func() []netip.Addr
 }
 
-func newAddressPolicy(allowPrivate, allowFiles bool) *addressPolicy {
+func newAddressPolicy(allowPrivate, allowFiles bool, allowHosts ...string) *addressPolicy {
+	hosts := map[string]bool{}
+	for _, h := range allowHosts {
+		hosts[strings.ToLower(h)] = true
+	}
 	return &addressPolicy{
-		allowPrivate: allowPrivate, allowFiles: allowFiles,
+		allowPrivate: allowPrivate, allowFiles: allowFiles, allowHosts: hosts,
 		resolve: func(ctx context.Context, host string) ([]netip.Addr, error) {
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 		},
@@ -70,7 +75,7 @@ func (p *addressPolicy) checkWith(ctx context.Context, input string, resolve boo
 	if u.User != nil {
 		return &Problem{Code: "bad_address", Message: "addresses with a user name or password are not allowed"}, nil
 	}
-	if p.allowPrivate {
+	if p.allowPrivate || p.allowHosts[strings.ToLower(u.Host)] || p.allowHosts[strings.ToLower(host)] {
 		return nil, nil
 	}
 	var addrs []netip.Addr

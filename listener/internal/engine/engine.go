@@ -22,8 +22,9 @@ type Options struct {
 	MemoryDir    string // memories: <dir>/<stream>/<analysis>/<key>/
 	StateFile    string // the configuration last given; "" keeps none
 	FFmpeg       string
-	AllowPrivate bool // accept stream addresses on private networks (intranet, tests)
-	AllowFiles   bool // accept file paths as inputs (development, tests)
+	AllowPrivate bool     // accept stream addresses on private networks (intranet, tests)
+	AllowFiles   bool     // accept file paths as inputs (development, tests)
+	AllowHosts   []string // hosts (or host:port) accepted although private, e.g. a test server
 	Limits       Limits
 	Version      string
 }
@@ -75,7 +76,7 @@ func New(opts Options) (*Engine, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	e := &Engine{
 		opts: opts, instance: hex.EncodeToString(b), started: time.Now().UTC(),
-		policy: newAddressPolicy(opts.AllowPrivate, opts.AllowFiles),
+		policy: newAddressPolicy(opts.AllowPrivate, opts.AllowFiles, opts.AllowHosts...),
 		ctx:    ctx, cancel: cancel, probes: newProbeGate(),
 		streams: map[string]*stream{}, watch: map[chan change]struct{}{},
 	}
