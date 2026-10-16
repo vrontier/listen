@@ -839,3 +839,29 @@ func TestTestHookFailsAnAnalysis(t *testing.T) {
 		t.Errorf("fail route without hooks: %d", st)
 	}
 }
+
+func TestFirstUsageWindowIsReported(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	writeWAV(t, filepath.Join(dir, "ok.wav"), 22050, 30)
+	_, host := serveFiles(t, dir, "audio/wav")
+	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), AllowHosts: []string{host}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(e.Caller(DefaultCaller).Handler())
+	defer func() { e.Close(); srv.Close() }()
+	c := client{t, srv.URL}
+	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: "http://" + host + "/ok.wav", SampleRate: 22050, Mode: Continuous}, nil)
+	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{}, nil)
+	waitFor(t, "data to arrive", func() bool { return e.source("http://"+host+"/ok.wav").bytes.Load() > 0 })
+
+	// One measurement only: a source seen for the first time is reported
+	// over its own age instead of being left out.
+	e.meter.measure()
+	var sv StreamView
+	c.do("GET", "/v1/streams/s-1", nil, &sv)
+	if sv.Usage.InKbps <= 0 || sv.Usage.InMeasured == nil || !*sv.Usage.InMeasured {
+		t.Errorf("first window: %+v", sv.Usage)
+	}
+}

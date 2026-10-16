@@ -19,9 +19,10 @@ import (
 // and one front end, whoever asked for it. The streams of all callers that
 // name the address attach to it; it connects while any of them wants it.
 type sourceConn struct {
-	e     *Engine
-	input string
-	rate  int
+	e       *Engine
+	input   string
+	rate    int
+	created time.Time
 
 	mu         sync.Mutex
 	streams    map[*stream]struct{}
@@ -44,6 +45,7 @@ type sourceConn struct {
 	lastData atomic.Int64              // UnixNano of the latest samples
 	delay    atomic.Int64              // ms between observation and now
 	pid      atomic.Int64              // ffmpeg, 0 when not running
+	pidStart atomic.Int64              // UnixNano when that ffmpeg started
 	bytes    atomic.Int64              // bytes received, all connections
 	connBase atomic.Int64              // bytes before the running connection
 	connAt   atomic.Int64              // timeline when it started
@@ -56,7 +58,7 @@ type sourceConn struct {
 
 func newSource(e *Engine, input string, rate int) *sourceConn {
 	s := &sourceConn{
-		e: e, input: input, rate: rate, streams: map[*stream]struct{}{},
+		e: e, input: input, rate: rate, created: time.Now(), streams: map[*stream]struct{}{},
 		state: StateIdle, since: time.Now().UTC(), quit: make(chan struct{}), supDone: make(chan struct{}),
 		fe: analysis.NewFrontEnd(rate, nil, true),
 	}
@@ -200,7 +202,12 @@ func (s *sourceConn) startSource(retryMax time.Duration) {
 			}
 			return nil
 		},
-		OnProcess: func(pid int) { s.pid.Store(int64(pid)) },
+		OnProcess: func(pid int) {
+			if pid > 0 {
+				s.pidStart.Store(time.Now().UnixNano())
+			}
+			s.pid.Store(int64(pid))
+		},
 	}
 	if isURL(s.input) {
 		// The engine connects, every time, and counts what arrives.

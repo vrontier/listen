@@ -48,6 +48,15 @@ func (m *meter) measure() {
 		wall = time.Millisecond
 	}
 	pct := func(d time.Duration) float64 { return round(100*float64(d)/float64(wall), 1) }
+	// Something new since the last measurement counts from zero over its
+	// own age, so that its first window is reported too.
+	since := func(start time.Time) time.Duration {
+		if w := now.Sub(start); w > 0 && w < wall {
+			return w
+		}
+		return wall
+	}
+	pctOver := func(d, w time.Duration) float64 { return round(100*float64(d)/float64(w), 1) }
 
 	self := selfCPU()
 	total := Usage{CPUPercent: pct(self - m.selfCPU), MemoryMB: round(selfMemMB(), 1)}
@@ -60,24 +69,30 @@ func (m *meter) measure() {
 		measured := isURL(src.input)
 		u := Usage{InMeasured: &measured}
 		ib := src.bytes.Load()
-		if prev, ok := m.inBytes[src]; ok && measured {
-			u.InKbps = round(float64(ib-prev)*8/wall.Seconds()/1000, 1)
+		prevB, seen := m.inBytes[src]
+		w := wall
+		if !seen {
+			w = since(src.created)
+		}
+		if measured {
+			u.InKbps = round(float64(ib-prevB)*8/w.Seconds()/1000, 1)
 			total.InKbps += u.InKbps
 		}
 		inBytes[src] = ib
 		// The source's cost: its front end (inside the engine) and its
 		// ffmpeg (a process of its own).
 		fb := src.feBusyNs.Load()
-		if prev, ok := m.feBusy[src]; ok {
-			u.CPUPercent = pct(time.Duration(fb - prev))
-		}
+		u.CPUPercent = pctOver(time.Duration(fb-m.feBusy[src]), w)
 		feBusy[src] = fb
 		if pid := src.pid.Load(); pid > 0 {
 			if cpu, rss, ok := procStat(int(pid)); ok {
-				if prev, ok := m.procCPU[pid]; ok {
-					u.CPUPercent = round(u.CPUPercent+pct(cpu-prev), 1)
-					total.CPUPercent += pct(cpu - prev)
+				prev, ok := m.procCPU[pid]
+				pw := wall
+				if !ok {
+					pw = since(time.Unix(0, src.pidStart.Load())) // a new ffmpeg: its CPU time started at 0
 				}
+				u.CPUPercent = round(u.CPUPercent+pctOver(cpu-prev, pw), 1)
+				total.CPUPercent += pctOver(cpu-prev, pw)
 				procs[pid] = cpu
 				u.MemoryMB = round(rss, 1)
 				total.MemoryMB += u.MemoryMB
@@ -106,9 +121,12 @@ func (m *meter) measure() {
 			for _, r := range runs {
 				b := r.busyNs.Load()
 				ru := Usage{MemoryEstimated: true}
-				if prev, ok := m.runBusy[r]; ok {
-					ru.CPUPercent = pct(time.Duration(b - prev))
+				prev, ok := m.runBusy[r]
+				rw := wall
+				if !ok {
+					rw = since(r.started)
 				}
+				ru.CPUPercent = pctOver(time.Duration(b-prev), rw)
 				busy[r] = b
 				ru.MemoryMB = round(r.memoryEstimate(), 1)
 				r.mu.Lock()
