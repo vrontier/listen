@@ -306,7 +306,7 @@ func bars(samples []catalogue.UsageSample, end time.Time, slot time.Duration, n 
 	for i, v := range sums {
 		h := v * scale
 		t := start.Add(slot * time.Duration(i)).UTC()
-		axis, month := t.Format("02"), t.Format("01")
+		axis, month := t.Format("02"), t.Format("Jan")
 		if slot < 24*time.Hour {
 			axis, month = "now", ""
 			if back := n - 1 - i; back > 0 {

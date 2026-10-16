@@ -184,3 +184,4 @@ pre code { background: none; padding: 0; overflow-wrap: normal; }
 .space-key .space-mem { background: var(--warn); }
 .space-key .space-free { background: var(--surface); }
 .space-warn .space-data { background: var(--bad); }
+.nowrap { white-space: nowrap; }

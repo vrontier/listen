@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -44,7 +45,7 @@ func TestResults(t *testing.T) {
 	member := r.loginAs("m@example.org")
 	_, page, _ := r.get(member, "/results")
 	csrf := csrfOf(t, page)
-	for _, want := range []string{"Your space", "of 512.0 MB used", runURL + "/all.zip", "Hum watch", "Last 30 days", ">now<", ">-23<", "<br>-<br>" + time.Now().UTC().Format("01") + "</span>"} {
+	for _, want := range []string{"Your space", "of 512.0 MB used", runURL + "/all.zip", "Hum watch", "Last 30 days", ">now<", ">-23<", "<br>" + time.Now().UTC().Format("Jan") + "</span>"} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("results page lacks %q", want)
 		}
@@ -57,6 +58,16 @@ func TestResults(t *testing.T) {
 	}
 	if code, _, hdr := r.get(member, "/account/usage"); code != http.StatusMovedPermanently || hdr.Get("Location") != "/results" {
 		t.Fatalf("old usage address: %d", code)
+	}
+
+	// The run's page offers the zip, and gives the single files' sizes as
+	// they download, uncompressed.
+	if _, page, _ := r.get(member, runURL); !strings.Contains(page, `href="`+runURL+`/all.zip"`) || strings.Contains(page, "Size, compressed") {
+		t.Fatal("run page: no zip, or sizes still called compressed")
+	}
+	_, events, _ := r.get(member, runURL+"/events.csv")
+	if n, err := gzSize(filepath.Join(r.srv.data.runDir(run.ID), "events.csv.gz")); err != nil || n != int64(len(events)) {
+		t.Fatalf("events.csv: %d bytes downloaded, %d shown (%v)", len(events), n, err)
 	}
 
 	// All files in one archive.

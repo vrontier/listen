@@ -32,10 +32,13 @@
   <p class="meta">None: {{.Run.DatasetNote}}.</p>
   {{else}}
   <table>
-    <thead><tr><th>File</th><th>Size, compressed</th><th>Content</th></tr></thead>
-    <tbody>{{range .Files}}<tr><td><a href="/runs/{{$d.Run.ID}}/{{.Name}}">{{.Name}}</a></td><td>{{bytes .Bytes}}</td><td class="meta">{{.About}}</td></tr>{{end}}</tbody>
+    <thead><tr><th>File</th><th>Size</th><th>Content</th></tr></thead>
+    <tbody>
+      <tr><td class="nowrap"><a href="/runs/{{$d.Run.ID}}/all.zip">all.zip</a></td><td class="nowrap">about {{bytes .Packed}}</td><td class="meta">the files below together, compressed in one zip archive</td></tr>
+      {{range .Files}}<tr><td class="nowrap"><a href="/runs/{{$d.Run.ID}}/{{.Name}}">{{.Name}}</a></td><td class="nowrap">{{bytes .Bytes}}</td><td class="meta">{{.About}}</td></tr>{{end}}
+    </tbody>
   </table>
-  <p class="meta">Times are UTC, wall time at the engine. Data sets and the analyses' memories count against your disk quota: {{bytes .Used}} of {{bytes .Quota}} used.</p>
+  <p class="meta">Times are UTC, wall time at the engine. The single files download uncompressed, at the size shown. The data set is kept compressed, at {{bytes .Run.DatasetBytes}}, and counts so against your disk quota: {{bytes .Used}} of {{bytes .Quota}} used, see <a href="/results">Results</a>.</p>
 
   <h3>What it holds</h3>
   <table>

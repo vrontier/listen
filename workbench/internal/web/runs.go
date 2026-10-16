@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -286,8 +288,28 @@ type runPageData struct {
 	Summary  datasetSummary
 	Pairs    []pairSummary
 	Files    []runFileView
+	Packed   int64 // the files compressed, about the size of the zip
 	Used     int64 // the member's data sets together
 	Quota    int64
+}
+
+// gzSize reads the size of a gzip file's content from its trailer, which
+// holds it modulo 4 GiB; data sets stay far below that.
+func gzSize(path string) (int64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	var b [4]byte
+	st, err := f.Stat()
+	if err != nil || st.Size() < 18 {
+		return 0, fmt.Errorf("%s: not a gzip file", path)
+	}
+	if _, err := f.ReadAt(b[:], st.Size()-4); err != nil {
+		return 0, err
+	}
+	return int64(binary.LittleEndian.Uint32(b[:])), nil
 }
 
 type runFileView struct {
@@ -344,6 +366,10 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, f := range []string{fileJSON, fileEvents, fileCompare} {
 		if n, ok := d.Summary.Files[f]; ok {
+			d.Packed += n
+			if run.Dataset == catalogue.DatasetReady {
+				n, _ = gzSize(filepath.Join(s.data.runDir(run.ID), f+".gz"))
+			}
 			d.Files = append(d.Files, runFileView{Name: f, Bytes: n, About: about[f]})
 		}
 	}

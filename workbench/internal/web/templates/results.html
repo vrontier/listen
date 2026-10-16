@@ -76,7 +76,7 @@
   <p class="meta">CPU per hour, on average, counted in hours back from now (UTC); the highest bar is {{cores .DayMax}} cores. Hover over a bar for its hour.</p>
   <h2>Last 30 days</h2>
   <svg class="usage-bars" viewBox="0 0 600 100" preserveAspectRatio="none" role="img" aria-label="CPU per day over the last 30 days">{{range .Month}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Title}}</title></rect>{{end}}</svg>
-  <div class="usage-axis" aria-hidden="true">{{range .Month}}<span>{{.Axis}}<br>-<br>{{.Month}}</span>{{end}}</div>
+  <div class="usage-axis" aria-hidden="true">{{range .Month}}<span>{{.Axis}}<br>{{.Month}}</span>{{end}}</div>
   <p class="meta">CPU per day, on average, labelled with the day and, below it, the month (UTC); the highest bar is {{cores .MonthMax}} cores.</p>
 </section>
 {{end}}
