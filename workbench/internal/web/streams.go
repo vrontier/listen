@@ -218,6 +218,12 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Input = input
+	if s.reserved(input) {
+		d.Errs["input"] = "already analysed by the Listening Observatory"
+		d.Err = "The Listening Observatory listens to this stream already. It can be used here once its operator has agreed to the Workbench, and it then reaches the Workbench through the Observatory's own connection, so that the station is not connected to twice. Until then it cannot be registered."
+		s.render(w, r, 409, "source-new", "Register a source", d)
+		return
+	}
 	for _, in := range []string{input, otherScheme(input)} {
 		if existing, err := s.db.StreamByInput(r.Context(), in); err == nil {
 			d.Existing = &existing
@@ -339,6 +345,7 @@ type consumer struct {
 
 type streamData struct {
 	Stream    catalogue.Stream
+	View      engine.ViewSpec // the view as saved, for the form
 	Engine    engine.Stream
 	InEngine  bool
 	Probe     engine.ProbeResult
@@ -393,6 +400,9 @@ func (s *Server) ownStream(w http.ResponseWriter, r *http.Request) (catalogue.St
 func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, error) {
 	sess, _ := sessionFrom(r)
 	d := streamData{Stream: st, Texts: textsOf(st.Texts), IsOwner: st.OwnerID == sess.User.ID, Errs: map[string]string{}, Publish: s.cfg.Publishing}
+	if d.Stream.View != nil {
+		json.Unmarshal(d.Stream.View, &d.View)
+	}
 	json.Unmarshal(st.Probe, &d.Probe)
 	d.Engine, d.InEngine = s.sync.stream(st.EngineID())
 	if d.IsOwner {

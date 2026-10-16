@@ -229,7 +229,7 @@ func (e *Engine) getChanges(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(200)
-	writeSSE(w, "", "engine.hello", map[string]any{"instance": e.instance, "api": map[string]int{"major": apiMajor, "minor": apiMinor}})
+	writeSSE(w, "", "engine.hello", map[string]any{"instance": e.instance, "api": map[string]int{"major": apiMajor, "minor": apiMinor}, "resumed": false})
 	fl.Flush()
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()
@@ -266,11 +266,59 @@ func writeSSE(w io.Writer, id, typ string, data any) {
 // --- streams ---
 
 type streamSpec struct {
-	Input      string `json:"input"`
-	SampleRate int    `json:"sample_rate"`
-	Mode       string `json:"mode"`
-	IdleAfterS *int   `json:"idle_after_s"`
-	RetryMaxS  *int   `json:"retry_max_s"`
+	Input      string    `json:"input"`
+	SampleRate int       `json:"sample_rate"`
+	Mode       string    `json:"mode"`
+	IdleAfterS *int      `json:"idle_after_s"`
+	RetryMaxS  *int      `json:"retry_max_s"`
+	View       *viewSpec `json:"view"`
+}
+
+type viewSpec struct {
+	Scale string   `json:"scale"`
+	MinHz *float64 `json:"min_hz"`
+	MaxHz *float64 `json:"max_hz"`
+	Bands *int     `json:"bands"`
+}
+
+// checkView checks a stream's view against its sample rate and fills in
+// the defaults: linear from 0, log from 20 Hz, up to Nyquist, 240 bands.
+func checkView(v *viewSpec, rate int) (*viewEff, []fieldError) {
+	if v == nil {
+		return nil, nil
+	}
+	var fe []fieldError
+	nyq := float64(rate) / 2
+	eff := &viewEff{Scale: v.Scale, MaxHz: nyq, Bands: 240}
+	switch v.Scale {
+	case "linear":
+	case "log":
+		eff.MinHz = 20
+	default:
+		fe = append(fe, fieldError{Path: "view.scale", Code: "invalid", Message: "linear or log"})
+	}
+	if v.MinHz != nil {
+		eff.MinHz = *v.MinHz
+	}
+	if v.MaxHz != nil {
+		eff.MaxHz = *v.MaxHz
+	}
+	if v.Bands != nil {
+		eff.Bands = *v.Bands
+	}
+	if eff.MinHz < 0 || v.Scale == "log" && eff.MinHz <= 0 {
+		fe = append(fe, fieldError{Path: "view.min_hz", Code: "out_of_range", Message: "must be at least 0 Hz, and above 0 Hz on a log scale"})
+	}
+	if eff.MaxHz > nyq {
+		fe = append(fe, fieldError{Path: "view.max_hz", Code: "out_of_range", Message: fmt.Sprintf("must be at most %g Hz, half the sample rate", nyq)})
+	}
+	if eff.MaxHz <= eff.MinHz {
+		fe = append(fe, fieldError{Path: "view.max_hz", Code: "out_of_range", Message: "must be above min_hz"})
+	}
+	if eff.Bands < 16 || eff.Bands > 1024 {
+		fe = append(fe, fieldError{Path: "view.bands", Code: "out_of_range", Message: "must be between 16 and 1024"})
+	}
+	return eff, fe
 }
 
 func (e *Engine) listStreams(w http.ResponseWriter, r *http.Request) {
@@ -336,6 +384,8 @@ func (e *Engine) putStream(w http.ResponseWriter, r *http.Request) {
 	if retry < 1 || retry > 3600 {
 		fe = append(fe, fieldError{Path: "retry_max_s", Code: "out_of_range", Message: "must be between 1 and 3600"})
 	}
+	view, vfe := checkView(spec.View, spec.SampleRate)
+	fe = append(fe, vfe...)
 	if fe != nil {
 		writeErr(w, &apiError{status: 422, code: "invalid", message: "the stream was refused", errors: fe})
 		return
@@ -361,6 +411,7 @@ func (e *Engine) putStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mode, s.idleAfter, s.retryMax = spec.Mode, idle, retry
+	s.viewEff = view // changeable on a running stream
 	s.update(time.Now())
 	writeJSON(w, 200, s.view(true))
 }

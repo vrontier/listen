@@ -1,8 +1,8 @@
 # Control API between the Workbench and the engine process
 
-Status: draft (2026-10-13), with additions for the maintainer's answers of 2026-10-14 and corrections from a reading of the engine's code on 2026-10-14. Nothing here is built. API version described: **1.0**.
+Status: agreed (2026-10-16). Draft of 2026-10-13, with additions for the maintainer's answers of 2026-10-14, read against the engine's code by the engine's owner in the listen repository on 2026-10-16, whose answers and the maintainer's decisions on them are worked in. The engine is not built yet; the Workbench is built to this against a stand-in. API version described: **1.0**, groups as **1.1**.
 
-Everything in this document is **proposed**. It becomes stable only after it has been read against the engine's code in the listen repository (see [design.md](design.md#questions-and-answers), question 4, decided). Points that are still **open** are collected at the end.
+The reading against the code that [design.md](design.md#questions-and-answers) (question 4, decided) asked for has been done: the table [For the engine session](#for-the-engine-session) was found correct. **Decided** (2026-10-16, the maintainer): the engine owner's four changes to this contract, marked where they are. **Decided (engine)** marks choices inside the engine that its owner made. The rest of the detail stays **proposed** until the engine answers to it; the [conformance test](#conformance-test) checks that it does. The answers to the earlier open points are at the end.
 
 This is the contract for step 0 of the [order of work](design.md#order-of-work). The engine process is built to it in the listen repository; the Workbench is built to it here, at first against a stand-in.
 
@@ -20,7 +20,7 @@ Not part of version 1.0: audio (relay and captures), the language-model interpre
 
 ## Transport
 
-- **HTTP/1.1 over a Unix domain socket**, with JSON bodies in UTF-8. The path of the socket is a setting of both programs, for example `/run/listen-engine/control.sock`.
+- **HTTP/1.1 over a Unix domain socket**, with JSON bodies in UTF-8. The path of the socket is a setting of both programs. **Decided (engine)** (2026-10-16): the engine is the command `listen-engine` in the listen repository, its socket `/run/listen-engine/control.sock`, its user and group `listen-engine`, its memories under `/var/lib/listen-engine/memory/<stream>/<analysis>/<key>/`, apart from the Observatory's user and directories.
 - **Access is the socket's file permission.** The socket belongs to the engine's user and to a group that the Workbench's user is in, with mode 0660. There is no other authentication. The engine never offers this API on a network address. For development on one machine it may offer it on a loopback port, switched on by a flag.
 - **Every path starts with `/v1`.** The 1 is the first number of the API version.
 - **Times** are RFC 3339 in UTC. **Durations** are numbers of seconds, in fields ending in `_s`. **Frequencies** are in Hz, in fields ending in `_hz`.
@@ -55,7 +55,7 @@ engine
 ```
 
 - **Terms.** An "analysis" here is the engine's analysis of one stream. A Workbench analysis with n sources is put into the engine as n such analyses, one per source with its settings, all with the same identifier, and from two sources on as one group over them ([design.md](design.md#analyses-and-sources)).
-- **The Workbench holds the truth.** The engine keeps no configuration across a restart. It keeps the memories on disk, under the identifiers it was given.
+- **The Workbench holds the truth.** **Decided** (2026-10-16): the engine resumes the configuration it was last given (streams, analyses, groups; never a language-model key), saved after every accepted change, so a continuous run goes on after an engine restart even while the Workbench is down. The Workbench still lists, puts and deletes after every new `instance`, as below. The engine keeps the memories on disk, under the identifiers it was given.
 - **Every change is a `PUT` of the whole object**, and sending the same object twice changes nothing. The Workbench can therefore repeat any request it is unsure about.
 - **After a restart of either side** the Workbench lists what the engine has, puts what is missing or different, and deletes what should not be there. `GET /v1/engine` returns an `instance` value that changes with every start of the engine, so the Workbench can tell a restart from a short break in the connection.
 - **A change takes effect within 2 seconds.** A `PUT` returns as soon as the engine has accepted it, with the object's current state, which for a new stream is usually `connecting` or `idle`.
@@ -141,9 +141,10 @@ engine
 | `mode` | no, default `on_demand` | `continuous`: connected for as long as the stream exists. `on_demand`: connected only while an analysis of it has a subscriber. |
 | `idle_after_s` | no, default 30 | `on_demand` only: how long after the last subscriber left the connection is closed. |
 | `retry_max_s` | no, default 300 | The longest wait between attempts to reach a stream that keeps failing. The wait doubles from 1 second. |
+| `view` | no | The stream's spectrogram view, **decided** (2026-10-16): `{"scale": "linear" \| "log", "min_hz", "max_hz", "bands"}`. Bands of the stream's own, unfiltered and independent of any analysis's range, each band taking the strongest bin in it, computed once per stream. Defaults: `min_hz` 0 (linear) or 20 (log), `max_hz` half the sample rate, `bands` 240. Refused fields are reported with paths `view.scale`, `view.min_hz`, `view.max_hz`, `view.bands`. |
 
 - `input` and `sample_rate` cannot be changed on an existing stream (`409`, code `immutable`). A different address or rate is a different stream with a new identifier, because memories made from one do not compare with the other.
-- `mode`, `idle_after_s` and `retry_max_s` can be changed at any time without interrupting the connection.
+- `mode`, `idle_after_s`, `retry_max_s` and `view` can be changed at any time without interrupting the connection. With `view` set, every `signal.spectrum` of every analysis of the stream carries `payload.view` (`min_hz`, `max_hz`, `scale`, `bands`) next to the analysis's own bands, which do not change; the stream's response reports `view` with its effective values.
 - A stream without analyses holds no connection, whatever its mode.
 - The engine connects to an address once, however many analyses and subscribers there are. It refuses a second stream with the same `input` (`409`, code `duplicate_input`, with the existing stream's identifier). Addresses are compared as written; recognising two spellings of one stream is the Workbench's task.
 
@@ -201,9 +202,10 @@ The engine, not the Workbench, enforces what may be connected to, because only t
 
 - Only `http` and `https`.
 - Not a loopback, private or link-local address, and not one of the server's own. The check is made on the address actually connected to, at the first connection, at every redirect and at every reconnect.
+- **Decided (engine)** (2026-10-16), from the first version: ffmpeg runs with its protocols limited to what HTTP and HTTPS need, so neither an address nor a redirect reaches a file or another protocol; before every start of ffmpeg (the first connection and every reconnect the engine makes) the host is resolved and refused if any of its addresses is loopback, private, link-local, multicast, unspecified or the server's own; the probe makes the same check. That is `"address_check": "initial"`.
 - A refusal sets the state `refused` with `last_error.code` `address_not_allowed` or `protocol_not_allowed`.
 
-**This needs an engine change.** Today ffmpeg opens the connection and follows redirects by itself. Until the engine opens the HTTP connection itself, it can only check the address as given, and `GET /v1/engine` reports `"address_check": "initial"` instead of `"every_connection"` under `capabilities`.
+**The rest needs an engine change** (the engine's phase 4). ffmpeg follows redirects and reconnects inside a connection by itself. Until the engine opens the HTTP connection itself, those are not checked, and `GET /v1/engine` reports `"address_check": "initial"` instead of `"every_connection"` under `capabilities`.
 
 ## Analyses
 
@@ -290,7 +292,7 @@ This is the listener's `-ignore` syntax as an object. The engine returns each ru
 ```
 
 - `effective` is what the analysis really works with after defaults. It matters to a researcher: without a range, peaks are searched only in the lower part of the spectrum (from 40 Hz to about 27 % of the sample rate), and the width of a bin sets how close two tones can lie and still be told apart.
-- `state` is `running` while the stream is connected and `idle` otherwise.
+- `state` is `running` while the stream is connected and `idle` otherwise, or `failed`. **Decided** (2026-10-16): each analysis runs on its own and catches its own crash; it then stops with the state `failed` and a `last_error` (`code`, `message`, `at`) as for a stream, while its stream and the other analyses go on. A `PUT` of the same analysis starts it again. `last_error` is `null` otherwise.
 
 ### What a change does
 
@@ -442,8 +444,8 @@ A page that opens fetches `…/state` and then follows `…/events`, as the Obse
 | Event | Sent when | Data |
 |---|---|---|
 | `stream.state` | a stream changes state, or is deleted | the stream as in `GET /v1/streams/{stream}`, without its `input`; after a `DELETE` only `id` and `"deleted": true` |
-| `analysis.state` | an analysis starts, stops or switches memory | the analysis's identifiers, `state`, `memory.key` |
-| `engine.hello` | first event of every connection | `instance` and `api`, as in `GET /v1/engine` |
+| `analysis.state` | an analysis starts, stops, fails or switches memory | the analysis's identifiers, `state`, `memory.key`, and `last_error` when it failed |
+| `engine.hello` | first event of every connection | `instance` and `api`, as in `GET /v1/engine`, and `resumed` (**decided** 2026-10-16): `true` when the engine started from its saved configuration |
 | `usage` | every 10 seconds | `usage` of the engine, of every connected stream and of every running analysis, see [Usage](#usage) |
 
 After connecting, the Workbench reads `engine.hello`, lists the streams once and from then on follows the events. If the `instance` has changed, it sends its whole wanted state again.
@@ -580,8 +582,9 @@ Not in version 1. Named here so that version 1 does not block them.
 
 | Later feature | Where it attaches |
 |---|---|
+| A local input | **decided** in principle (2026-10-16), not before the engine's phase 2: for a stream the Observatory already decodes, its listener passes its decoded, unfiltered samples to the engine over a local socket, so the station is connected to once. A stream input such as `local:<name>`, accepted only for names the engine's operator configured, never from a member, and only after the stream's operator agreed to the Workbench (no answer is no). The stream then has the Observatory's sample rate and depends on its listener. Until then the Workbench refuses to register addresses the Observatory listens to, from a list set on the server |
 | Defined motifs and profiles | a `definitions` list in an analysis; `capabilities.detectors` with each detector's parameters and ranges; a new event type |
-| Trial runs on a capture | a resource for captures under a stream, and a way to run an analysis over one without touching its live memory. A trial on the live stream needs nothing new: see [Open](#open), point 3 |
+| Trial runs on a capture | a resource for captures under a stream, and a way to run an analysis over one without touching its live memory. A trial on the live stream needs nothing new: see [Open](#answers-to-the-open-points), point 3 |
 | Audio in the browser | allowed (decided 2026-10-14). A field `audio` on a stream and a data path for the encoded audio; the stream's `position_s` already allows lining events up with it. The engine's existing relay is the starting point. Its encoder's CPU and the outgoing bandwidth belong in [Usage](#usage) |
 | Interpretation by a language model | decided to run for member analyses (2026-10-14), through the OpenAI and the Anthropic API, with the member's own API key. A setting of an analysis that carries provider, model and key; the engine keeps the key in memory only, never writes it to disk or logs, and never returns it in a response (`GET` shows only that a key is set). The engine would need to be told whether a person is watching: today it counts browser connections apart from programs (`?role=tool`), but under this API it sees one subscription by the Workbench. Proposed: the Workbench reports the number of people watching each analysis with a small `PUT`. Today's narrator speaks the OpenAI format only |
 
@@ -617,15 +620,31 @@ What this spec asks of the engine, against what exists in the listener today.
 
 The paths the Observatory's site uses today (`/<slug>/ws/live` and the others) are not part of this API. Whether the engine process also serves them is a question for the day the Observatory moves onto it.
 
-## Open
+## Conformance test
 
-1. **Should the engine remember its configuration across a restart?** Proposed here: no, the Workbench sends it again. The price: if the engine restarts while the Workbench is down, nothing is listened to until the Workbench is back, which leaves a gap in a continuous stream's memory.
-2. **Two callers on one engine.** If the Observatory's streams ever run in the same engine process, something other than the Workbench configures them. The Workbench's "delete what should not be there" after a restart would then remove them. Version 1 assumes one caller. A second caller would need a namespace per caller. Since 2026-10-14 the Workbench starts with members' streams only (decided), so this can wait.
-3. **Trial mode.** Decided on 2026-10-14 that there is one. Proposed: a trial is an ordinary analysis with its own identifier and `memory.mode` `ram`, `PUT` next to the analysis it tries a change for and deleted afterwards. It learns motifs as the real one would, so the member sees what the change does to them, and writes nothing to disk. That needs nothing new in this API, but it counts against `analyses_per_stream`, so that limit has to leave room for trials.
-4. **Does one more analysis cost a whole spectrum?** Today each analysis computes its own. Sharing it between the analyses of a stream would make an analysis much cheaper and would not change this API. The limit `analyses_per_stream` depends on the answer and should be set from a measurement, which [Usage](#usage) now provides.
-5. **Limits on the size of a memory** are not in this spec. A disk quota of 0.5 GB per member is decided (2026-10-14); the Workbench enforces it from the sizes under `…/memories`. Open: what happens to a running analysis whose member is over quota. If it should stop writing history, the engine needs a setting for that.
-6. **Server-Sent Events between the two processes** are proposed because they need no library on either side. The engine speaks WebSocket today. If keeping WebSocket there is much less work, only the transport of `…/events` changes.
-7. **The identifiers in `source`.** Events reach browsers and token holders with the catalogue's internal identifiers in them. If that is unwanted, the Workbench has to rewrite every event, which costs.
-8. **Feeding the analyses.** The listener hands samples to its analysis in the goroutine that reads ffmpeg's output. With several analyses fed one after the other there, one slow analysis delays the others and, in the end, ffmpeg. Whether each analysis gets its own goroutine with a short queue is the engine session's choice; it does not change this API.
-9. **Sharing the spectrum** (point 4) needs the analyses of a stream to step through the audio on the same grid of 1/20 s. An analysis added later has to join that grid, which the stream's timeline above makes possible.
-10. **Where the group service runs.** **Decided** (2026-10-15, design.md question 24): inside the engine process, which already holds every analysis's events, as a module of its own; the listen repository's draft had a separate process. The API above is the same either way.
+**Built** (2026-10-16): `internal/conformance` in this repository, with the command `cmd/engine-check`, runs this contract's requests against any engine and reports what passes, phase by phase of the engine's plan (1: one process, many streams; 2: several analyses per stream, trials, usage, the view; 3: groups). The Workbench's tests run it against the stand-in, so the two cannot drift apart. The engine's owner runs it against the engine, from a checkout of this repository:
+
+```text
+go run ./cmd/engine-check -engine /run/listen-engine/control.sock -input <a stream address the engine may reach> -phase 1
+```
+
+The failure of an analysis cannot be provoked from outside; that check runs against the stand-in only.
+
+## Answers to the open points
+
+The open points of the draft, answered by the engine's owner on 2026-10-16; where they change the contract, the maintainer accepted them (**decided**, 2026-10-16).
+
+| Open point | Answer |
+|---|---|
+| 1. Configuration across a restart | The engine resumes the configuration it was last given; the Workbench still holds the truth (see [The model](#the-model)). |
+| 2. Two callers on one engine | Not needed. **Decided (engine)**: the Observatory stays on its own listeners, so a fault or load in the Workbench cannot take down the public site; the control API keeps one caller. A stream both use reaches the engine later through a local input (see [Reserved](#reserved)). |
+| 3. Trial mode | As proposed: an ordinary analysis with memory mode `ram`. |
+| 4. One spectrum per analysis | No. **Decided (engine)**: from the engine's phase 2, the decode and the spectrum run once per stream, and every analysis gets each frame through its own short queue. `limits.analyses_per_stream` is set from a measurement afterwards. |
+| 5. Memory over quota | No new setting: the Workbench switches the analysis to memory mode `ram` or deletes it. |
+| 6. Server-Sent Events or WebSocket | Server-Sent Events. |
+| 7. Identifiers in `source` | The engine uses the identifiers it is given. The Workbench's (`s-0001`, `a-0001`) carry nothing about a member. |
+| 8. Feeding the analyses | One goroutine per analysis with a short queue; a full queue drops frames for that analysis only and counts them in its status. |
+| 9. A common grid | Given by the one spectrum per stream (point 4); `position_s` on the stream's timeline comes with it. |
+| 10. Where the group service runs | Inside the engine process, as a module of its own (decided 2026-10-15). |
+
+Nothing is open between the two sides at present. The engine's plan, with the owner's answers in full, is kept with the engine.

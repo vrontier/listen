@@ -57,6 +57,9 @@ type Config struct {
 	// (the default), the page and its menu entry are gone; keys saved
 	// before stay sealed in the catalogue (in the backlog, 2026-10-16).
 	LLMKeys bool
+	// Reserved are addresses the Observatory listens to, which members
+	// cannot register (reserved.go).
+	Reserved []string
 }
 
 // Server is the Workbench's web side.
@@ -105,6 +108,7 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 	s.sync.onState = s.data.noteState
 	s.acct = newAccounting(s)
 	s.sync.onUsage = s.acct.report
+	s.sync.onFailed = s.analysisFailed
 	if err := s.parseTemplates(); err != nil {
 		return nil, err
 	}
@@ -191,6 +195,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /sources/{slug}", s.member(s.streamPage))
 	m.HandleFunc("POST /sources/{slug}", s.member(s.streamEdit))
 	m.HandleFunc("POST /sources/{slug}/state", s.member(s.streamState))
+	m.HandleFunc("POST /sources/{slug}/view", s.member(s.streamView))
 	m.HandleFunc("POST /sources/{slug}/delete", s.member(s.streamDelete))
 	m.HandleFunc("POST /sources/{slug}/share", s.member(s.streamShare))
 	m.HandleFunc("POST /sources/{slug}/unshare", s.member(s.streamUnshare))
@@ -204,6 +209,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /analyses/{id}/delete", s.member(s.analysisDelete))
 	m.HandleFunc("POST /analyses/{id}/run", s.member(s.analysisRunStart))
 	m.HandleFunc("POST /analyses/{id}/stop", s.member(s.analysisRunStop))
+	m.HandleFunc("POST /analyses/{id}/restart", s.member(s.analysisRestart))
 	m.HandleFunc("POST /analyses/{id}/memories/{source}/delete", s.member(s.analysisMemoryDelete))
 	m.HandleFunc("GET /results", s.member(s.resultsPage))
 	m.HandleFunc("POST /results/delete", s.member(s.resultsDelete))
@@ -421,6 +427,7 @@ func (s *Server) parseTemplates() error {
 	funcs["aiPages"] = func() []aiLink { return aiPages }
 	funcs["navItem"] = navItem
 	funcs["instrument"] = instrument
+	funcs["half"] = func(n int) int { return n / 2 }
 	funcs["status"] = statusOf
 	funcs["connWords"] = connWords
 	funcs["brandName"] = func(site string) string { name, _ := strings.CutSuffix(site, " Workbench"); return name }

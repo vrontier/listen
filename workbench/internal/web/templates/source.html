@@ -52,6 +52,24 @@
 </section>
 
 <section>
+  <h2>Spectrogram view</h2>
+  <p class="meta">What the spectrogram of every analysis of this source shows: by default each analysis's own bands, on a log scale over its analysed range and after its filter rules. A view of the source's own shows the whole signal instead, unfiltered, on a linear or log scale over a range you choose, for example 0 to 16 kHz for VLF radio. It is computed once for the source and changes nothing in the analyses.</p>
+  {{if .IsOwner}}
+  <form method="post" action="/sources/{{.Stream.Slug}}/view" class="stack wide-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <div class="row">
+      <label>Scale <select name="view_scale"><option value="">each analysis's bands</option><option value="linear" {{if eq .View.Scale "linear"}}selected{{end}}>linear</option><option value="log" {{if eq .View.Scale "log"}}selected{{end}}>log</option></select></label>
+      <label>Lowest Hz <small>empty: 0, or 20 on a log scale</small><input name="view_min" inputmode="decimal" value="{{with .View.MinHz}}{{.}}{{end}}"></label>
+      <label>Highest Hz <small>empty: half the sample rate, {{half .Stream.SampleRate}} Hz</small><input name="view_max" inputmode="decimal" value="{{with .View.MaxHz}}{{.}}{{end}}"></label>
+      <label>Bands <small>rows; empty: 240</small><input name="view_bands" inputmode="numeric" value="{{with .View.Bands}}{{.}}{{end}}"></label>
+    </div>
+    <button>Save the view</button>
+  </form>
+  {{end}}
+  {{with .Engine.View}}<p class="meta">In effect: {{.Scale}}, {{.MinHz}} to {{.MaxHz}} Hz in {{.Bands}} bands.</p>{{else}}{{if .Stream.View}}<p class="meta">Saved; in effect once the source is in the engine.</p>{{else if not .IsOwner}}<p class="meta">Each analysis's own bands.</p>{{end}}{{end}}
+</section>
+
+<section>
   <h2>Description</h2>
   {{if not .IsOwner}}
   <p>{{if .Stream.Texts.Description}}{{.Stream.Texts.Description}}{{else}}<span class="meta">No description.</span>{{end}}</p>

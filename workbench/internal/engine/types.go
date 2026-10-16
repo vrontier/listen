@@ -97,11 +97,36 @@ const (
 
 // StreamSpec is the body of PUT /v1/streams/{stream}.
 type StreamSpec struct {
-	Input      string `json:"input"`
-	SampleRate int    `json:"sample_rate"`
-	Mode       string `json:"mode,omitempty"`
-	IdleAfterS int    `json:"idle_after_s,omitempty"`
-	RetryMaxS  int    `json:"retry_max_s,omitempty"`
+	Input      string    `json:"input"`
+	SampleRate int       `json:"sample_rate"`
+	Mode       string    `json:"mode,omitempty"`
+	IdleAfterS int       `json:"idle_after_s,omitempty"`
+	RetryMaxS  int       `json:"retry_max_s,omitempty"`
+	View       *ViewSpec `json:"view,omitempty"`
+}
+
+// View scales.
+const (
+	ScaleLinear = "linear"
+	ScaleLog    = "log"
+)
+
+// ViewSpec is a stream's spectrogram view (decided 2026-10-16): bands of
+// its own, unfiltered and independent of any analysis's range, computed
+// once per stream. Unset fields take the engine's defaults.
+type ViewSpec struct {
+	Scale string   `json:"scale"`
+	MinHz *float64 `json:"min_hz,omitempty"`
+	MaxHz *float64 `json:"max_hz,omitempty"`
+	Bands *int     `json:"bands,omitempty"`
+}
+
+// View is a stream's view as in effect.
+type View struct {
+	Scale string  `json:"scale"`
+	MinHz float64 `json:"min_hz"`
+	MaxHz float64 `json:"max_hz"`
+	Bands int     `json:"bands"`
 }
 
 type Stream struct {
@@ -118,6 +143,7 @@ type Stream struct {
 	Reconnects int        `json:"reconnects"`
 	DelayMs    int        `json:"delay_ms"`
 	Analyses   []string   `json:"analyses"`
+	View       *View      `json:"view,omitempty"`
 	Usage      Usage      `json:"usage"`
 }
 
@@ -174,6 +200,15 @@ type MemorySpec struct {
 	Key          string `json:"key,omitempty"` // returned by the engine only
 }
 
+// Analysis states. An analysis fails on its own (decided 2026-10-16): its
+// stream and the other analyses go on, and a PUT of the same analysis
+// starts it again.
+const (
+	AnalysisIdle    = "idle"
+	AnalysisRunning = "running"
+	AnalysisFailed  = "failed"
+)
+
 type Analysis struct {
 	ID          string     `json:"id"`
 	Stream      string     `json:"stream"`
@@ -183,6 +218,7 @@ type Analysis struct {
 	Label       string     `json:"label"`
 	Effective   Effective  `json:"effective"`
 	State       string     `json:"state"`
+	LastError   *Problem   `json:"last_error,omitempty"`
 	Subscribers int        `json:"subscribers"`
 	Motifs      int        `json:"motifs"`
 	Usage       Usage      `json:"usage"`
@@ -260,14 +296,16 @@ type Change struct {
 type Hello struct {
 	Instance string     `json:"instance"`
 	API      APIVersion `json:"api"`
+	Resumed  bool       `json:"resumed"` // started from its saved configuration (decided 2026-10-16)
 }
 
 // AnalysisState is the data of analysis.state.
 type AnalysisState struct {
-	Stream    string `json:"stream"`
-	Analysis  string `json:"analysis"`
-	State     string `json:"state"`
-	MemoryKey string `json:"memory_key"`
+	Stream    string   `json:"stream"`
+	Analysis  string   `json:"analysis"`
+	State     string   `json:"state"`
+	MemoryKey string   `json:"memory_key"`
+	LastError *Problem `json:"last_error,omitempty"`
 }
 
 // UsageReport is the data of the usage event.

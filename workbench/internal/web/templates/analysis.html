@@ -110,6 +110,10 @@
     <h2 class="live-title"><a href="/sources/{{.Stream.Slug}}">{{.Stream.Texts.Name}}</a></h2>
     {{if .Live}}<span class="status conn conn-info">Connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else if not .Running}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{else}}<span class="meta">{{.Stream.SampleRate}} Hz · live during a run or a preview</span>{{end}}
   </div>
+  {{if .Failed}}<div class="note bad-note">
+    <p>{{template "status" (status "activity" "failed")}} The analysis of this source failed in {{.FailedIn}}: {{.Failed.Message}}. Its other sources go on; nothing of this source is recorded until it runs again.</p>
+    <form method="post" action="/analyses/{{$d.Analysis.ID}}/restart" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button>Start it again</button></form>
+  </div>{{end}}
   {{if .Live}}
   {{template "instrument" (instrument .Stream.Texts.Name false)}}
   <div class="grid">

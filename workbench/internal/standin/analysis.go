@@ -38,6 +38,35 @@ type analysis struct {
 
 	memories map[string]*memory
 	mem      *memory // in use; nil with memory.mode off
+
+	failed *problem // set when the analysis failed; a PUT starts it again
+}
+
+// Fail makes an analysis fail as the engine's would after a crash in it,
+// for tests: it stops, its stream and the other analyses go on.
+func (e *Engine) Fail(stream, analysis, message string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	s := e.streams[stream]
+	if s == nil || s.analyses[analysis] == nil {
+		return false
+	}
+	a := s.analyses[analysis]
+	a.failed = &problem{Code: "analysis_failed", Message: message}
+	a.stateChanged(s)
+	return true
+}
+
+// state is the analysis's state: failed, or running while its stream is
+// connected, else idle.
+func (a *analysis) state(s *stream) string {
+	switch {
+	case a.failed != nil:
+		return "failed"
+	case s.state == "connected":
+		return "running"
+	}
+	return "idle"
 }
 
 type sub struct {
@@ -114,10 +143,7 @@ func (a *analysis) view(s *stream) map[string]any {
 	if rules == nil {
 		rules = []rule{}
 	}
-	state := "idle"
-	if s.state == "connected" {
-		state = "running"
-	}
+	state := a.state(s)
 	motifs := 0
 	if a.mem != nil {
 		for _, m := range a.mem.motifs {
@@ -130,7 +156,7 @@ func (a *analysis) view(s *stream) map[string]any {
 	return map[string]any{
 		"id": a.id, "stream": s.id, "settings": a.c.settings, "rules": rules,
 		"memory": map[string]any{"mode": a.c.memMode, "motif_return_s": a.c.motifReturn, "history_days": a.c.historyDays, "key": key},
-		"label":  a.c.label, "effective": a.c.eff, "state": state, "subscribers": len(a.subs), "motifs": motifs,
+		"label":  a.c.label, "effective": a.c.eff, "state": state, "last_error": a.failed, "subscribers": len(a.subs), "motifs": motifs,
 		"usage": map[string]any{"cpu_percent": u.CPU, "memory_mb": u.Mem, "memory_estimated": true},
 	}
 }
@@ -177,11 +203,11 @@ func (a *analysis) stateChanged(s *stream) {
 	if a.mem != nil {
 		key = a.mem.key
 	}
-	state := "idle"
-	if s.state == "connected" {
-		state = "running"
+	ev := map[string]any{"stream": s.id, "analysis": a.id, "state": a.state(s), "memory_key": key}
+	if a.failed != nil {
+		ev["last_error"] = a.failed
 	}
-	s.e.notify("analysis.state", map[string]any{"stream": s.id, "analysis": a.id, "state": state, "memory_key": key})
+	s.e.notify("analysis.state", ev)
 }
 
 // emit stamps a payload and hands it to subscribers, the snapshot and the
@@ -341,9 +367,11 @@ func (a *analysis) step(s *stream, t time.Time, status bool) {
 		"peak": 0.3, "zero_crossing_rate": 0.08, "spectral_centroid_hz": round(centroid, 1),
 		"spectral_flux": round(0.05+0.5*b2f(sc.transient), 3), "spectral_entropy": 0.62, "harmonicity": round(harmonicity, 3),
 	})
-	a.emit(s, "signal.spectrum", t, pos, map[string]any{
-		"min_hz": eff.MinHz, "max_hz": eff.MaxHz, "scale": "log", "bands": bands, "peaks": peaks,
-	})
+	spectrum := map[string]any{"min_hz": eff.MinHz, "max_hz": eff.MaxHz, "scale": "log", "bands": bands, "peaks": peaks}
+	if v := s.viewEff; v != nil && s.viewBands != nil {
+		spectrum["view"] = map[string]any{"min_hz": v.MinHz, "max_hz": v.MaxHz, "scale": v.Scale, "bands": s.viewBands}
+	}
+	a.emit(s, "signal.spectrum", t, pos, spectrum)
 	if sc.transient {
 		a.emit(s, "event.transient", t, pos, map[string]any{
 			"strength": round(0.5+0.5*sc.rng.Float64(), 3), "duration_ms": 40, "centroid_hz": round(centroid*2, 1),
@@ -524,6 +552,7 @@ func (e *Engine) putAnalysis(w http.ResponseWriter, r *http.Request) {
 		s.analyses[id] = a
 	}
 	a.apply(c)
+	a.failed = nil // a PUT of a failed analysis starts it again
 	s.update(time.Now())
 	a.stateChanged(s)
 	writeJSON(w, 200, a.view(s))

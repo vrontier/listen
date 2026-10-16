@@ -97,6 +97,8 @@ type sourceView struct {
 	TrialData string // …/trial/data/<source>/
 	Engine    *engine.Analysis
 	EngineErr string
+	Failed    *engine.Problem // this source's analysis failed in the engine
+	FailedIn  string          // in the run, the preview or the trial
 	Memories  []engine.Memory
 	LivePath  string
 	DataPath  string
@@ -358,6 +360,11 @@ func (s *Server) analysisData(r *http.Request, a catalogue.Analysis) (analysisDa
 				v.TrialLive = v.Running
 				v.TrialPath = base + "/trial/live/" + sid
 				v.TrialData = base + "/trial/data/" + sid + "/"
+			}
+		}
+		for _, f := range []struct{ id, in string }{{a.EngineID(), "the run"}, {previewID(a), "the preview"}, {trialID(a), "the trial"}} {
+			if p, ok := s.sync.failure(src.Stream.EngineID(), f.id); ok && v.Failed == nil {
+				v.Failed, v.FailedIn = &p, f.in
 			}
 		}
 		if v.Running && inRun {

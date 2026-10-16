@@ -100,12 +100,24 @@
       s.style[prop] = pct + "%";
       box.append(s);
     }
-    function frequencyTicks(min, max) {
+    // frac is where a frequency sits on the axis, 0 at the bottom.
+    function frac(hz, r) {
+      if (r.scale === "linear") return (hz - r.min) / (r.max - r.min);
+      return (Math.log(hz) - Math.log(r.min)) / (Math.log(r.max) - Math.log(r.min));
+    }
+    function frequencyTicks(r) {
       yTicks.textContent = "";
-      const lmin = Math.log(min), lmax = Math.log(max);
-      for (const hz of HZ_TICKS) {
-        if (hz < min || hz > max) continue;
-        tick(yTicks, hz >= 1000 ? hz / 1000 + "k" : String(hz), "top", (1 - (Math.log(hz) - lmin) / (lmax - lmin)) * 100);
+      let ticks = HZ_TICKS;
+      if (r.scale === "linear") {
+        // About five round steps: 1, 2 or 5 times a power of ten.
+        const raw = (r.max - r.min) / 5, p = Math.pow(10, Math.floor(Math.log10(raw)));
+        const step = [1, 2, 5, 10].map((m) => m * p).find((x) => x >= raw);
+        ticks = [];
+        for (let hz = Math.ceil(r.min / step) * step; hz <= r.max; hz += step) ticks.push(hz);
+      }
+      for (const hz of ticks) {
+        if (hz < r.min || hz > r.max || r.scale !== "linear" && hz <= 0) continue;
+        tick(yTicks, hz >= 1000 ? +(hz / 1000).toFixed(1) + "k" : String(hz), "top", (1 - frac(hz, r)) * 100);
       }
     }
     function timeTicks(span) {
@@ -120,24 +132,35 @@
     const motifsBody = root.querySelector(".motifs tbody");
     let range = null, lastSeq = 0;
 
+    // drawSpectrum adds one column: the stream's own view when the engine
+    // sends one (unfiltered, its own range and scale), else the analysis's
+    // bands on a log scale.
     function drawSpectrum(p) {
       const w = canvas.width, h = canvas.height;
-      if (!range || range.min !== p.min_hz || range.max !== p.max_hz) {
-        range = { min: p.min_hz, max: p.max_hz };
-        frequencyTicks(p.min_hz, p.max_hz);
+      const v = p.view && p.view.bands && p.view.bands.length ? p.view : null;
+      const r = v ? { min: v.min_hz, max: v.max_hz, scale: v.scale } : { min: p.min_hz, max: p.max_hz, scale: "log" };
+      const bandsOf = v ? v.bands : p.bands;
+      if (!range || range.min !== r.min || range.max !== r.max || range.scale !== r.scale) {
+        if (range) {
+          // Another axis: what was drawn on the old one would mislead.
+          ctx.fillStyle = getComputedStyle(canvas).backgroundColor;
+          ctx.fillRect(0, 0, w, h);
+        }
+        range = r;
+        frequencyTicks(r);
       }
       const col = 3;
       ctx.drawImage(canvas, col, 0, w - col, h, 0, 0, w - col, h);
-      const n = p.bands.length;
+      const n = bandsOf.length;
       for (let i = 0; i < n; i++) {
         const y0 = h - Math.round(((i + 1) * h) / n), y1 = h - Math.round((i * h) / n);
-        ctx.fillStyle = colour(p.bands[i]);
-        ctx.fillRect(w - col, y0, col, y1 - y0);
+        ctx.fillStyle = colour(bandsOf[i]);
+        ctx.fillRect(w - col, y0, col, Math.max(1, y1 - y0));
       }
-      const lmin = Math.log(p.min_hz), lmax = Math.log(p.max_hz);
       ctx.fillStyle = "#ffffff";
       for (const pk of p.peaks || []) {
-        const y = h - ((Math.log(pk.hz) - lmin) / (lmax - lmin)) * h;
+        if (pk.hz < r.min || pk.hz > r.max) continue;
+        const y = h - frac(pk.hz, r) * h;
         ctx.fillRect(w - col, Math.round(y) - 1, col, 2);
       }
     }

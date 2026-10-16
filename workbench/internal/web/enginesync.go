@@ -39,11 +39,15 @@ type engineSync struct {
 	onState func(stream, state string, at time.Time)
 	// onUsage, if set, is given every usage report (every 10 s).
 	onUsage func(engine.UsageReport)
+	// onFailed, if set, is told when an analysis in the engine fails.
+	onFailed func(engine.AnalysisState)
+
+	failures map[string]engine.AnalysisState // "stream/analysis" → its failure
 }
 
 func newEngineSync(eng *engine.Client, db *catalogue.DB) *engineSync {
 	return &engineSync{eng: eng, db: db, problem: "not yet connected to the engine", streams: map[string]engine.Stream{}, sent: map[string]string{},
-		previews: map[int64]time.Time{}, trials: map[int64]trial{}, held: map[int64]int{}}
+		previews: map[int64]time.Time{}, trials: map[int64]trial{}, held: map[int64]int{}, failures: map[string]engine.AnalysisState{}}
 }
 
 func (s *engineSync) status() (ready bool, problem string, info engine.Info) {
@@ -68,6 +72,21 @@ func (s *engineSync) stream(id string) (engine.Stream, bool) {
 	defer s.mu.Unlock()
 	st, ok := s.streams[id]
 	return st, ok
+}
+
+// failure is why an analysis in the engine failed, if it did (decided
+// 2026-10-16: an analysis fails on its own; putting it again restarts it).
+func (s *engineSync) failure(stream, analysis string) (engine.Problem, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st, ok := s.failures[stream+"/"+analysis]
+	if !ok {
+		return engine.Problem{}, false
+	}
+	if st.LastError == nil {
+		return engine.Problem{Message: "no reason given"}, true
+	}
+	return *st.LastError, true
 }
 
 func (s *engineSync) setProblem(p string) {
@@ -119,13 +138,20 @@ func (s *engineSync) session(ctx context.Context) error {
 			s.mu.Lock()
 			fresh := h.Instance != s.instance
 			s.instance = h.Instance
+			if fresh {
+				clear(s.failures) // a new engine reports its analyses anew
+			}
 			s.mu.Unlock()
 			if err := s.reconcile(ctx); err != nil {
 				s.setProblem("could not send the wanted state: " + err.Error())
 				return
 			}
 			if fresh {
-				log.Printf("engine: instance %s, API %s, wanted state sent", h.Instance, h.API)
+				resumed := ""
+				if h.Resumed {
+					resumed = ", resumed from its saved configuration"
+				}
+				log.Printf("engine: instance %s, API %s%s, wanted state sent", h.Instance, h.API, resumed)
 			}
 			s.setProblem("")
 		case "stream.state":
@@ -150,6 +176,24 @@ func (s *engineSync) session(ctx context.Context) error {
 					onState(st.ID, state, time.Now().UTC())
 				}
 			}
+		case "analysis.state":
+			var st engine.AnalysisState
+			if json.Unmarshal(ev.Data, &st) != nil {
+				break
+			}
+			key := st.Stream + "/" + st.Analysis
+			s.mu.Lock()
+			_, was := s.failures[key]
+			if st.State == engine.AnalysisFailed {
+				s.failures[key] = st
+			} else {
+				delete(s.failures, key)
+			}
+			onFailed := s.onFailed
+			s.mu.Unlock()
+			if st.State == engine.AnalysisFailed && !was && onFailed != nil {
+				onFailed(st)
+			}
 		case "usage":
 			var u engine.UsageReport
 			if json.Unmarshal(ev.Data, &u) == nil {
@@ -170,6 +214,12 @@ func (s *engineSync) session(ctx context.Context) error {
 // on demand, for a preview.
 func wanted(st catalogue.Stream, inRun bool) (engine.StreamSpec, bool) {
 	spec := engine.StreamSpec{Input: st.Input, SampleRate: st.SampleRate, Mode: engine.OnDemand}
+	if st.View != nil {
+		var v engine.ViewSpec
+		if json.Unmarshal(st.View, &v) == nil && v.Scale != "" {
+			spec.View = &v
+		}
+	}
 	switch st.State {
 	case catalogue.StreamDraft, catalogue.StreamProduction:
 		if inRun {

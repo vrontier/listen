@@ -47,6 +47,7 @@ func main() {
 
 		publishing = flag.Bool("publishing", env("LOW_PUBLISHING", "") == "on", "let members publish analyses at /research [env LOW_PUBLISHING=on]")
 		llmKeys    = flag.Bool("llm-keys", env("LOW_LLM_KEYS", "") == "on", "offer members the page for their language-model keys [env LOW_LLM_KEYS=on]")
+		reserved   = flag.String("reserved", env("LOW_RESERVED_INPUTS", ""), "file of stream addresses or hosts the Observatory listens to, which members cannot register [env LOW_RESERVED_INPUTS]")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "usage: workbench [flags]\n       workbench [flags] admin -email ADDRESS -name NAME\n\n")
@@ -91,7 +92,20 @@ func main() {
 	} else {
 		log.Printf("LOW_KEYS_SECRET not set: members cannot save language-model keys")
 	}
-	srv, err := web.New(web.Config{BaseURL: *baseURL, DatasetDir: *dataDir, Seal: seal, Publishing: *publishing, LLMKeys: *llmKeys}, db, engine.Dial(*engAddr), sender)
+	var reservedList []string
+	if *reserved != "" {
+		f, err := os.Open(*reserved)
+		if err != nil {
+			log.Fatalf("reserved inputs: %v", err)
+		}
+		reservedList, err = web.ParseReserved(f)
+		f.Close()
+		if err != nil {
+			log.Fatalf("reserved inputs: %v", err)
+		}
+		log.Printf("%d addresses reserved for the Observatory", len(reservedList))
+	}
+	srv, err := web.New(web.Config{BaseURL: *baseURL, DatasetDir: *dataDir, Seal: seal, Publishing: *publishing, LLMKeys: *llmKeys, Reserved: reservedList}, db, engine.Dial(*engAddr), sender)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -39,6 +39,7 @@ var statusWords = map[string]map[string]status{
 		"run":     {"Running", "info"},
 		"preview": {"Preview", "info"},
 		"idle":    {"Idle", "neutral"},
+		"failed":  {"Failed", "bad"},
 	},
 	// A run's data set.
 	"dataset": {

@@ -36,8 +36,11 @@ type Stream struct {
 	// does not run the stream (members-and-streams.md, question 12).
 	Operator string
 	Probe    json.RawMessage
-	Created  time.Time
-	Updated  time.Time
+	// View is the stream's spectrogram view as the engine takes it (a
+	// JSON object with scale, min_hz, max_hz, bands); nil for none.
+	View    json.RawMessage
+	Created time.Time
+	Updated time.Time
 }
 
 // StreamTexts are the parts of a stream its owner may edit at any time.
@@ -162,14 +165,18 @@ func Slugify(name string) string {
 }
 
 const streamCols = `s.id, s.slug, s.owner_id, u.name, s.input, s.sample_rate, s.name, s.place, s.timezone, s.lat, s.lon, s.description,
-	s.credit, s.credit_url, s.audio_allowed, s.state, s.attested, s.attestation, s.operator, s.probe, s.created, s.updated`
+	s.credit, s.credit_url, s.audio_allowed, s.state, s.attested, s.attestation, s.operator, s.probe, s.created, s.updated, s.view`
 
 func scanStream(row interface{ Scan(...any) error }) (Stream, error) {
 	var s Stream
 	var attested, probe, created, updated string
+	var view sql.NullString
 	err := row.Scan(&s.ID, &s.Slug, &s.OwnerID, &s.OwnerName, &s.Input, &s.SampleRate, &s.Texts.Name, &s.Texts.Place,
 		&s.Texts.TimeZone, &s.Texts.Lat, &s.Texts.Lon, &s.Texts.Description, &s.Texts.Credit, &s.Texts.CreditURL, &s.AudioAllowed, &s.State,
-		&attested, &s.Attestation, &s.Operator, &probe, &created, &updated)
+		&attested, &s.Attestation, &s.Operator, &probe, &created, &updated, &view)
+	if view.Valid && view.String != "" {
+		s.View = json.RawMessage(view.String)
+	}
 	s.Attested, s.Created, s.Updated = parseStamp(attested), parseStamp(created), parseStamp(updated)
 	s.Probe = json.RawMessage(probe)
 	return s, err
@@ -267,5 +274,35 @@ func (d *DB) DeleteStream(ctx context.Context, id, by int64) error {
 		}
 		before, _ := json.Marshal(map[string]any{"input": old.Input, "sample_rate": old.SampleRate, "texts": old.Texts})
 		return audit(ctx, tx, now, by, "stream", id, "delete", string(before), "")
+	})
+}
+
+// migrateStreamView adds a stream's spectrogram view (2026-10-16).
+func migrateStreamView(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('streams') WHERE name = 'view'`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := db.Exec(`ALTER TABLE streams ADD COLUMN view TEXT`)
+	return err
+}
+
+// SetStreamView sets or clears (nil) a stream's spectrogram view; only its
+// owner may.
+func (d *DB) SetStreamView(ctx context.Context, id, ownerID int64, view json.RawMessage) error {
+	now := d.now()
+	return d.tx(ctx, func(tx *sql.Tx) error {
+		var old sql.NullString
+		if err := tx.QueryRowContext(ctx, `SELECT view FROM streams WHERE id = ? AND owner_id = ?`, id, ownerID).Scan(&old); err != nil {
+			return notFound(err)
+		}
+		var v any
+		if view != nil {
+			v = string(view)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE streams SET view = ?, updated = ? WHERE id = ?`, v, stamp(now), id); err != nil {
+			return err
+		}
+		return audit(ctx, tx, now, ownerID, "stream", id, "view", old.String, string(view))
 	})
 }

@@ -297,7 +297,10 @@ func migrate(db *sql.DB) error {
 	if err := migrateControl(db); err != nil {
 		return err
 	}
-	return migrateEmailChanges(db)
+	if err := migrateEmailChanges(db); err != nil {
+		return err
+	}
+	return migrateStreamView(db)
 }
 
 // migrateRunRemoved adds the deletion of finished runs (2026-10-16).

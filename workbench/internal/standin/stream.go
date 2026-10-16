@@ -30,6 +30,11 @@ type stream struct {
 	analyses map[string]*analysis
 	scene    scene
 
+	// The stream's spectrogram view, if set: bands of its own, unfiltered,
+	// computed once per tick for all its analyses.
+	viewEff   *viewEff
+	viewBands []float64
+
 	// What the stream hears of the made-up sky that all streams share,
 	// for the group analyses: later by its path delay, and with a weight
 	// of its own.
@@ -132,6 +137,9 @@ func (s *stream) view(withInput bool) map[string]any {
 		"reconnects": s.reconnects, "delay_ms": 180, "analyses": ids,
 		"usage": map[string]any{"cpu_percent": u.CPU, "memory_mb": u.Mem, "in_kbps": u.In, "in_measured": false},
 	}
+	if s.viewEff != nil {
+		v["view"] = s.viewEff
+	}
 	if withInput {
 		v["input"] = s.input
 	}
@@ -151,9 +159,59 @@ func (s *stream) tick(now time.Time, d time.Duration) {
 	s.hearSky(t, d)
 	s.statusTick++
 	status := s.statusTick%50 == 0
+	s.viewBands = s.viewOf()
 	for _, a := range s.analyses {
-		a.step(s, t, status)
+		if a.failed == nil {
+			a.step(s, t, status)
+		}
 	}
+}
+
+// viewEff is a stream's spectrogram view as in effect.
+type viewEff struct {
+	Scale string  `json:"scale"`
+	MinHz float64 `json:"min_hz"`
+	MaxHz float64 `json:"max_hz"`
+	Bands int     `json:"bands"`
+}
+
+// viewOf draws the stream's view bands from the made-up scene: the whole
+// range, mains and every component included, each band taking the
+// strongest component in it.
+func (s *stream) viewOf() []float64 {
+	v := s.viewEff
+	if v == nil {
+		return nil
+	}
+	sc := &s.scene
+	bands := make([]float64, v.Bands)
+	for i := range bands {
+		bands[i] = 0.1 + 0.06*sc.rng.Float64()
+	}
+	pos := func(hz float64) float64 {
+		if v.Scale == "log" {
+			return (math.Log(hz) - math.Log(v.MinHz)) / (math.Log(v.MaxHz) - math.Log(v.MinHz))
+		}
+		return (hz - v.MinHz) / (v.MaxHz - v.MinHz)
+	}
+	for _, c := range sc.comps {
+		if c.hz < v.MinHz || c.hz > v.MaxHz {
+			continue
+		}
+		i := int(pos(c.hz) * float64(v.Bands))
+		if i >= 0 && i < v.Bands {
+			bands[i] = math.Max(bands[i], math.Min(1, 0.15+c.amp))
+		}
+	}
+	if sc.transient {
+		for i := range bands {
+			bands[i] = math.Min(1, bands[i]+0.3)
+		}
+	}
+	for i := range bands {
+		bands[i] = round(bands[i], 3)
+	}
+	return bands
 }
 
 // hearSky adds what the stream hears of the shared sky in this tick to the
