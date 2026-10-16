@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -28,6 +29,7 @@ import (
 	"github.com/vrontier/listen/listener/internal/analysis"
 	"github.com/vrontier/listen/listener/internal/events"
 	"github.com/vrontier/listen/listener/internal/hub"
+	"github.com/vrontier/listen/listener/internal/ingest"
 	"github.com/vrontier/listen/listener/internal/memory"
 	"github.com/vrontier/listen/listener/internal/narrate"
 	"github.com/vrontier/listen/listener/internal/relay"
@@ -72,6 +74,7 @@ func main() {
 		sampleRate    = flag.Int("sample-rate", analysis.DefaultSampleRate, "analysis sample rate; raise for sources with content above 11 kHz (e.g. 32000 for VLF radio)")
 		ffmpeg        = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
 		ffprobe       = flag.String("ffprobe", "ffprobe", "ffprobe binary")
+		ingestSock    = flag.String("ingest", "", "read a stream URL through listen-ingest on this socket (e.g. /run/listen-ingest/feeds.sock), which holds the machine's one connection to the station; empty: connect itself")
 		start         = flag.String("start", "", "recording time of a file's first sample (RFC 3339); "+
 			"default: parsed from a YYYYMMDDTHHMMSSZ stamp in the file name")
 	)
@@ -142,7 +145,7 @@ func main() {
 		log.Fatalf("-spectrogram-scale: %q is neither linear nor log", *sgScale)
 	}
 	if *dump {
-		runDump(ctx, *in, *sampleRate, opts, stamper, through, *loop, *realtime, *ffmpeg, rec)
+		runDump(ctx, *in, *sampleRate, opts, stamper, through, *loop, *realtime, *ffmpeg, rec, openThrough(*ingestSock, *in))
 		return
 	}
 
@@ -210,6 +213,7 @@ func main() {
 	go func() {
 		srcDone <- run(ctx, source.Config{
 			Input: *in, SampleRate: *sampleRate, Realtime: *realtime, Loop: *loop, FFmpeg: *ffmpeg,
+			Open:       openThrough(*ingestSock, *in),
 			MaxBackoff: *retryMax,
 			OnSamples:  a.Feed,
 			Outputs:    outputs,
@@ -309,8 +313,27 @@ func runOnDemand(ctx context.Context, cfg source.Config, viewers func() int, idl
 	}
 }
 
+// openThrough is how the source opens a stream URL when the machine has an
+// ingest: through it. A refusal or the ingest being away is not final for
+// the Observatory: the listener keeps trying, as it does when a station is
+// down. nil: the listener connects itself (ffmpeg), as before.
+func openThrough(socket, in string) func(context.Context) (io.ReadCloser, string, error) {
+	if socket == "" || !source.IsURL(in) {
+		return nil
+	}
+	cl := ingest.NewClient(socket)
+	return func(ctx context.Context) (io.ReadCloser, string, error) {
+		body, format, _, err := cl.Open(ctx, in, nil)
+		if err != nil {
+			log.Printf("ingest: %v", err)
+			return nil, "", err
+		}
+		return body, format, nil
+	}
+}
+
 func runDump(ctx context.Context, in string, sampleRate int, opts analysis.Options, stamper *events.Stamper, through func(func(events.Message)) func(events.Message),
-	loop, realtime bool, ffmpeg string, rec replay) {
+	loop, realtime bool, ffmpeg string, rec replay, open func(context.Context) (io.ReadCloser, string, error)) {
 	w := bufio.NewWriterSize(os.Stdout, 1<<16)
 	defer w.Flush()
 	a := analysis.New(sampleRate, stamper, through(func(m events.Message) {
@@ -326,7 +349,7 @@ func runDump(ctx context.Context, in string, sampleRate int, opts analysis.Optio
 		a.Anchor(time.Unix(0, 0))
 	}
 	err := source.Run(ctx, source.Config{
-		Input: in, SampleRate: sampleRate, Realtime: realtime, Loop: loop, FFmpeg: ffmpeg,
+		Input: in, SampleRate: sampleRate, Realtime: realtime, Loop: loop, FFmpeg: ffmpeg, Open: open,
 		OnSamples: a.Feed,
 	})
 	if err != nil {

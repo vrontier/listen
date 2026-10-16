@@ -1,0 +1,61 @@
+# The one service on this machine that connects to stations (listen-ingest).
+# Every other program here asks it for a station over
+# /run/listen-ingest/feeds.sock (mode 0660, group listen-ingest) and gets the
+# station's original bytes: the Observatory's listeners (user listen) and the
+# Workbench's engine (user listen-engine) join that group. A station is
+# connected once, however many ask.
+#
+# Setup (root, once):
+#   useradd --system --no-create-home --shell /usr/sbin/nologin listen-ingest
+#   usermod -aG listen-ingest listen; usermod -aG listen-ingest listen-engine
+#   install -m 0755 listen-ingest /usr/local/bin/listen-ingest
+#   install -m 0644 listen-ingest.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now listen-ingest
+#
+# Optional flags (e.g. -allow-host for an intranet test server) in
+# /etc/listen-ingest/ingest.env as INGEST_ARGS="…".
+[Unit]
+Description=Listening Observatory ingest: the one connection to each station
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=listen-ingest
+Group=listen-ingest
+EnvironmentFile=-/etc/listen-ingest/ingest.env
+ExecStart=/usr/local/bin/listen-ingest -socket /run/listen-ingest/feeds.sock -mode 0660 $INGEST_ARGS
+Restart=always
+RestartSec=2
+RuntimeDirectory=listen-ingest
+RuntimeDirectoryMode=0750
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0027
+
+# Small: it only moves bytes.
+Nice=5
+CPUQuota=50%
+MemoryMax=512M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
