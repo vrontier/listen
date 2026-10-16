@@ -23,6 +23,10 @@ out="${1:?usage: gen-sources.sh <out> [nginx directives]}"
 extra="${2:-}"
 cfg=site/_config/sources.json
 node_mode="${NODE_MODE:-continuous}"
+# NODE_INGEST: the socket of listen-ingest on the node, if it has one; then
+# sources with a network input read through it (-ingest) and the node holds
+# one connection per station.
+node_ingest="${NODE_INGEST:-}"
 node_idle="${NODE_IDLE_AFTER:-30s}"
 case $node_mode in continuous|on-demand) ;; *) echo "NODE_MODE must be continuous or on-demand" >&2; exit 1 ;; esac
 
@@ -46,11 +50,12 @@ jq -e '
 rm -rf "$out" && mkdir -p "$out/sources"
 jq -c '.sources[]' "$cfg" | while read -r s; do
   slug=$(jq -r .slug <<<"$s")
-  args=$(jq -r --arg mode "$node_mode" --arg idle "$node_idle" 'def sgargs: .spectrogram // {} | if .scale then ["-spectrogram-scale", .scale]
+  args=$(jq -r --arg mode "$node_mode" --arg idle "$node_idle" --arg ingest "$node_ingest" 'def sgargs: .spectrogram // {} | if .scale then ["-spectrogram-scale", .scale]
     + (if .min_hz != null then ["-spectrogram-min-hz", (.min_hz | tostring)] else [] end)
     + (if .max_hz != null then ["-spectrogram-max-hz", (.max_hz | tostring)] else [] end)
     + (if .bands != null then ["-spectrogram-bands", (.bands | tostring)] else [] end) else [] end;
     ["-addr", "127.0.0.1:\(.listener.port)", "-in", .listener.input] + (.listener.args // []) + sgargs
+    + (if $ingest != "" and (.listener.input | test("://")) then ["-ingest", $ingest] else [] end)
     + (if .audio then ["-audio"] else [] end)
     + (if (.listener.mode // $mode) == "on-demand" then ["-on-demand", "-idle-after", (.listener.idle_after // $idle)] else [] end)
     | join(" ")' <<<"$s")

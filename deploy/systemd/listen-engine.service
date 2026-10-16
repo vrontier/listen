@@ -17,8 +17,8 @@
 # /etc/listen-engine/engine.env as ENGINE_ARGS="…".
 [Unit]
 Description=Listening Observatory engine for the Workbench
-Wants=network-online.target
-After=network-online.target
+Wants=network-online.target listen-ingest.service
+After=network-online.target listen-ingest.service
 
 [Service]
 Type=simple
@@ -27,8 +27,9 @@ Group=listen-engine
 EnvironmentFile=-/etc/listen-engine/engine.env
 # Two callers, each on its own socket and in its own namespace: the Workbench
 # (group listen-engine) and internal work such as tests (the engine's user and
-# root only). A source both name is read once.
-ExecStart=/usr/local/bin/listen-engine -caller workbench=/run/listen-engine/control.sock:0660 -caller internal=/run/listen-engine/internal.sock:0600 -memory-dir /var/lib/listen-engine/memory -state /var/lib/listen-engine/state.json $ENGINE_ARGS
+# root only). A source both name is read once. Stations are read through
+# listen-ingest, the machine's one connection to each.
+ExecStart=/usr/local/bin/listen-engine -caller workbench=/run/listen-engine/control.sock:0660 -caller internal=/run/listen-engine/internal.sock:0600 -memory-dir /var/lib/listen-engine/memory -state /var/lib/listen-engine/state.json -ingest /run/listen-ingest/feeds.sock $ENGINE_ARGS
 Restart=always
 RestartSec=5
 RuntimeDirectory=listen-engine

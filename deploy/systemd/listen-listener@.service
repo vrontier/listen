@@ -6,7 +6,9 @@
 [Unit]
 Description=Listening Observatory listener (%i)
 Wants=network-online.target
-After=network-online.target
+# Where the node has listen-ingest, URL sources read through it (-ingest in
+# LISTEN_ARGS); start after it.
+After=network-online.target listen-ingest.service
 
 [Service]
 Type=simple

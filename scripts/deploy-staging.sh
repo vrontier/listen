@@ -14,7 +14,10 @@ cfg=site/_config/sources.json
 gen=bin/deploy-gen
 
 echo "generating per-source files from $cfg"
-NODE_MODE="${LISTEN_MODE:-on-demand}" NODE_IDLE_AFTER="${IDLE_AFTER:-30s}" scripts/gen-sources.sh "$gen"
+# The node's listen-ingest (installed by scripts/deploy-engine.sh) holds the
+# one connection to each station; the listeners read through it.
+NODE_INGEST="${INGEST:-/run/listen-ingest/feeds.sock}" \
+  NODE_MODE="${LISTEN_MODE:-on-demand}" NODE_IDLE_AFTER="${IDLE_AFTER:-30s}" scripts/gen-sources.sh "$gen"
 slugs=$(cat "$gen/slugs")
 
 # Staging listens on demand by default: a source connects only while a live
