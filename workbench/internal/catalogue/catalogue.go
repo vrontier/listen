@@ -181,6 +181,21 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 	last_used TEXT,
 	revoked   TEXT
 );
+CREATE TABLE IF NOT EXISTS token_access (
+	id       INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	token_id INTEGER NOT NULL REFERENCES api_tokens(id) ON DELETE CASCADE,
+	at       TEXT NOT NULL,
+	via      TEXT NOT NULL,                  -- mcp or stream
+	what     TEXT NOT NULL,                  -- the MCP method or tool, or the method and path
+	detail   TEXT NOT NULL DEFAULT '',       -- the arguments or the query, shortened
+	client   TEXT NOT NULL DEFAULT '',       -- the program, as it names itself
+	status   TEXT NOT NULL,                  -- open, ok, error, refused, cut
+	note     TEXT NOT NULL DEFAULT '',       -- the error, shortened
+	ms       INTEGER NOT NULL DEFAULT 0,
+	bytes    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS token_access_user ON token_access(user_id, id);
 CREATE TABLE IF NOT EXISTS llm_keys (
 	user_id  INTEGER NOT NULL REFERENCES users(id),
 	provider TEXT NOT NULL,                  -- anthropic, openai

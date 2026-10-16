@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vrontier/listen-workbench/internal/catalogue"
 )
@@ -121,6 +122,7 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 	body := http.MaxBytesReader(w, r.Body, 1<<20)
 	var raw json.RawMessage
 	if err := json.NewDecoder(body).Decode(&raw); err != nil {
+		s.noteRPC(r, rpcRequest{Method: "(unreadable message)"}, rpcResponse{Error: &rpcError{-32700, "parse error"}}, true, time.Now())
 		writeRPC(w, rpcResponse{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{-32700, "parse error"}})
 		return
 	}
@@ -128,12 +130,16 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(trimmed, "[") { // a batch, as the 2025-03-26 version allows
 		var reqs []rpcRequest
 		if err := json.Unmarshal(raw, &reqs); err != nil {
+			s.noteRPC(r, rpcRequest{Method: "(invalid request)"}, rpcResponse{Error: &rpcError{-32600, "invalid request"}}, true, time.Now())
 			writeRPC(w, rpcResponse{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{-32600, "invalid request"}})
 			return
 		}
 		var out []rpcResponse
 		for _, q := range reqs {
-			if resp, ok := s.rpc(r, q); ok {
+			start := time.Now()
+			resp, ok := s.rpc(r, q)
+			s.noteRPC(r, q, resp, ok, start)
+			if ok {
 				out = append(out, resp)
 			}
 		}
@@ -146,10 +152,13 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 	}
 	var q rpcRequest
 	if err := json.Unmarshal(raw, &q); err != nil {
+		s.noteRPC(r, rpcRequest{Method: "(invalid request)"}, rpcResponse{Error: &rpcError{-32600, "invalid request"}}, true, time.Now())
 		writeRPC(w, rpcResponse{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{-32600, "invalid request"}})
 		return
 	}
+	start := time.Now()
 	resp, ok := s.rpc(r, q)
+	s.noteRPC(r, q, resp, ok, start)
 	if !ok {
 		w.WriteHeader(http.StatusAccepted) // a notification or a response: nothing to answer
 		return

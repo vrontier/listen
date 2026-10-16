@@ -115,6 +115,9 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 // Start follows the engine, ends runs at their planned end and sweeps old
 // sessions until ctx ends.
 func (s *Server) Start(ctx context.Context) {
+	if err := s.db.CutOpenAccess(ctx); err != nil { // data streams open when the Workbench last stopped
+		log.Printf("access: %v", err)
+	}
 	go s.sync.run(ctx)
 	go s.data.refresh(ctx) // runs that went on, or ended, while the Workbench was down
 	go func() {
@@ -148,6 +151,9 @@ func (s *Server) Start(ctx context.Context) {
 			case <-t.C:
 				if err := s.db.SweepUsage(ctx); err != nil {
 					log.Printf("sweep usage: %v", err)
+				}
+				if err := s.db.SweepAccess(ctx); err != nil {
+					log.Printf("sweep access: %v", err)
 				}
 				if err := s.db.Sweep(ctx); err != nil {
 					log.Printf("sweep: %v", err)
@@ -207,6 +213,7 @@ func (s *Server) routes() {
 		http.Redirect(w, r, "/results", http.StatusMovedPermanently)
 	})
 	m.HandleFunc("GET /account/tokens", s.member(s.tokensPage))
+	m.HandleFunc("GET /account/activity", s.member(s.activityPage))
 	m.HandleFunc("POST /account/tokens", s.member(s.tokenCreate))
 	m.HandleFunc("POST /account/tokens/{token}/revoke", s.member(s.tokenRevoke))
 	keys := func(h http.HandlerFunc) http.HandlerFunc {
@@ -290,6 +297,14 @@ var funcs = template.FuncMap{
 			return "—"
 		}
 		return t.UTC().Format("2006-01-02 15:04") + " UTC"
+	},
+	// moment is a time to the second, without the zone.
+	"moment": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05") },
+	"ms": func(n int64) string {
+		if n < 1000 {
+			return strconv.FormatInt(n, 10) + " ms"
+		}
+		return roundDuration(time.Duration(n) * time.Millisecond)
 	},
 	// day is when without the zone, for columns that name it in their head.
 	"day": func(t time.Time) string {

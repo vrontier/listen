@@ -72,6 +72,12 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request, scope stri
 		return r, false
 	}
 	if !t.Has(scope) {
+		a := tokenAccess(r, t, map[string]string{catalogue.ScopeMCP: "mcp"}[scope], r.Method+" "+r.URL.Path)
+		if a.Via == "" {
+			a.Via = "stream"
+		}
+		a.Status, a.Note = catalogue.AccessRefused, "the token is not for "+a.Via
+		s.noteAccess(a)
 		apiError(w, http.StatusForbidden, "scope", fmt.Sprintf("This token is not for %s; its member can create one that is.", map[string]string{catalogue.ScopeStream: "the data stream", catalogue.ScopeMCP: "MCP"}[scope]))
 		return r, false
 	}
@@ -83,7 +89,7 @@ func (s *Server) bearer(scope string, h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r, ok := s.authenticate(w, r, scope)
 		if ok {
-			h(w, r)
+			s.noted(w, r, h)
 		}
 	}
 }

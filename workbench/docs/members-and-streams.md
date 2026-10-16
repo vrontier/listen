@@ -196,6 +196,7 @@ A member creates tokens for programs and AI assistants. A token:
 **Built** against the stand-in (2026-10-15), **proposed** in every detail:
 
 - **The page.** "Tokens" in the menu (`/account/tokens`): a member makes a token with a name and what it is for (data stream, MCP, or both), sees it once, and later sees each token's first characters, what it is for, when it was made and last used, and can revoke it. At most 20 valid tokens per member. Making and revoking are in the audit trail.
+- **Activity.** **Decided** (2026-10-16): every access with a member's tokens is tracked, on a page of its own. **Built** against the stand-in, **proposed** in its detail: "Activity" in the menu (`/account/activity`, titled "MCP activity") shows, per token, the accesses in the last 24 hours, the failed ones, those in the last 30 days, the data streams open now and the last access; below, every access, newest first, 100 per page, filtered by token, by MCP or data stream, or to the failed ones. A note holds the time, the token, the program as it names itself (MCP `clientInfo`, otherwise the User-Agent), the MCP method or tool with its arguments or the data stream's path and query, the result (ok, error with its message, refused when the token is not for MCP or the data stream, streaming while live events are sent, cut off when the Workbench restarted meanwhile), how long it took and how much went back. Notes are kept 30 days. The token and the other headers are never noted. A request with an unknown or revoked token cannot be put to a member and is not noted.
 - **The token.** `low_` and 43 random characters; stored as a SHA-256 hash. A token in the address (`?token=`) is refused with a note to use the header. A revoked token, or one of a suspended member, is refused.
 - **It reads, it does not start.** A token reads the member's own analyses only, and never starts, stops or changes anything. So it never connects a source: this settles how tokens fit with "a source connects only for runs and previews". Live data and events are there while the analysis is in a run or a preview; otherwise the answer is `409 not_running`. A data set can be read at any time.
 - **What it reads** (scope "data stream"):
@@ -268,6 +269,7 @@ No user-written code or expressions run on the server: filters and motif definit
 | `/runs/<id>` | one run: when, revisions, its data set (what it holds, the files singly at their uncompressed size or together as one zip, delete) |
 | `/results` | own data sets (download, delete), disk space as a bar, memories, CPU, RAM and bandwidth against the caps |
 | `/account/tokens` | create and revoke tokens |
+| `/account/activity` | every access with the member's tokens, through MCP and the data stream, over 30 days |
 | `/account/keys` | own API keys for the language-model interpretation: switched off, in the backlog (decided 2026-10-16) |
 | `/library` | shared filter rule sets: taken out for the time being (decided 2026-10-16) |
 | `/research` | everything published |
