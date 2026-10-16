@@ -66,6 +66,17 @@ func NewTransientDetector(cfg TransientConfig) *TransientDetector {
 	return &TransientDetector{cfg: cfg}
 }
 
+// Tune changes the threshold and the minimum gap of a running detector;
+// zero values keep the current ones. Its baseline carries on.
+func (d *TransientDetector) Tune(k float64, refractory time.Duration) {
+	if k > 0 {
+		d.cfg.K = k
+	}
+	if refractory > 0 {
+		d.cfg.Refractory = refractory
+	}
+}
+
 // Update feeds one frame and returns a transient when one has just ended.
 func (d *TransientDetector) Update(o TransientObs) *Transient {
 	med, mad := d.baselineStats()

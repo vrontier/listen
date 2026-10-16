@@ -84,91 +84,127 @@ func (m *Memory) Summaries() map[string]events.Envelope {
 //	GET /api/history/events          ?from=&to= (RFC 3339, default last hour), ?type=, ?limit=
 //	GET /api/history/features        ?window=1h|24h: per-minute aggregates
 func (m *Memory) Routes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/motifs", func(w http.ResponseWriter, r *http.Request) {
-		m.mu.Lock()
-		aliases := make(map[string]string, len(m.aliases))
-		for k, v := range m.aliases {
-			aliases[k] = v
-		}
-		m.mu.Unlock()
-		writeJSON(w, map[string]any{"motifs": nonNil(m.Motifs()), "aliases": aliases})
-	})
+	mux.HandleFunc("GET /api/motifs", m.ServeMotifs)
 	mux.HandleFunc("GET /api/motifs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		m.mu.Lock()
-		if a, ok := m.aliases[id]; ok {
-			id = a
-		}
-		var found *MotifView
-		for _, mo := range m.motifs {
-			if mo.ID == id {
-				v := m.view(mo, true)
-				found = &v
-			}
-		}
-		m.mu.Unlock()
-		if found == nil {
-			http.Error(w, "unknown motif", http.StatusNotFound)
-			return
-		}
-		writeJSON(w, found)
+		m.ServeMotif(w, r, r.PathValue("id"))
 	})
-	mux.HandleFunc("GET /api/history/events", func(w http.ResponseWriter, r *http.Request) {
-		if m.store == nil {
-			writeJSON(w, map[string]any{"events": []any{}})
-			return
+	mux.HandleFunc("GET /api/history/events", m.ServeHistoryEvents)
+	mux.HandleFunc("GET /api/history/features", m.ServeHistoryFeatures)
+}
+
+// ServeMotifs answers with the established motifs and the aliases of merged
+// ones. The Serve methods are the handlers behind Routes, for callers that
+// mount them under paths of their own.
+func (m *Memory) ServeMotifs(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	aliases := make(map[string]string, len(m.aliases))
+	for k, v := range m.aliases {
+		aliases[k] = v
+	}
+	m.mu.Unlock()
+	writeJSON(w, map[string]any{"motifs": nonNil(m.Motifs()), "aliases": aliases})
+}
+
+// ServeMotif answers with one motif and its recent occurrences; a merged
+// motif's identifier leads to the one it was merged into.
+func (m *Memory) ServeMotif(w http.ResponseWriter, r *http.Request, id string) {
+	m.mu.Lock()
+	if a, ok := m.aliases[id]; ok {
+		id = a
+	}
+	var found *MotifView
+	for _, mo := range m.motifs {
+		if mo.ID == id {
+			v := m.view(mo, true)
+			found = &v
 		}
-		q := r.URL.Query()
-		now := m.clock()
-		from, to := now.Add(-time.Hour), now.Add(time.Second)
-		if t, err := time.Parse(time.RFC3339, q.Get("from")); err == nil {
-			from = t
+	}
+	m.mu.Unlock()
+	if found == nil {
+		http.Error(w, "unknown motif", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, found)
+}
+
+// HasMotif reports whether id names an established motif, or one merged
+// into it.
+func (m *Memory) HasMotif(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if a, ok := m.aliases[id]; ok {
+		id = a
+	}
+	for _, mo := range m.motifs {
+		if mo.ID == id {
+			return true
 		}
-		if t, err := time.Parse(time.RFC3339, q.Get("to")); err == nil {
-			to = t
-		}
-		limit := 2000
-		if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 && n < limit {
-			limit = n
-		}
-		typ := q.Get("type")
-		out := []json.RawMessage{}
-		m.mu.Lock()
+	}
+	return false
+}
+
+// ServeHistoryEvents answers with stored events: ?from=&to= (RFC 3339,
+// default the last hour), ?type=, ?limit= (at most 2000).
+func (m *Memory) ServeHistoryEvents(w http.ResponseWriter, r *http.Request) {
+	if m.store == nil {
+		writeJSON(w, map[string]any{"events": []any{}})
+		return
+	}
+	q := r.URL.Query()
+	now := m.clock()
+	from, to := now.Add(-time.Hour), now.Add(time.Second)
+	if t, err := time.Parse(time.RFC3339, q.Get("from")); err == nil {
+		from = t
+	}
+	if t, err := time.Parse(time.RFC3339, q.Get("to")); err == nil {
+		to = t
+	}
+	limit := 2000
+	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 && n < limit {
+		limit = n
+	}
+	typ := q.Get("type")
+	out := []json.RawMessage{}
+	m.mu.Lock()
+	if !m.readOnly {
 		m.store.flush()
-		m.mu.Unlock()
-		m.store.scan(from, to, func(rec record) bool {
-			if rec.Event == nil {
+	}
+	m.mu.Unlock()
+	m.store.scan(from, to, func(rec record) bool {
+		if rec.Event == nil {
+			return true
+		}
+		if typ != "" {
+			var head struct {
+				Type string `json:"type"`
+			}
+			if json.Unmarshal(rec.Event, &head) != nil || head.Type != typ {
 				return true
 			}
-			if typ != "" {
-				var head struct {
-					Type string `json:"type"`
-				}
-				if json.Unmarshal(rec.Event, &head) != nil || head.Type != typ {
-					return true
-				}
-			}
-			out = append(out, rec.Event)
-			return len(out) < limit
-		})
-		writeJSON(w, map[string]any{"from": from, "to": to, "events": out})
-	})
-	mux.HandleFunc("GET /api/history/features", func(w http.ResponseWriter, r *http.Request) {
-		window := time.Hour
-		if r.URL.Query().Get("window") == "24h" {
-			window = 24 * time.Hour
 		}
-		m.mu.Lock()
-		cut := m.now.Add(-window)
-		out := []*minute{}
-		for _, mi := range m.minutes {
-			if !mi.T.Before(cut) {
-				out = append(out, mi)
-			}
-		}
-		m.mu.Unlock()
-		writeJSON(w, map[string]any{"window": window.String(), "minutes": out})
+		out = append(out, rec.Event)
+		return len(out) < limit
 	})
+	writeJSON(w, map[string]any{"from": from, "to": to, "events": out})
+}
+
+// ServeHistoryFeatures answers with per-minute aggregates: ?window=1h
+// (default) or 24h.
+func (m *Memory) ServeHistoryFeatures(w http.ResponseWriter, r *http.Request) {
+	window := time.Hour
+	if r.URL.Query().Get("window") == "24h" {
+		window = 24 * time.Hour
+	}
+	m.mu.Lock()
+	cut := m.now.Add(-window)
+	out := []*minute{}
+	for _, mi := range m.minutes {
+		if !mi.T.Before(cut) {
+			out = append(out, mi)
+		}
+	}
+	m.mu.Unlock()
+	writeJSON(w, map[string]any{"window": window.String(), "minutes": out})
 }
 
 func (m *Memory) clock() time.Time {

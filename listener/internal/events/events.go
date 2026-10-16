@@ -209,6 +209,10 @@ type Status struct {
 	// Audio lists the codecs relayed on /ws/audio; empty when the relay
 	// is off.
 	Audio []string `json:"audio,omitempty"`
+	// Label and MemoryKey describe an analysis of the engine process: the
+	// caller's revision of its settings and the memory in use.
+	Label     string `json:"label,omitempty"`
+	MemoryKey string `json:"memory_key,omitempty"`
 }
 
 // Visual is the stable identity the browser derives a motif's form from

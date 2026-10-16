@@ -27,7 +27,8 @@ const (
 	Buffering    = "buffering"
 	Reconnecting = "reconnecting"
 	Offline      = "offline"
-	Idle         = "idle" // on demand: no viewer, so no connection to the source
+	Idle         = "idle"    // on demand: no viewer, so no connection to the source
+	Refused      = "refused" // BeforeStart refused the input
 )
 
 type Config struct {
@@ -48,7 +49,25 @@ type Config struct {
 	// audio for the browser). Each is written to its own pipe and must be
 	// drained by Handle until EOF, or ffmpeg stalls.
 	Outputs []Output
+
+	// ProtocolWhitelist limits the protocols ffmpeg may open for a URL
+	// input, including through redirects (ffmpeg's -protocol_whitelist).
+	// Empty: ffmpeg's defaults.
+	ProtocolWhitelist string
+	// BeforeStart is called before every start of ffmpeg, the first and
+	// each reconnect. If it returns an error the input is not opened: Run
+	// reports Refused and returns the error.
+	BeforeStart func() error
+	// OnProcess is called with ffmpeg's process ID after every start, and
+	// with 0 when it has ended.
+	OnProcess func(pid int)
 }
+
+// RefusedError is returned by Run when BeforeStart refused the input.
+type RefusedError struct{ Err error }
+
+func (e *RefusedError) Error() string { return "input refused: " + e.Err.Error() }
+func (e *RefusedError) Unwrap() error { return e.Err }
 
 // Output is an additional ffmpeg output. Args are the output options
 // (codec, format); the destination pipe is appended. Handle is called once
@@ -79,6 +98,9 @@ func IsURL(in string) bool { return strings.Contains(in, "://") }
 func (c Config) args() []string {
 	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	if IsURL(c.Input) {
+		if c.ProtocolWhitelist != "" {
+			a = append(a, "-protocol_whitelist", c.ProtocolWhitelist)
+		}
 		a = append(a,
 			"-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_on_network_error", "1",
 			"-reconnect_delay_max", "10", "-rw_timeout", "15000000")
@@ -118,6 +140,12 @@ func Run(ctx context.Context, c Config) error {
 	state(Connecting)
 	var delivered int64
 	for attempt := 0; ; attempt++ {
+		if c.BeforeStart != nil {
+			if err := c.BeforeStart(); err != nil {
+				state(Refused)
+				return &RefusedError{err}
+			}
+		}
 		got, err := c.once(ctx, state, delivered)
 		delivered += got
 		if ctx.Err() != nil {
@@ -180,6 +208,10 @@ func (c Config) once(ctx context.Context, state func(string), base int64) (int64
 	}
 	if err != nil {
 		return 0, fmt.Errorf("start ffmpeg: %w", err)
+	}
+	if c.OnProcess != nil {
+		c.OnProcess(cmd.Process.Pid)
+		defer c.OnProcess(0)
 	}
 	for i, o := range c.Outputs {
 		drained.Add(1)

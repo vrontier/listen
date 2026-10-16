@@ -21,6 +21,7 @@ type Config struct {
 	SummaryEvery time.Duration
 	Window       time.Duration // texture window
 	Live         bool          // live stream: the clock follows the observation time (see advance)
+	Quiet        bool          // no log line when opened
 
 	ResonanceMatch float64 // minimum similarity to join a resonance motif
 	TextureMatch   float64 // minimum similarity to join a texture motif
@@ -82,6 +83,7 @@ type Memory struct {
 	summaries   map[string]events.Envelope
 	lastSave    time.Time
 	dirty       bool
+	readOnly    bool // opened by Peek: nothing is written
 }
 
 type episode struct {
@@ -130,7 +132,9 @@ func New(cfg Config, stamper *events.Stamper) (*Memory, error) {
 			known++
 		}
 	}
-	log.Printf("memory: %s: %d motifs (%d established), %d minutes of history", cfg.Dir, len(m.motifs), known, len(m.minutes))
+	if !cfg.Quiet {
+		log.Printf("memory: %s: %d motifs (%d established), %d minutes of history", cfg.Dir, len(m.motifs), known, len(m.minutes))
+	}
 	return m, nil
 }
 
@@ -612,9 +616,56 @@ func (m *Memory) saveLocked() {
 func (m *Memory) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.store == nil {
+	if m.store == nil || m.readOnly {
 		return nil
 	}
 	m.saveLocked()
 	return m.store.close()
+}
+
+// Peek opens the memory in dir for reading only: its motifs and history can
+// be served, but it observes nothing and writes nothing. Its clock is now.
+func Peek(dir string) (*Memory, error) {
+	m, err := New(Config{Dir: dir, Quiet: true}, nil)
+	if err != nil {
+		return nil, err
+	}
+	m.readOnly = true
+	m.now = time.Now()
+	return m, nil
+}
+
+// SetReturnAfter changes the absence after which a known motif counts as
+// returned; the memory carries on.
+func (m *Memory) SetReturnAfter(d time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if d > 0 {
+		m.cfg.ReturnAfter = d
+	}
+}
+
+// SetHistoryDays changes how many days of history are kept.
+func (m *Memory) SetHistoryDays(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if n > 0 {
+		m.cfg.HistoryDays = n
+		if m.store != nil {
+			m.store.keep = time.Duration(n) * 24 * time.Hour
+		}
+	}
+}
+
+// Established counts the established motifs.
+func (m *Memory) Established() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, mo := range m.motifs {
+		if mo.established() {
+			n++
+		}
+	}
+	return n
 }

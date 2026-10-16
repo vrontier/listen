@@ -18,10 +18,10 @@ import (
 const DefaultSampleRate = 22050
 
 const (
-	fftSize   = 4096 // ≈186 ms window at 22.05 kHz, 5.4 Hz bins
-	bandCount = 48
-	minHz     = 20.0
-	peakMinHz = 40.0 // below this the MP3 source is a roll-off hump, not partials
+	fftSize      = 4096 // ≈186 ms window at 22.05 kHz, 5.4 Hz bins
+	bandCount    = 48
+	defaultMinHz = 20.0
+	peakMinHz    = 40.0 // below this the MP3 source is a roll-off hump, not partials
 
 	// mainsTolerance is how close (in FFT bins) a peak may sit to a mains
 	// harmonic and still count as hum.
@@ -162,14 +162,9 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 	if opt.MainsHz > 0 {
 		ignore = append([]Ignore{{Hz: opt.MainsHz, Comb: true}}, ignore...)
 	}
-	scale := float64(sampleRate) / DefaultSampleRate
 	a := &Analyzer{
 		sampleRate: sampleRate,
 		hopSize:    (sampleRate + 19) / 20, // 1103 at 22.05 kHz: 20 frames/s
-		minHz:      minHz,
-		maxHz:      math.Round(11000 * scale),
-		peakMinHz:  peakMinHz,
-		peakMaxHz:  math.Round(6000 * scale),
 		ignore:     ignore,
 		ignoreBase: make([]float64, len(ignore)),
 		emit:       emit,
@@ -192,15 +187,8 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 		novelty:    detect.NewNovelty(bandCount, 20, 20*60),
 		transients: detect.NewTransientDetector(tc),
 	}
-	// A focus range replaces the defaults for bands, shape and peaks alike.
-	if opt.MaxHz > 0 && opt.MaxHz < a.maxHz {
-		a.maxHz = opt.MaxHz
-		a.peakMaxHz = opt.MaxHz
-	}
-	if opt.MinHz > 0 && opt.MinHz < a.maxHz/2 {
-		a.minHz = opt.MinHz
-		a.peakMinHz = math.Max(peakMinHz, opt.MinHz)
-	}
+	r := EffectiveRange(sampleRate, opt.MinHz, opt.MaxHz)
+	a.minHz, a.maxHz, a.peakMinHz, a.peakMaxHz = r.MinHz, r.MaxHz, r.PeakMinHz, r.PeakMaxHz
 	a.bands = dsp.NewBands(bandCount, a.minHz, a.maxHz, a.binHz, len(a.mag))
 	a.resonances = detect.NewResonanceTracker(detect.DefaultResonanceConfig(a.binHz))
 	a.lo = int(math.Ceil(a.minHz / a.binHz))
@@ -517,7 +505,7 @@ func newViewBands(o View, nyquist, binHz float64, nbins int) *viewBands {
 	if o.Scale != "linear" {
 		o.Scale = "log"
 		if o.MinHz <= 0 {
-			o.MinHz = minHz
+			o.MinHz = defaultMinHz
 		}
 	}
 	if o.MinHz < 0 || o.MinHz >= o.MaxHz/2 {
@@ -543,4 +531,71 @@ func (v *viewBands) update(mag []float64) {
 	sorted := append([]float64(nil), v.db...)
 	sort.Float64s(sorted)
 	v.rng.Update(sorted[len(sorted)/5], sorted[len(sorted)-1])
+}
+
+// Range is what an analysis works with after defaults: the analysed range,
+// the range in which peaks are searched, the width of a bin and the default
+// tolerance of a filter rule.
+type Range struct {
+	SampleRate           int
+	BinHz                float64
+	MinHz, MaxHz         float64
+	PeakMinHz, PeakMaxHz float64
+	DefaultTolHz         float64
+}
+
+// EffectiveRange applies the defaults New applies to a focus range (minHz,
+// maxHz; 0: default). Values New cannot use are left at the default, as New
+// does; TopHz says how high maxHz may go.
+func EffectiveRange(sampleRate int, minHz, maxHz float64) Range {
+	if sampleRate <= 0 {
+		sampleRate = DefaultSampleRate
+	}
+	scale := float64(sampleRate) / DefaultSampleRate
+	bin := float64(sampleRate) / fftSize
+	r := Range{
+		SampleRate: sampleRate, BinHz: bin,
+		MinHz: defaultMinHz, MaxHz: TopHz(sampleRate),
+		PeakMinHz: peakMinHz, PeakMaxHz: math.Round(6000 * scale),
+		DefaultTolHz: mainsTolerance * bin,
+	}
+	// A focus range replaces the defaults for bands, shape and peaks alike.
+	if maxHz > 0 && maxHz < r.MaxHz {
+		r.MaxHz, r.PeakMaxHz = maxHz, maxHz
+	}
+	if minHz > 0 && minHz < r.MaxHz/2 {
+		r.MinHz = minHz
+		r.PeakMinHz = math.Max(peakMinHz, minHz)
+	}
+	return r
+}
+
+// TopHz is the highest frequency analysed at a sample rate: just below
+// Nyquist.
+func TopHz(sampleRate int) float64 {
+	return math.Round(11000 * float64(sampleRate) / DefaultSampleRate)
+}
+
+// Defaults of Options.
+const (
+	DefaultTransientK   = 6.0
+	DefaultTransientGap = 300 * time.Millisecond
+)
+
+// Tune changes the transient threshold and gap of a running analyzer; zero
+// values keep the current ones.
+func (a *Analyzer) Tune(transientK float64, transientGap time.Duration) {
+	a.transients.Tune(transientK, transientGap)
+}
+
+// Samples is the number of samples fed so far, on the analyzer's timeline.
+func (a *Analyzer) Samples() int64 { return a.samples + int64(len(a.pending)) }
+
+// SeekTo moves the analyzer to sample n of its input's timeline, as after a
+// gap: what is pending is dropped and the window refills from the next
+// samples. Positions and the observation clock count on from n.
+func (a *Analyzer) SeekTo(n int64) {
+	a.pending = a.pending[:0]
+	a.ring = a.ring[:0]
+	a.samples = n
 }
