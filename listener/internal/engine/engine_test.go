@@ -75,6 +75,8 @@ func TestAddressPolicy(t *testing.T) {
 	}
 
 	// Without a lookup (resuming), a name passes; addresses are still checked.
+	// (A stream whose host does not resolve is accepted at the PUT as well;
+	// see TestUnresolvedHostAccepted.)
 	if pr := p.checkStatic("http://unknown.example/s"); pr != nil {
 		t.Errorf("static check of a name: %v", pr)
 	}
@@ -544,5 +546,23 @@ func TestCorrelationFindsLag(t *testing.T) {
 	br, _, _ := bestLag(a, b, n-corrWindow-baselineShift, corrWindow, baselineShift)
 	if math.Abs(br) > 0.3 {
 		t.Errorf("baseline r %.2f, want near 0", br)
+	}
+}
+
+func TestUnresolvedHostAccepted(t *testing.T) {
+	dir := t.TempDir()
+	e, c := startEngine(t, dir)
+	e.policy.resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
+		if host == "private.example" {
+			return []netip.Addr{netip.MustParseAddr("10.0.0.9")}, nil
+		}
+		return nil, errors.New("no such host")
+	}
+	if st := c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: "https://unresolved.example/live.ogg", SampleRate: 22050}, nil); st != 200 {
+		t.Errorf("unresolved host: %d, want 200", st)
+	}
+	var er map[string]map[string]any
+	if st := c.do("PUT", "/v1/streams/s-2", StreamSpec{Input: "https://private.example/live.ogg", SampleRate: 22050}, &er); st != 422 {
+		t.Errorf("host resolving to a private address: %d, want 422", st)
 	}
 }

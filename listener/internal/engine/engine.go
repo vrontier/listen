@@ -230,7 +230,12 @@ func (e *Engine) checkStream(ctx context.Context, spec *StreamSpec, resolve bool
 	case spec.Input == "":
 		fe = append(fe, FieldError{"input", "required", "the stream's address is needed"})
 	case resolve:
-		p, _ = e.policy.check(ctx, spec.Input)
+		// A host that does not resolve now is no reason to refuse: the
+		// connection fails and is retried, and every attempt is checked.
+		var err error
+		if p, err = e.policy.check(ctx, spec.Input); errors.Is(err, errUnresolved) {
+			p = nil
+		}
 	default:
 		p = e.policy.checkStatic(spec.Input)
 	}
