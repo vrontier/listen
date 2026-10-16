@@ -259,7 +259,11 @@ button.danger, .button.danger { background: var(--bad-fill); border-color: var(-
 button.danger:hover { filter: brightness(0.92); background: var(--bad-fill); border-color: var(--bad-fill); }
 button:disabled, button:disabled:hover { opacity: 0.45; cursor: not-allowed; background: var(--accent); }
 button.secondary:disabled, button.secondary:disabled:hover { background: var(--surface); }
-button.stop-x, button.stop-x:hover { background: var(--bad-fill); border-color: var(--bad-fill); color: #fff; width: 1.8rem; height: 1.8rem; padding: 0; border-radius: 50%; font-size: 1.15rem; line-height: 1; font-weight: 600; }
+/* The round stop button: centred on its own, whatever form it sits in
+   (an inline form's padding must not move the cross), the same on hover. */
+button.stop-x, form button.stop-x, button.stop-x:hover { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; background: var(--bad-fill); border: 1px solid var(--bad-fill); color: #fff; width: 1.8rem; height: 1.8rem; min-width: 1.8rem; padding: 0; border-radius: 50%; line-height: 0; align-self: center; }
+button.stop-x:hover { filter: brightness(0.9); }
+button.stop-x svg { display: block; width: 0.75rem; height: 0.75rem; }
 .confirm { max-width: min(28rem, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: var(--surface); color: var(--text); padding: 1rem 1.2rem; }
 .confirm::backdrop { background: rgba(0, 0, 0, 0.45); }
 .confirm p { margin: 0 0 1rem; }

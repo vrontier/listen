@@ -14,7 +14,7 @@
   <form method="post" action="/analyses/{{$d.Analysis.ID}}/stop" class="inline-form" data-confirm="Stop run {{.Number}} of {{$d.Analysis.Name}} now? Its data set is put together from what it has recorded so far." data-confirm-yes="Stop the run">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <span class="run-on">Run {{.Number}} since {{when .Started}}, {{if .Ends.IsZero}}until stopped{{else}}until {{when .Ends}}{{end}}{{if .OfflineStop}}, or until a source sends nothing for {{.OfflineStop}} min{{end}}.</span>
-    <button class="stop-x" title="Stop run {{.Number}}" aria-label="Stop run {{.Number}}">×</button>
+    <button class="stop-x" title="Stop run {{.Number}}" aria-label="Stop run {{.Number}}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   </form>
   <p class="meta">The sources stay connected while the run lasts, whether or not this page is open. What it finds goes into the run's data set.{{range $d.Sources}}{{if not .Running}} {{.Stream.Texts.Name}} is {{.Stream.State}} and does not run.{{end}}{{end}}</p>
   {{with $d.Trial}}

@@ -136,3 +136,32 @@ func waitFor(t *testing.T, ok func() bool, what string) {
 		}
 	}
 }
+
+// A preview listens for its ten minutes even with no page open, as when it
+// is started through MCP: its stream is continuous meanwhile.
+func TestPreviewKeepsStreamConnected(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	u, _ := r.db.CreateUser(ctx, "m@example.org", "Mira", false)
+	st, _ := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050,
+		Texts: catalogue.StreamTexts{Name: "A"}, Probe: []byte(`{}`)})
+	a, _ := r.db.CreateAnalysis(ctx, u.ID, "Watch", "", []int64{st.ID}, nil)
+	r.srv.sync.reconcile(ctx)
+	cl := engine.NewClient(&http.Client{}, r.engSrv.URL)
+	mode := func() string { es, _ := cl.Stream(ctx, st.EngineID()); return es.Mode }
+	if m := mode(); m != engine.OnDemand {
+		t.Fatalf("before: %s", m)
+	}
+	member := r.loginAs("m@example.org")
+	aURL := "/analyses/" + strconv.FormatInt(a.ID, 10)
+	_, page, _ := r.get(member, aURL)
+	csrf := csrfOf(t, page)
+	r.post(member, aURL+"/preview", url.Values{"csrf": {csrf}})
+	if m := mode(); m != engine.Continuous {
+		t.Fatalf("during the preview: %s", m)
+	}
+	r.post(member, aURL+"/preview/end", url.Values{"csrf": {csrf}})
+	if m := mode(); m != engine.OnDemand {
+		t.Fatalf("after the preview: %s", m)
+	}
+}

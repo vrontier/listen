@@ -414,6 +414,18 @@ func (s *engineSync) push(ctx context.Context, st catalogue.Stream) error {
 	if err != nil {
 		return err
 	}
+	analyses, err := s.db.AnalysesUsing(ctx, st.ID)
+	if err != nil {
+		return err
+	}
+	// A preview listens for its ten minutes whether or not a page is open
+	// (it may be started through MCP): its stream stays connected as for
+	// a run.
+	for _, a := range analyses {
+		if _, ok := s.preview(a.ID); ok {
+			inRun = true
+		}
+	}
 	spec, ok := s.wanted(st, inRun)
 	if !ok {
 		err := s.eng.DeleteStream(ctx, st.EngineID(), false)
@@ -429,10 +441,6 @@ func (s *engineSync) push(ctx context.Context, st catalogue.Stream) error {
 	s.mu.Lock()
 	s.streams[es.ID] = es
 	s.mu.Unlock()
-	analyses, err := s.db.AnalysesUsing(ctx, st.ID)
-	if err != nil {
-		return err
-	}
 	keep := map[string]bool{}
 	for _, a := range analyses {
 		src, ok := a.Source(st.ID)

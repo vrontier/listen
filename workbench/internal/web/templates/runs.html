@@ -20,7 +20,7 @@
       <td>{{.StartedBy}}{{with .Token}} <span class="meta small">token {{.}}</span>{{end}}</td>
       <td><form method="post" action="/analyses/{{.AnalysisID}}/stop" class="inline-form" data-confirm="Stop run {{.Number}} of {{.AnalysisName}} now? Its data set is put together from what it has recorded so far." data-confirm-yes="Stop the run">
         <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="back" value="runs">
-        <button class="stop-x" title="Stop run {{.Number}}" aria-label="Stop run {{.Number}}">×</button>
+        <button class="stop-x" title="Stop run {{.Number}}" aria-label="Stop run {{.Number}}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </form></td>
     </tr>{{end}}</tbody>
   </table>
