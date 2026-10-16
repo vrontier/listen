@@ -61,7 +61,7 @@ const (
 )
 
 type group struct {
-	e  *Engine
+	c  *caller
 	id string
 
 	mu       sync.Mutex
@@ -193,18 +193,18 @@ func (r *run) notifyObservers(m events.Message) {
 
 // --- the registry ---
 
-func (e *Engine) checkGroup(spec *GroupSpec) []FieldError {
+func (c *caller) checkGroup(spec *GroupSpec) []FieldError {
 	var fe []FieldError
-	lim := e.opts.Limits
+	lim := c.e.opts.Limits
 	if n := len(spec.Members); n < 2 || n > lim.MembersPerGroup {
 		fe = append(fe, FieldError{"members", "out_of_range", fmt.Sprintf("a group has 2 to %d members", lim.MembersPerGroup)})
 	}
 	seen := map[string]bool{}
 	for i, m := range spec.Members {
 		path := fmt.Sprintf("members[%d]", i)
-		_, _, err := e.find(m.Stream, m.Analysis)
+		_, _, err := c.find(m.Stream, m.Analysis)
 		switch {
-		case e.stream(m.Stream) == nil:
+		case c.stream(m.Stream) == nil:
 			fe = append(fe, FieldError{path + ".stream", "not_found", "no such stream"})
 		case err != nil:
 			fe = append(fe, FieldError{path + ".analysis", "not_found", "no such analysis on " + m.Stream})
@@ -244,33 +244,34 @@ func (e *Engine) checkGroup(spec *GroupSpec) []FieldError {
 	return fe
 }
 
-func (e *Engine) groupDir(id string) string { return filepath.Join(e.opts.MemoryDir, "_groups", id) }
+func (c *caller) groupDir(id string) string { return filepath.Join(c.memDir, "_groups", id) }
 
 // putGroup creates or changes a group.
-func (e *Engine) putGroup(id string, spec GroupSpec) (*group, *apiError) {
-	if fe := e.checkGroup(&spec); fe != nil {
+func (c *caller) putGroup(id string, spec GroupSpec) (*group, *apiError) {
+	if fe := c.checkGroup(&spec); fe != nil {
 		return nil, &apiError{status: 422, code: "invalid", message: "the group was refused", errors: fe}
 	}
 	days := 30
 	if spec.HistoryDays != nil {
 		days = *spec.HistoryDays
 	}
-	e.gmu.Lock()
-	g := e.groups[id]
+	c.gmu.Lock()
+	g := c.groups[id]
 	if g == nil {
-		if len(e.groups) >= e.opts.Limits.Groups {
-			e.gmu.Unlock()
-			return nil, &apiError{status: 409, code: "limit_reached", message: fmt.Sprintf("the engine holds %d groups, its limit", len(e.groups))}
+		if !reserve(&c.e.ngroups, c.e.opts.Limits.Groups) {
+			c.gmu.Unlock()
+			return nil, &apiError{status: 409, code: "limit_reached", message: fmt.Sprintf("the engine holds %d groups, its limit", c.e.opts.Limits.Groups)}
 		}
-		hist, err := openDayLog(e.groupDir(id), days)
+		hist, err := openDayLog(c.groupDir(id), days)
 		if err != nil {
-			e.gmu.Unlock()
+			c.e.ngroups.Add(-1)
+			c.gmu.Unlock()
 			return nil, &apiError{status: 500, code: "internal", message: err.Error()}
 		}
-		g = &group{e: e, id: id, subs: map[*sub]struct{}{}, hist: hist}
-		e.groups[id] = g
+		g = &group{c: c, id: id, subs: map[*sub]struct{}{}, hist: hist}
+		c.groups[id] = g
 	}
-	e.gmu.Unlock()
+	c.gmu.Unlock()
 
 	g.mu.Lock()
 	if !sameMembers(g.spec.Members, spec.Members) {
@@ -290,8 +291,8 @@ func (e *Engine) putGroup(id string, spec GroupSpec) (*group, *apiError) {
 	g.hist.setKeep(days)
 	g.mu.Unlock()
 	g.attach()
-	e.saveConfig()
-	e.notify("group.state", g.view())
+	c.saveConfig()
+	c.notify("group.state", g.view())
 	return g, nil
 }
 
@@ -307,11 +308,14 @@ func sameMembers(a, b []GroupMember) bool {
 	return true
 }
 
-func (e *Engine) deleteGroup(id string, purge bool) *apiError {
-	e.gmu.Lock()
-	g := e.groups[id]
-	delete(e.groups, id)
-	e.gmu.Unlock()
+func (c *caller) deleteGroup(id string, purge bool) *apiError {
+	c.gmu.Lock()
+	g := c.groups[id]
+	if g != nil {
+		delete(c.groups, id)
+		c.e.ngroups.Add(-1)
+	}
+	c.gmu.Unlock()
 	if g == nil {
 		return errNotFound("group")
 	}
@@ -328,37 +332,37 @@ func (e *Engine) deleteGroup(id string, purge bool) *apiError {
 	g.hist.close()
 	g.mu.Unlock()
 	if purge {
-		os.RemoveAll(e.groupDir(id))
+		os.RemoveAll(c.groupDir(id))
 	}
-	e.saveConfig()
-	e.notify("group.state", map[string]any{"id": id, "deleted": true})
+	c.saveConfig()
+	c.notify("group.state", map[string]any{"id": id, "deleted": true})
 	return nil
 }
 
-func (e *Engine) group(id string) *group {
-	e.gmu.Lock()
-	defer e.gmu.Unlock()
-	return e.groups[id]
+func (c *caller) group(id string) *group {
+	c.gmu.Lock()
+	defer c.gmu.Unlock()
+	return c.groups[id]
 }
 
-func (e *Engine) groupList() []*group {
-	e.gmu.Lock()
-	defer e.gmu.Unlock()
-	ids := make([]string, 0, len(e.groups))
-	for id := range e.groups {
+func (c *caller) groupList() []*group {
+	c.gmu.Lock()
+	defer c.gmu.Unlock()
+	ids := make([]string, 0, len(c.groups))
+	for id := range c.groups {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	out := make([]*group, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, e.groups[id])
+		out = append(out, c.groups[id])
 	}
 	return out
 }
 
 // groupWants reports whether a running group needs the stream connected.
-func (e *Engine) groupWants(streamID string) bool {
-	for _, g := range e.groupList() {
+func (c *caller) groupWants(streamID string) bool {
+	for _, g := range c.groupList() {
 		g.mu.Lock()
 		wanted := g.wantedLocked()
 		hit := false
@@ -383,7 +387,7 @@ func (g *group) attach() {
 	members := append([]*gmember(nil), g.members...)
 	g.mu.Unlock()
 	for _, m := range members {
-		_, cur, _ := g.e.find(m.stream, m.analysis)
+		_, cur, _ := g.c.find(m.stream, m.analysis)
 		g.mu.Lock()
 		if cur != m.run {
 			if m.run != nil {
@@ -413,7 +417,7 @@ func (g *group) snapshotLocked() ([]*gmember, []*run) {
 func (g *group) memberStates(members []*gmember, runs []*run, now time.Time) []string {
 	out := make([]string, len(members))
 	for i, m := range members {
-		s, r, err := g.e.find(m.stream, m.analysis)
+		s, r, err := g.c.find(m.stream, m.analysis)
 		_, arrived := m.seen()
 		switch {
 		case err != nil || r != runs[i]:
@@ -439,9 +443,11 @@ func (e *Engine) groupLoop() {
 		case <-e.ctx.Done():
 			return
 		case now := <-t.C:
-			for _, g := range e.groupList() {
-				g.attach()
-				g.tick(now)
+			for _, c := range e.callers {
+				for _, g := range c.groupList() {
+					g.attach()
+					g.tick(now)
+				}
 			}
 		}
 	}
@@ -458,7 +464,7 @@ func (g *group) tick(now time.Time) {
 		g.mu.Lock()
 		g.running = wanted
 		g.mu.Unlock()
-		g.e.notify("group.state", g.view())
+		g.c.notify("group.state", g.view())
 	}
 	if !wanted {
 		return
@@ -677,16 +683,16 @@ func (g *group) view() map[string]any {
 
 // --- API ---
 
-func (e *Engine) groupRoutes(m *http.ServeMux) {
+func (c *caller) groupRoutes(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/groups", func(w http.ResponseWriter, r *http.Request) {
 		out := []map[string]any{}
-		for _, g := range e.groupList() {
+		for _, g := range c.groupList() {
 			out = append(out, g.view())
 		}
 		writeJSON(w, 200, map[string]any{"groups": out})
 	})
 	m.HandleFunc("GET /v1/groups/{g}", func(w http.ResponseWriter, r *http.Request) {
-		if g := e.group(r.PathValue("g")); g != nil {
+		if g := c.group(r.PathValue("g")); g != nil {
 			writeJSON(w, 200, g.view())
 			return
 		}
@@ -703,7 +709,7 @@ func (e *Engine) groupRoutes(m *http.ServeMux) {
 			writeErr(w, err)
 			return
 		}
-		g, err := e.putGroup(id, spec)
+		g, err := c.putGroup(id, spec)
 		if err != nil {
 			writeErr(w, err)
 			return
@@ -711,15 +717,15 @@ func (e *Engine) groupRoutes(m *http.ServeMux) {
 		writeJSON(w, 200, g.view())
 	})
 	m.HandleFunc("DELETE /v1/groups/{g}", func(w http.ResponseWriter, r *http.Request) {
-		if err := e.deleteGroup(r.PathValue("g"), purge(r)); err != nil {
+		if err := c.deleteGroup(r.PathValue("g"), purge(r)); err != nil {
 			writeErr(w, err)
 			return
 		}
 		w.WriteHeader(204)
 	})
-	m.HandleFunc("GET /v1/groups/{g}/events", e.groupEvents)
+	m.HandleFunc("GET /v1/groups/{g}/events", c.groupEvents)
 	m.HandleFunc("GET /v1/groups/{g}/state", func(w http.ResponseWriter, r *http.Request) {
-		g := e.group(r.PathValue("g"))
+		g := c.group(r.PathValue("g"))
 		if g == nil {
 			writeErr(w, errNotFound("group"))
 			return
@@ -740,7 +746,7 @@ func (e *Engine) groupRoutes(m *http.ServeMux) {
 		writeJSON(w, 200, out)
 	})
 	m.HandleFunc("GET /v1/groups/{g}/history/events", func(w http.ResponseWriter, r *http.Request) {
-		g := e.group(r.PathValue("g"))
+		g := c.group(r.PathValue("g"))
 		if g == nil {
 			writeErr(w, errNotFound("group"))
 			return
@@ -749,13 +755,13 @@ func (e *Engine) groupRoutes(m *http.ServeMux) {
 	})
 }
 
-func (e *Engine) groupEvents(w http.ResponseWriter, r *http.Request) {
+func (c *caller) groupEvents(w http.ResponseWriter, r *http.Request) {
 	fl, ok := w.(http.Flusher)
 	if !ok {
 		writeErr(w, &apiError{status: 500, code: "internal", message: "no streaming"})
 		return
 	}
-	g := e.group(r.PathValue("g"))
+	g := c.group(r.PathValue("g"))
 	if g == nil {
 		writeErr(w, errNotFound("group"))
 		return
@@ -770,7 +776,7 @@ func (e *Engine) groupEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	g.mu.Lock()
-	if len(g.subs) >= e.opts.Limits.SubscriptionsPerAnalysis {
+	if len(g.subs) >= c.e.opts.Limits.SubscriptionsPerAnalysis {
 		g.mu.Unlock()
 		writeErr(w, &apiError{status: 409, code: "limit_reached", message: "too many subscriptions to this group"})
 		return
@@ -796,7 +802,7 @@ func (e *Engine) groupEvents(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-e.ctx.Done():
+		case <-c.e.ctx.Done():
 			return
 		case frame, open := <-sb.ch:
 			if !open {

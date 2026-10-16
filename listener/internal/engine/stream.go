@@ -1,9 +1,6 @@
 package engine
 
 import (
-	"context"
-	"errors"
-	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -11,7 +8,6 @@ import (
 	"time"
 
 	"github.com/vrontier/listen/listener/internal/analysis"
-	"github.com/vrontier/listen/listener/internal/source"
 )
 
 // Stream states.
@@ -26,52 +22,33 @@ const (
 
 func isURL(in string) bool { return strings.Contains(in, "://") }
 
-// stream is one input: one connection, one decode at one sample rate,
-// feeding all its analyses.
+// stream is a caller's stream: its settings, view and analyses, on a
+// source that it may share with streams of other callers.
 type stream struct {
-	e     *Engine
+	c     *caller
 	id    string
 	input string
 	rate  int
+	src   *sourceConn
 
-	mu         sync.Mutex
-	spec       StreamSpec // as given
-	mode       string
-	idleAfter  time.Duration
-	retryMax   time.Duration
-	view       *View
-	runs       map[string]*run
-	state      string
-	since      time.Time
-	lastErr    *Problem
-	reconnects int
-	cancel     context.CancelFunc // set while the source runs
-	srcDone    chan struct{}
-	lastWanted time.Time
-	retryAt    time.Time // after a refusal
-	lastUsage  Usage
+	mu        sync.Mutex
+	spec      StreamSpec // as given
+	mode      string
+	idleAfter time.Duration
+	retryMax  time.Duration
+	view      *View
+	runs      map[string]*run
+	lastUsage Usage
 
-	feMu     sync.Mutex
-	fe       *analysis.FrontEnd     // one window, FFT and view for all analyses
-	feBusyNs atomic.Int64           // time spent in the front end
-	feedList atomic.Pointer[[]*run] // what the front end feeds
-	timeline atomic.Int64           // samples decoded since the stream was created
-	lastData atomic.Int64           // UnixNano of the latest samples
-	delay    atomic.Int64           // ms between observation and now
-	pid      atomic.Int64           // ffmpeg, 0 when not running
-	quit     chan struct{}
-	supDone  chan struct{}
+	vmu      sync.Mutex
+	vb       *analysis.ViewBands // the stream's own view, or nil
+	feedList atomic.Pointer[[]*run]
 }
 
-func newStream(e *Engine, id string, spec StreamSpec, view *View) *stream {
-	s := &stream{
-		e: e, id: id, input: spec.Input, rate: spec.SampleRate, runs: map[string]*run{},
-		state: StateIdle, since: time.Now().UTC(), quit: make(chan struct{}), supDone: make(chan struct{}),
-	}
-	s.fe = analysis.NewFrontEnd(spec.SampleRate, view.options(), true)
-	s.setSpec(spec, view)
+func newStream(c *caller, id string, spec StreamSpec, view *View, src *sourceConn) *stream {
+	s := &stream{c: c, id: id, input: spec.Input, rate: spec.SampleRate, src: src, runs: map[string]*run{}}
 	s.feedList.Store(&[]*run{})
-	go s.supervise()
+	s.setSpec(spec, view)
 	return s
 }
 
@@ -95,9 +72,12 @@ func (s *stream) setSpec(spec StreamSpec, view *View) {
 	s.view = view
 	s.mu.Unlock()
 	if changed {
-		s.feMu.Lock()
-		s.fe.SetView(view.options())
-		s.feMu.Unlock()
+		s.vmu.Lock()
+		s.vb = nil
+		if v := view.options(); v != nil {
+			s.vb = analysis.NewViewBands(*v, s.rate)
+		}
+		s.vmu.Unlock()
 	}
 }
 
@@ -106,6 +86,19 @@ func sameView(a, b *View) bool {
 		return a == b
 	}
 	return *a == *b
+}
+
+// take hands a frame of the source to the stream's analyses, with the
+// stream's view. It runs on the source's decode.
+func (s *stream) take(fr *analysis.Frame) {
+	s.vmu.Lock()
+	if s.vb != nil {
+		fr = s.vb.Apply(fr)
+	}
+	s.vmu.Unlock()
+	for _, r := range *s.feedList.Load() {
+		r.push(fr)
+	}
 }
 
 // runList is the analyses in identifier order; s.mu must be held.
@@ -142,26 +135,16 @@ func (s *stream) getRun(id string) *run {
 	return s.runs[id]
 }
 
-func (s *stream) connected() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state == StateConnected
-}
+func (s *stream) connected() bool { return s.src.connected() }
 
 func (s *stream) status() (state string, reconnects int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state, s.reconnects
+	st, _, _, rc := s.src.status()
+	return st, rc
 }
 
-func (s *stream) setDelay(d time.Duration) {
-	if d < 0 {
-		d = 0
-	}
-	s.delay.Store(d.Milliseconds())
-}
+func (s *stream) setDelay(d time.Duration) { s.src.setDelay(d) }
 
-// wanted: the stream should be connected now.
+// wanted: this stream wants its source connected.
 func (s *stream) wanted() bool {
 	s.mu.Lock()
 	runs, mode := s.runList(), s.mode
@@ -177,195 +160,24 @@ func (s *stream) wanted() bool {
 			return true
 		}
 	}
-	return s.e.groupWants(s.id) // a running group keeps its members' streams connected
+	return s.c.groupWants(s.id) // a running group keeps its members' streams connected
 }
 
-// supervise connects and disconnects the stream as it is wanted.
-func (s *stream) supervise() {
-	defer close(s.supDone)
-	t := time.NewTicker(250 * time.Millisecond)
-	defer t.Stop()
-	for {
-		s.step(time.Now())
-		select {
-		case <-s.quit:
-			s.stopSource()
-			return
-		case <-t.C:
-		}
-	}
-}
-
-func (s *stream) step(now time.Time) {
-	wanted := s.wanted()
+// stateChanged reports the source's new state as this stream's.
+func (s *stream) stateChanged() {
 	s.mu.Lock()
-	if wanted {
-		s.lastWanted = now
-	}
-	running, done := s.cancel != nil, s.srcDone
-	idleFor, retryAt, idleAfter := now.Sub(s.lastWanted), s.retryAt, s.idleAfter
-	s.mu.Unlock()
-	if running {
-		select {
-		case <-done:
-			s.mu.Lock()
-			s.cancel, s.srcDone = nil, nil
-			s.mu.Unlock()
-			return
-		default:
-		}
-		if !wanted && idleFor >= idleAfter {
-			s.stopSource()
-		}
-		return
-	}
-	if wanted && !now.Before(retryAt) {
-		s.startSource()
-	}
-}
-
-func (s *stream) startSource() {
-	ctx, cancel := context.WithCancel(s.e.ctx)
-	done := make(chan struct{})
-	s.mu.Lock()
-	s.cancel, s.srcDone = cancel, done
-	retryMax := s.retryMax
-	s.mu.Unlock()
-	s.setState(StateConnecting, nil)
-	cfg := source.Config{
-		Input: s.input, SampleRate: s.rate, FFmpeg: s.e.opts.FFmpeg, MaxBackoff: retryMax,
-		OnSamples: s.onSamples, OnState: s.onState,
-		BeforeStart: func() error {
-			p, err := s.e.policy.check(ctx, s.input)
-			if p != nil && !errors.Is(err, errUnresolved) {
-				return refusal{p}
-			}
-			return nil
-		},
-		OnProcess: func(pid int) { s.pid.Store(int64(pid)) },
-	}
-	if isURL(s.input) {
-		cfg.ProtocolWhitelist = protocolWhitelist
-	} else {
-		cfg.Realtime, cfg.Loop = true, true // development and tests
-	}
-	go func() {
-		defer close(done)
-		err := source.Run(ctx, cfg)
-		var ref *source.RefusedError
-		var why refusal
-		switch {
-		case errors.As(err, &ref) && errors.As(ref.Err, &why):
-			now := time.Now().UTC()
-			p := *why.p
-			p.At = &now
-			s.mu.Lock()
-			s.retryAt = time.Now().Add(retryMax)
-			s.mu.Unlock()
-			log.Printf("stream %s: refused: %s", s.id, p.Message)
-			s.setState(StateRefused, &p)
-		case err != nil:
-			now := time.Now().UTC()
-			log.Printf("stream %s: %v", s.id, err)
-			s.setState(StateIdle, &Problem{Code: "input_ended", Message: err.Error(), At: &now})
-		case ctx.Err() == nil:
-			s.setState(StateIdle, nil) // a file that ended
-		}
-	}()
-}
-
-// refusal carries the address check's answer through source.Run.
-type refusal struct{ p *Problem }
-
-func (r refusal) Error() string { return r.p.Message }
-
-func (s *stream) stopSource() {
-	s.mu.Lock()
-	cancel, done := s.cancel, s.srcDone
-	s.cancel, s.srcDone = nil, nil
-	s.mu.Unlock()
-	if cancel == nil {
-		return
-	}
-	cancel()
-	<-done
-	s.pid.Store(0)
-	s.mu.Lock()
-	refused := s.state == StateRefused
-	s.mu.Unlock()
-	if !refused {
-		s.setState(StateIdle, nil)
-	}
-}
-
-// onState maps the source's states onto the stream's.
-func (s *stream) onState(st string) {
-	switch st {
-	case source.Connecting:
-		// reported by startSource already
-	case source.Connected:
-		s.mu.Lock()
-		fresh := s.state != StateBuffering && s.state != StateConnected
-		s.mu.Unlock()
-		if fresh {
-			// A new connection: every analysis's clock starts from now.
-			at, now := s.timeline.Load(), time.Now()
-			for _, r := range *s.feedList.Load() {
-				r.anchorAt(now, at)
-			}
-		}
-		s.setState(StateConnected, nil)
-	case source.Buffering:
-		s.setState(StateBuffering, nil)
-	case source.Reconnecting:
-		s.mu.Lock()
-		s.reconnects++
-		s.mu.Unlock()
-		s.setState(StateReconnecting, nil)
-	}
-}
-
-func (s *stream) setState(st string, p *Problem) {
-	s.mu.Lock()
-	if s.state == st && p == nil {
-		s.mu.Unlock()
-		return
-	}
-	s.state, s.since = st, time.Now().UTC()
-	if p != nil {
-		s.lastErr = p
-	} else if st == StateConnected {
-		s.lastErr = nil
-	}
 	runs := s.runList()
 	s.mu.Unlock()
-	s.e.notify("stream.state", s.viewOf(false))
+	s.c.notify("stream.state", s.viewOf(false))
 	for _, r := range runs {
 		r.emitStatus()
-		s.e.notifyAnalysis(r)
+		s.c.notifyAnalysis(r)
 	}
 }
 
-// onSamples runs the stream's front end once and hands every frame to all
-// its analyses, each through its own queue.
-func (s *stream) onSamples(x []float32) {
-	s.timeline.Add(int64(len(x)))
-	s.lastData.Store(time.Now().UnixNano())
-	s.feMu.Lock()
-	t0 := time.Now()
-	s.fe.Feed(x, func(fr *analysis.Frame) {
-		for _, r := range *s.feedList.Load() {
-			r.push(fr)
-		}
-	})
-	s.feBusyNs.Add(int64(time.Since(t0)))
-	s.feMu.Unlock()
-}
-
-// close stops the stream, its source and its analyses.
+// close stops the stream's analyses; the engine detaches it from its
+// source.
 func (s *stream) close() {
-	close(s.quit)
-	<-s.supDone
 	s.mu.Lock()
 	runs := s.runList()
 	s.mu.Unlock()
@@ -375,6 +187,8 @@ func (s *stream) close() {
 }
 
 func (s *stream) viewOf(withInput bool) StreamView {
+	state, since, lastErr, reconnects := s.src.status()
+	shared := s.src.shared()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ids := make([]string, 0, len(s.runs))
@@ -385,13 +199,17 @@ func (s *stream) viewOf(withInput bool) StreamView {
 	v := StreamView{
 		ID: s.id, SampleRate: s.rate, Mode: s.mode,
 		IdleAfterS: int(s.idleAfter / time.Second), RetryMaxS: int(s.retryMax / time.Second),
-		State: s.state, Since: s.since, LastError: s.lastErr, Reconnects: s.reconnects,
-		DelayMs: int(s.delay.Load()), Analyses: ids, Usage: s.lastUsage,
+		State: state, Since: since, LastError: lastErr, Reconnects: reconnects,
+		DelayMs: int(s.src.delay.Load()), Analyses: ids, Usage: s.lastUsage,
+		Shared: shared, Source: "network",
 	}
-	if s.state != StateConnected && s.state != StateBuffering {
+	if !isURL(s.input) {
+		v.Source = "file"
+	}
+	if state != StateConnected && state != StateBuffering {
 		v.DelayMs = 0
 	}
-	if n := s.lastData.Load(); n > 0 {
+	if n := s.src.lastData.Load(); n > 0 {
 		t := time.Unix(0, n).UTC()
 		v.LastData = &t
 	}

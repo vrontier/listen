@@ -28,28 +28,28 @@ func errNotFound(what string) *apiError {
 }
 
 // Handler serves the control API.
-func (e *Engine) Handler() http.Handler {
+func (c *caller) Handler() http.Handler {
 	m := http.NewServeMux()
-	m.HandleFunc("GET /v1/engine", e.getEngine)
-	m.HandleFunc("GET /v1/events", e.getChanges)
-	m.HandleFunc("GET /v1/streams", e.listStreams)
-	m.HandleFunc("GET /v1/streams/{s}", e.getStream)
-	m.HandleFunc("PUT /v1/streams/{s}", e.handlePutStream)
-	m.HandleFunc("DELETE /v1/streams/{s}", e.handleDeleteStream)
-	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}", e.getAnalysis)
-	m.HandleFunc("PUT /v1/streams/{s}/analyses/{a}", e.handlePutAnalysis)
-	m.HandleFunc("DELETE /v1/streams/{s}/analyses/{a}", e.handleDeleteAnalysis)
-	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/events", e.analysisEvents)
-	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/state", e.analysisState)
-	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/motifs", e.analysisMotifs)
-	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/motifs/{m}", e.analysisMotif)
-	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/history/events", e.historyEvents)
-	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/history/features", e.historyFeatures)
-	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/memories", e.listMemories)
-	m.HandleFunc("DELETE /v1/streams/{s}/analyses/{a}/memories/{key}", e.deleteMemory)
-	m.HandleFunc("POST /v1/validate/analysis", e.validate)
-	m.HandleFunc("POST /v1/probes", e.handleProbe)
-	e.groupRoutes(m)
+	m.HandleFunc("GET /v1/engine", c.getEngine)
+	m.HandleFunc("GET /v1/events", c.getChanges)
+	m.HandleFunc("GET /v1/streams", c.listStreams)
+	m.HandleFunc("GET /v1/streams/{s}", c.getStream)
+	m.HandleFunc("PUT /v1/streams/{s}", c.handlePutStream)
+	m.HandleFunc("DELETE /v1/streams/{s}", c.handleDeleteStream)
+	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}", c.getAnalysis)
+	m.HandleFunc("PUT /v1/streams/{s}/analyses/{a}", c.handlePutAnalysis)
+	m.HandleFunc("DELETE /v1/streams/{s}/analyses/{a}", c.handleDeleteAnalysis)
+	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/events", c.analysisEvents)
+	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/state", c.analysisState)
+	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/motifs", c.analysisMotifs)
+	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/motifs/{m}", c.analysisMotif)
+	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/history/events", c.historyEvents)
+	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/history/features", c.historyFeatures)
+	m.HandleFunc("GET /v1/streams/{s}/analyses/{a}/memories", c.listMemories)
+	m.HandleFunc("DELETE /v1/streams/{s}/analyses/{a}/memories/{key}", c.deleteMemory)
+	m.HandleFunc("POST /v1/validate/analysis", c.validate)
+	m.HandleFunc("POST /v1/probes", c.handleProbe)
+	c.groupRoutes(m)
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeErr(w, errNotFound("resource")) })
 	return m
 }
@@ -103,54 +103,55 @@ func purge(r *http.Request) bool { return r.URL.Query().Get("purge") == "true" }
 
 // --- engine and changes ---
 
-func (e *Engine) getEngine(w http.ResponseWriter, r *http.Request) {
-	counts := map[string]int{"streams": 0, "connected": 0, "analyses": 0, "groups": len(e.groupList())}
-	e.mu.Lock()
-	counts["streams"] = len(e.streams)
-	streams := make([]*stream, 0, len(e.streams))
-	for _, s := range e.streams {
+func (c *caller) getEngine(w http.ResponseWriter, r *http.Request) {
+	counts := map[string]int{"streams": 0, "connected": 0, "analyses": 0, "groups": len(c.groupList())}
+	c.mu.Lock()
+	counts["streams"] = len(c.streams)
+	streams := make([]*stream, 0, len(c.streams))
+	for _, s := range c.streams {
 		streams = append(streams, s)
 	}
-	e.mu.Unlock()
+	c.mu.Unlock()
 	for _, s := range streams {
 		s.mu.Lock()
 		counts["analyses"] += len(s.runs)
-		if s.state == StateConnected {
+		s.mu.Unlock()
+		if s.connected() {
 			counts["connected"]++
 		}
-		s.mu.Unlock()
 	}
 	check := "initial"
 	writeJSON(w, 200, map[string]any{
 		"api":            map[string]int{"major": APIMajor, "minor": APIMinor},
-		"engine_version": e.opts.Version,
-		"instance":       e.instance,
-		"started":        e.started,
-		"resumed":        e.resumed,
-		"limits":         e.opts.Limits,
+		"engine_version": c.e.opts.Version,
+		"instance":       c.e.instance,
+		"started":        c.e.started,
+		"resumed":        c.resumed,
+		"limits":         c.e.opts.Limits,
+		"limits_scope":   "engine", // the limits count every caller's streams and groups; counts are this caller's
 		"capabilities": map[string]any{
 			"rule_kinds": []string{RuleLine, RuleComb}, "detectors": []any{},
-			"file_inputs": e.opts.AllowFiles, "address_check": check,
+			"file_inputs": c.e.opts.AllowFiles, "address_check": check,
 			"station_time": false, "group_analyses": groupAnalyses,
 		},
 		"counts": counts,
 		"host":   map[string]int{"cores": hostCores(), "memory_mb": hostMemoryMB()},
-		"usage":  e.meter.last(),
+		"usage":  c.e.meter.last(),
 	})
 }
 
-func (e *Engine) getChanges(w http.ResponseWriter, r *http.Request) {
+func (c *caller) getChanges(w http.ResponseWriter, r *http.Request) {
 	fl, ok := w.(http.Flusher)
 	if !ok {
 		writeErr(w, &apiError{status: 500, code: "internal", message: "no streaming"})
 		return
 	}
-	ch := e.addWatcher()
-	defer e.removeWatcher(ch)
+	ch := c.addWatcher()
+	defer c.removeWatcher(ch)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(200)
-	writeSSE(w, "engine.hello", e.hello())
+	writeSSE(w, "engine.hello", c.hello())
 	fl.Flush()
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()
@@ -158,7 +159,7 @@ func (e *Engine) getChanges(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-e.ctx.Done():
+		case <-c.e.ctx.Done():
 			return
 		case c := <-ch:
 			writeSSE(w, c.typ, c.data)
@@ -177,13 +178,13 @@ func writeSSE(w io.Writer, typ string, data any) {
 
 // --- streams ---
 
-func (e *Engine) listStreams(w http.ResponseWriter, r *http.Request) {
-	e.mu.Lock()
-	streams := make([]*stream, 0, len(e.streams))
-	for _, id := range e.streamIDs() {
-		streams = append(streams, e.streams[id])
+func (c *caller) listStreams(w http.ResponseWriter, r *http.Request) {
+	c.mu.Lock()
+	streams := make([]*stream, 0, len(c.streams))
+	for _, id := range c.streamIDs() {
+		streams = append(streams, c.streams[id])
 	}
-	e.mu.Unlock()
+	c.mu.Unlock()
 	out := make([]StreamView, 0, len(streams))
 	for _, s := range streams {
 		out = append(out, s.viewOf(true))
@@ -191,8 +192,8 @@ func (e *Engine) listStreams(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"streams": out})
 }
 
-func (e *Engine) getStream(w http.ResponseWriter, r *http.Request) {
-	s := e.stream(r.PathValue("s"))
+func (c *caller) getStream(w http.ResponseWriter, r *http.Request) {
+	s := c.stream(r.PathValue("s"))
 	if s == nil {
 		writeErr(w, errNotFound("stream"))
 		return
@@ -200,7 +201,7 @@ func (e *Engine) getStream(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.viewOf(true))
 }
 
-func (e *Engine) handlePutStream(w http.ResponseWriter, r *http.Request) {
+func (c *caller) handlePutStream(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("s")
 	if err := checkID(id); err != nil {
 		writeErr(w, err)
@@ -211,7 +212,7 @@ func (e *Engine) handlePutStream(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	s, err := e.putStream(r.Context(), id, spec)
+	s, err := c.putStream(r.Context(), id, spec)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -219,8 +220,8 @@ func (e *Engine) handlePutStream(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.viewOf(true))
 }
 
-func (e *Engine) handleDeleteStream(w http.ResponseWriter, r *http.Request) {
-	if err := e.deleteStream(r.PathValue("s"), purge(r)); err != nil {
+func (c *caller) handleDeleteStream(w http.ResponseWriter, r *http.Request) {
+	if err := c.deleteStream(r.PathValue("s"), purge(r)); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -229,8 +230,8 @@ func (e *Engine) handleDeleteStream(w http.ResponseWriter, r *http.Request) {
 
 // --- analyses ---
 
-func (e *Engine) getAnalysis(w http.ResponseWriter, r *http.Request) {
-	_, run, err := e.find(r.PathValue("s"), r.PathValue("a"))
+func (c *caller) getAnalysis(w http.ResponseWriter, r *http.Request) {
+	_, run, err := c.find(r.PathValue("s"), r.PathValue("a"))
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -238,7 +239,7 @@ func (e *Engine) getAnalysis(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, run.view())
 }
 
-func (e *Engine) handlePutAnalysis(w http.ResponseWriter, r *http.Request) {
+func (c *caller) handlePutAnalysis(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("a")
 	if err := checkID(id); err != nil {
 		writeErr(w, err)
@@ -249,7 +250,7 @@ func (e *Engine) handlePutAnalysis(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	run, err := e.putAnalysis(r.PathValue("s"), id, spec)
+	run, err := c.putAnalysis(r.PathValue("s"), id, spec)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -257,21 +258,21 @@ func (e *Engine) handlePutAnalysis(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, run.view())
 }
 
-func (e *Engine) handleDeleteAnalysis(w http.ResponseWriter, r *http.Request) {
-	if err := e.deleteAnalysis(r.PathValue("s"), r.PathValue("a"), purge(r)); err != nil {
+func (c *caller) handleDeleteAnalysis(w http.ResponseWriter, r *http.Request) {
+	if err := c.deleteAnalysis(r.PathValue("s"), r.PathValue("a"), purge(r)); err != nil {
 		writeErr(w, err)
 		return
 	}
 	w.WriteHeader(204)
 }
 
-func (e *Engine) validate(w http.ResponseWriter, r *http.Request) {
+func (c *caller) validate(w http.ResponseWriter, r *http.Request) {
 	var req ValidateRequest
 	if err := decode(r, &req); err != nil {
 		writeErr(w, err)
 		return
 	}
-	c, errs, warns := checkAnalysis(req.SampleRate, req.AnalysisSpec, e.opts.Limits)
+	ch, errs, warns := checkAnalysis(req.SampleRate, req.AnalysisSpec, c.e.opts.Limits)
 	v := Validation{Valid: len(errs) == 0, Errors: errs, Warnings: warns}
 	if v.Errors == nil {
 		v.Errors = []FieldError{}
@@ -280,20 +281,20 @@ func (e *Engine) validate(w http.ResponseWriter, r *http.Request) {
 		v.Warnings = []FieldError{}
 	}
 	if v.Valid {
-		eff := c.effective()
+		eff := ch.effective()
 		v.Effective = &eff
-		v.Rules = c.spec.Rules
+		v.Rules = ch.spec.Rules
 	}
 	writeJSON(w, 200, v)
 }
 
-func (e *Engine) handleProbe(w http.ResponseWriter, r *http.Request) {
+func (c *caller) handleProbe(w http.ResponseWriter, r *http.Request) {
 	var req ProbeRequest
 	if err := decode(r, &req); err != nil {
 		writeErr(w, err)
 		return
 	}
-	res, err := e.probe(r.Context(), req)
+	res, err := c.probe(r.Context(), req)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -305,13 +306,13 @@ func (e *Engine) handleProbe(w http.ResponseWriter, r *http.Request) {
 
 // analysisEvents streams an analysis's live events. A subscription is what
 // connects an on-demand stream.
-func (e *Engine) analysisEvents(w http.ResponseWriter, r *http.Request) {
+func (c *caller) analysisEvents(w http.ResponseWriter, r *http.Request) {
 	fl, ok := w.(http.Flusher)
 	if !ok {
 		writeErr(w, &apiError{status: 500, code: "internal", message: "no streaming"})
 		return
 	}
-	_, run, err := e.find(r.PathValue("s"), r.PathValue("a"))
+	_, run, err := c.find(r.PathValue("s"), r.PathValue("a"))
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -325,7 +326,7 @@ func (e *Engine) analysisEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	sb, ok := run.subscribe(types, e.opts.Limits.SubscriptionsPerAnalysis)
+	sb, ok := run.subscribe(types, c.e.opts.Limits.SubscriptionsPerAnalysis)
 	if !ok {
 		writeErr(w, &apiError{status: 409, code: "limit_reached", message: "too many subscriptions to this analysis"})
 		return
@@ -341,7 +342,7 @@ func (e *Engine) analysisEvents(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-e.ctx.Done():
+		case <-c.e.ctx.Done():
 			return
 		case frame, open := <-sb.ch:
 			if !open {
@@ -356,8 +357,8 @@ func (e *Engine) analysisEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (e *Engine) analysisState(w http.ResponseWriter, r *http.Request) {
-	_, run, err := e.find(r.PathValue("s"), r.PathValue("a"))
+func (c *caller) analysisState(w http.ResponseWriter, r *http.Request) {
+	_, run, err := c.find(r.PathValue("s"), r.PathValue("a"))
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -367,8 +368,8 @@ func (e *Engine) analysisState(w http.ResponseWriter, r *http.Request) {
 
 // memoryFor returns the memory named by ?memory=, or the one in use; done
 // releases a memory opened for reading.
-func (e *Engine) memoryFor(w http.ResponseWriter, r *http.Request) (m *memory.Memory, done func(), ok bool) {
-	_, run, aerr := e.find(r.PathValue("s"), r.PathValue("a"))
+func (c *caller) memoryFor(w http.ResponseWriter, r *http.Request) (m *memory.Memory, done func(), ok bool) {
+	_, run, aerr := c.find(r.PathValue("s"), r.PathValue("a"))
 	if aerr != nil {
 		writeErr(w, aerr)
 		return nil, nil, false
@@ -393,8 +394,8 @@ func (e *Engine) memoryFor(w http.ResponseWriter, r *http.Request) (m *memory.Me
 	return pm, func() { pm.Close() }, true
 }
 
-func (e *Engine) analysisMotifs(w http.ResponseWriter, r *http.Request) {
-	m, done, ok := e.memoryFor(w, r)
+func (c *caller) analysisMotifs(w http.ResponseWriter, r *http.Request) {
+	m, done, ok := c.memoryFor(w, r)
 	if !ok {
 		return
 	}
@@ -406,8 +407,8 @@ func (e *Engine) analysisMotifs(w http.ResponseWriter, r *http.Request) {
 	m.ServeMotifs(w, r)
 }
 
-func (e *Engine) analysisMotif(w http.ResponseWriter, r *http.Request) {
-	m, done, ok := e.memoryFor(w, r)
+func (c *caller) analysisMotif(w http.ResponseWriter, r *http.Request) {
+	m, done, ok := c.memoryFor(w, r)
 	if !ok {
 		return
 	}
@@ -420,8 +421,8 @@ func (e *Engine) analysisMotif(w http.ResponseWriter, r *http.Request) {
 	m.ServeMotif(w, r, id)
 }
 
-func (e *Engine) historyEvents(w http.ResponseWriter, r *http.Request) {
-	m, done, ok := e.memoryFor(w, r)
+func (c *caller) historyEvents(w http.ResponseWriter, r *http.Request) {
+	m, done, ok := c.memoryFor(w, r)
 	if !ok {
 		return
 	}
@@ -433,8 +434,8 @@ func (e *Engine) historyEvents(w http.ResponseWriter, r *http.Request) {
 	m.ServeHistoryEvents(w, r)
 }
 
-func (e *Engine) historyFeatures(w http.ResponseWriter, r *http.Request) {
-	m, done, ok := e.memoryFor(w, r)
+func (c *caller) historyFeatures(w http.ResponseWriter, r *http.Request) {
+	m, done, ok := c.memoryFor(w, r)
 	if !ok {
 		return
 	}
@@ -447,8 +448,8 @@ func (e *Engine) historyFeatures(w http.ResponseWriter, r *http.Request) {
 }
 
 // listMemories lists the memories kept on disk for an analysis.
-func (e *Engine) listMemories(w http.ResponseWriter, r *http.Request) {
-	_, run, err := e.find(r.PathValue("s"), r.PathValue("a"))
+func (c *caller) listMemories(w http.ResponseWriter, r *http.Request) {
+	_, run, err := c.find(r.PathValue("s"), r.PathValue("a"))
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -456,7 +457,7 @@ func (e *Engine) listMemories(w http.ResponseWriter, r *http.Request) {
 	run.mu.Lock()
 	cur, curKey, mode := run.mem, run.key, run.c.memMode
 	run.mu.Unlock()
-	base := filepath.Join(e.opts.MemoryDir, run.s.id, run.id)
+	base := filepath.Join(c.memDir, run.s.id, run.id)
 	ents, _ := os.ReadDir(base)
 	out := []MemoryInfo{}
 	for _, ent := range ents {
@@ -489,8 +490,8 @@ func (e *Engine) listMemories(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"memories": out})
 }
 
-func (e *Engine) deleteMemory(w http.ResponseWriter, r *http.Request) {
-	_, run, err := e.find(r.PathValue("s"), r.PathValue("a"))
+func (c *caller) deleteMemory(w http.ResponseWriter, r *http.Request) {
+	_, run, err := c.find(r.PathValue("s"), r.PathValue("a"))
 	if err != nil {
 		writeErr(w, err)
 		return

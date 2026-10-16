@@ -242,13 +242,32 @@ func (c client) sse(ctx context.Context, path, typ string, n int) []map[string]a
 
 func startEngine(t *testing.T, dir string) (*Engine, client) {
 	t.Helper()
-	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), StateFile: filepath.Join(dir, "state.json"), AllowFiles: true})
+	e, cs := startCallers(t, dir, DefaultCaller)
+	return e, cs[0]
+}
+
+// startCallers starts an engine with the named callers, each on a test
+// server of its own, as each would have a socket of its own.
+func startCallers(t *testing.T, dir string, names ...string) (*Engine, []client) {
+	t.Helper()
+	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), StateFile: filepath.Join(dir, "state.json"), AllowFiles: true, Callers: names})
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(e.Handler())
-	t.Cleanup(func() { e.Close(); srv.Close() })
-	return e, client{t, srv.URL}
+	var cs []client
+	var srvs []*httptest.Server
+	for _, n := range names {
+		srv := httptest.NewServer(e.Caller(n).Handler())
+		srvs = append(srvs, srv)
+		cs = append(cs, client{t, srv.URL})
+	}
+	t.Cleanup(func() {
+		e.Close()
+		for _, s := range srvs {
+			s.Close()
+		}
+	})
+	return e, cs
 }
 
 func waitFor(t *testing.T, what string, f func() bool) {
@@ -393,7 +412,7 @@ func TestResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(e.Handler())
+	srv := httptest.NewServer(e.Caller(DefaultCaller).Handler())
 	c := client{t, srv.URL}
 	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: wav, SampleRate: 22050, Mode: Continuous}, nil)
 	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{"label": "rev-9", "settings": map[string]any{"min_hz": 200}}, nil)
@@ -401,7 +420,7 @@ func TestResume(t *testing.T) {
 	srv.Close()
 
 	e2, c2 := startEngine(t, dir)
-	if !e2.resumed {
+	if !e2.Caller(DefaultCaller).resumed {
 		t.Fatal("not resumed")
 	}
 	var av AnalysisView
@@ -564,5 +583,116 @@ func TestUnresolvedHostAccepted(t *testing.T) {
 	var er map[string]map[string]any
 	if st := c.do("PUT", "/v1/streams/s-2", StreamSpec{Input: "https://private.example/live.ogg", SampleRate: 22050}, &er); st != 422 {
 		t.Errorf("host resolving to a private address: %d, want 422", st)
+	}
+}
+
+func TestCallersShareOneSource(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	w1, w2 := filepath.Join(dir, "one.wav"), filepath.Join(dir, "two.wav")
+	writeWAV(t, w1, 22050, 20)
+	writeWAV(t, w2, 22050, 20)
+	e, cs := startCallers(t, dir, "workbench", "internal")
+	wb, in := cs[0], cs[1]
+
+	// The same address from two callers: one source.
+	var sv StreamView
+	if st := wb.do("PUT", "/v1/streams/s-1", StreamSpec{Input: w1, SampleRate: 22050, Mode: Continuous, View: &ViewSpec{Scale: "linear"}}, &sv); st != 200 || sv.Shared != 1 {
+		t.Fatalf("workbench PUT: %d %+v", st, sv)
+	}
+	if st := in.do("PUT", "/v1/streams/premise", StreamSpec{Input: w1, SampleRate: 22050, Mode: Continuous}, &sv); st != 200 || sv.Shared != 2 {
+		t.Fatalf("internal PUT: %d shared %d", st, sv.Shared)
+	}
+	if n := len(e.sourceList()); n != 1 {
+		t.Fatalf("%d sources for one address", n)
+	}
+	wb.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{}, nil)
+	in.do("PUT", "/v1/streams/premise/analyses/a", map[string]any{}, nil)
+
+	// Namespaces: each caller sees its own only.
+	var list struct{ Streams []StreamView }
+	wb.do("GET", "/v1/streams", nil, &list)
+	if len(list.Streams) != 1 || list.Streams[0].ID != "s-1" {
+		t.Errorf("workbench sees %+v", list.Streams)
+	}
+	if st := in.do("GET", "/v1/streams/s-1", nil, nil); st != 404 {
+		t.Errorf("internal reads the workbench's stream: %d", st)
+	}
+
+	// Both analyses get spectra from the one decode, each with its own view.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	a := wb.sse(ctx, "/v1/streams/s-1/analyses/a-1/events?types=signal.spectrum", "signal.spectrum", 3)
+	b := in.sse(ctx, "/v1/streams/premise/analyses/a/events?types=signal.spectrum", "signal.spectrum", 3)
+	if len(a) < 3 || len(b) < 3 {
+		t.Fatalf("spectra %d %d", len(a), len(b))
+	}
+	if a[2]["payload"].(map[string]any)["view"] == nil || b[2]["payload"].(map[string]any)["view"] != nil {
+		t.Errorf("views: workbench %v, internal %v", a[2]["payload"].(map[string]any)["view"] != nil, b[2]["payload"].(map[string]any)["view"] != nil)
+	}
+	if src := e.sourceList()[0]; src.pid.Load() == 0 || src.shared() != 2 {
+		t.Errorf("source: pid %d, shared %d", src.pid.Load(), src.shared())
+	}
+
+	// Usage: each stream an equal share, the source's full cost beside it.
+	e.meter.measure()
+	e.meter.measure()
+	rep := e.meter.reportFor(e.Caller("workbench"))
+	if u := rep.Streams["s-1"]; u.Shared != 2 || u.SourceCPUPercent == nil {
+		t.Errorf("usage share %+v", u)
+	}
+	if _, ok := rep.Sources["s-1"]; !ok || len(rep.Streams) != 1 {
+		t.Errorf("usage report %+v", rep)
+	}
+
+	// duplicate_input within a caller; rate_conflict across callers.
+	var er map[string]map[string]any
+	if st := wb.do("PUT", "/v1/streams/s-2", StreamSpec{Input: w1, SampleRate: 22050}, &er); st != 409 || er["error"]["code"] != "duplicate_input" {
+		t.Errorf("same address twice in a caller: %d %v", st, er)
+	}
+	wb.do("PUT", "/v1/streams/s-3", StreamSpec{Input: w2, SampleRate: 22050}, nil)
+	if st := in.do("PUT", "/v1/streams/other", StreamSpec{Input: w2, SampleRate: 16000}, &er); st != 409 || er["error"]["code"] != "rate_conflict" {
+		t.Errorf("another rate on a shared source: %d %v", st, er)
+	}
+
+	// The probe of an address read already opens no connection.
+	var pr ProbeResult
+	in.do("POST", "/v1/probes", ProbeRequest{Input: w2}, &pr)
+	if !pr.OK || !pr.Shared || pr.SampleRate != 22050 || pr.Exists != nil {
+		t.Errorf("probe of a shared address: %+v", pr)
+	}
+
+	// The source stays while a stream is on it, and goes with the last.
+	wb.do("DELETE", "/v1/streams/s-1", nil, nil)
+	if src := e.source(w1); src == nil || src.shared() != 1 {
+		t.Fatalf("source after the first stream left: %v", src)
+	}
+	in.do("DELETE", "/v1/streams/premise", nil, nil)
+	if e.source(w1) != nil {
+		t.Errorf("source still there after the last stream left")
+	}
+}
+
+func TestMemoryMigratesUnderFirstCaller(t *testing.T) {
+	dir := t.TempDir()
+	mem := filepath.Join(dir, "memory")
+	old := filepath.Join(mem, "s-1", "a-1", "r800-15964-i3280a91f")
+	if err := os.MkdirAll(old, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(old, "motifs.json"), []byte(`{"version":1}`), 0o640)
+	e, err := New(Options{MemoryDir: mem, Callers: []string{"workbench", "internal"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	if _, err := os.Stat(filepath.Join(mem, "workbench", "s-1", "a-1", "r800-15964-i3280a91f", "motifs.json")); err != nil {
+		t.Errorf("not moved: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(mem, ".layout")); err != nil {
+		t.Errorf("no layout marker: %v", err)
+	}
+	if got := stateFileFor("/x/state.json", "internal", false); got != "/x/state-internal.json" {
+		t.Errorf("state file %s", got)
 	}
 }

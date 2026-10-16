@@ -136,3 +136,33 @@ func (f *FrontEnd) hop(x []float64, out func(*Frame)) {
 	}
 	out(fr)
 }
+
+// ViewBands computes a spectrogram view from the frames of a front end that
+// has none, for one consumer of a shared front end: several consumers may
+// each want a view of their own.
+type ViewBands struct{ vb *viewBands }
+
+// NewViewBands returns the view v for frames at sampleRate.
+func NewViewBands(v View, sampleRate int) *ViewBands {
+	if sampleRate <= 0 {
+		sampleRate = DefaultSampleRate
+	}
+	bin := float64(sampleRate) / fftSize
+	return &ViewBands{newViewBands(v, float64(sampleRate)/2, bin, fftSize/2+1)}
+}
+
+// Apply returns fr with this view's bands; fr itself is not changed.
+func (v *ViewBands) Apply(fr *Frame) *Frame {
+	v.vb.update(fr.Mag)
+	norm := make([]float64, len(v.vb.db))
+	for i, b := range v.vb.db {
+		norm[i] = v.vb.rng.Norm(b)
+	}
+	out := *fr
+	vv := v.vb.View
+	out.View, out.ViewNorm = &vv, norm
+	return &out
+}
+
+// View is the view after defaults.
+func (v *ViewBands) View() View { return v.vb.View }

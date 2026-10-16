@@ -7,8 +7,9 @@ import (
 	"time"
 )
 
-// meter measures what the engine, each stream's ffmpeg and each analysis
-// cost, as averages since the previous measurement (every 10 seconds).
+// meter measures what the engine, each source (its ffmpeg and front end)
+// and each analysis cost, as averages since the previous measurement
+// (every 10 seconds). A stream is charged an equal share of its source.
 type meter struct {
 	e *Engine
 
@@ -16,23 +17,28 @@ type meter struct {
 	at      time.Time
 	selfCPU time.Duration
 	procCPU map[int64]time.Duration // ffmpeg by pid
+	feBusy  map[*sourceConn]int64
 	runBusy map[*run]int64
-	feBusy  map[*stream]int64
+	sources map[*sourceConn]Usage // full cost, last measurement
 	engine  Usage
 }
 
 func newMeter(e *Engine) *meter {
-	return &meter{e: e, at: time.Now(), selfCPU: selfCPU(), procCPU: map[int64]time.Duration{}, runBusy: map[*run]int64{}, feBusy: map[*stream]int64{}}
+	return &meter{
+		e: e, at: time.Now(), selfCPU: selfCPU(), procCPU: map[int64]time.Duration{},
+		feBusy: map[*sourceConn]int64{}, runBusy: map[*run]int64{}, sources: map[*sourceConn]Usage{},
+	}
 }
 
-// UsageReport is the data of the usage event.
+// UsageReport is the data of the usage event, for one caller.
 type UsageReport struct {
 	Engine   Usage            `json:"engine"`
-	Streams  map[string]Usage `json:"streams"`
+	Streams  map[string]Usage `json:"streams"`  // the caller's streams: their shares
 	Analyses map[string]Usage `json:"analyses"` // keyed "stream/analysis"
+	Sources  map[string]Usage `json:"sources"`  // each source once, keyed by the caller's stream on it
 }
 
-func (m *meter) measure() UsageReport {
+func (m *meter) measure() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := time.Now()
@@ -41,65 +47,93 @@ func (m *meter) measure() UsageReport {
 		wall = time.Millisecond
 	}
 	pct := func(d time.Duration) float64 { return round(100*float64(d)/float64(wall), 1) }
-	rep := UsageReport{Streams: map[string]Usage{}, Analyses: map[string]Usage{}}
 
 	self := selfCPU()
 	total := Usage{CPUPercent: pct(self - m.selfCPU), MemoryMB: round(selfMemMB(), 1)}
 	m.selfCPU = self
 
-	procs := map[int64]time.Duration{}
-	m.e.mu.Lock()
-	streams := make([]*stream, 0, len(m.e.streams))
-	for _, id := range m.e.streamIDs() {
-		streams = append(streams, m.e.streams[id])
-	}
-	m.e.mu.Unlock()
-	busy, feBusy := map[*run]int64{}, map[*stream]int64{}
-	for _, s := range streams {
+	procs, feBusy, sources := map[int64]time.Duration{}, map[*sourceConn]int64{}, map[*sourceConn]Usage{}
+	for _, src := range m.e.sourceList() {
 		measured := false
-		su := Usage{InMeasured: &measured}
-		// The stream's own cost: its ffmpeg, and its front end (the FFT
-		// all its analyses share), which runs inside the engine.
-		fb := s.feBusyNs.Load()
-		if prev, ok := m.feBusy[s]; ok {
-			su.CPUPercent = pct(time.Duration(fb - prev))
+		u := Usage{InMeasured: &measured}
+		// The source's cost: its front end (inside the engine) and its
+		// ffmpeg (a process of its own).
+		fb := src.feBusyNs.Load()
+		if prev, ok := m.feBusy[src]; ok {
+			u.CPUPercent = pct(time.Duration(fb - prev))
 		}
-		feBusy[s] = fb
-		if pid := s.pid.Load(); pid > 0 {
+		feBusy[src] = fb
+		if pid := src.pid.Load(); pid > 0 {
 			if cpu, rss, ok := procStat(int(pid)); ok {
 				if prev, ok := m.procCPU[pid]; ok {
-					su.CPUPercent = round(su.CPUPercent+pct(cpu-prev), 1)
+					u.CPUPercent = round(u.CPUPercent+pct(cpu-prev), 1)
 					total.CPUPercent += pct(cpu - prev)
 				}
 				procs[pid] = cpu
-				su.MemoryMB = round(rss, 1)
-				total.MemoryMB += su.MemoryMB
+				u.MemoryMB = round(rss, 1)
+				total.MemoryMB += u.MemoryMB
 			}
 		}
-		s.mu.Lock()
-		s.lastUsage = su
-		runs := s.runList()
-		s.mu.Unlock()
-		rep.Streams[s.id] = su
-		for _, r := range runs {
-			b := r.busyNs.Load()
-			ru := Usage{MemoryEstimated: true}
-			if prev, ok := m.runBusy[r]; ok {
-				ru.CPUPercent = pct(time.Duration(b - prev))
+		sources[src] = u
+	}
+	busy := map[*run]int64{}
+	for _, c := range m.e.callers {
+		for _, s := range c.streamList() {
+			full := sources[s.src]
+			n := s.src.shared()
+			if n < 1 {
+				n = 1
 			}
-			busy[r] = b
-			ru.MemoryMB = round(r.memoryEstimate(), 1)
-			r.mu.Lock()
-			r.lastUsage = ru
-			r.mu.Unlock()
-			rep.Analyses[r.source()] = ru
+			cpu, mem := full.CPUPercent, full.MemoryMB
+			share := Usage{
+				CPUPercent: round(cpu/float64(n), 1), MemoryMB: round(mem/float64(n), 1), InMeasured: full.InMeasured,
+				SourceCPUPercent: &cpu, SourceMemoryMB: &mem, Shared: n,
+			}
+			s.mu.Lock()
+			s.lastUsage = share
+			runs := s.runList()
+			s.mu.Unlock()
+			for _, r := range runs {
+				b := r.busyNs.Load()
+				ru := Usage{MemoryEstimated: true}
+				if prev, ok := m.runBusy[r]; ok {
+					ru.CPUPercent = pct(time.Duration(b - prev))
+				}
+				busy[r] = b
+				ru.MemoryMB = round(r.memoryEstimate(), 1)
+				r.mu.Lock()
+				r.lastUsage = ru
+				r.mu.Unlock()
+			}
 		}
 	}
-	m.procCPU, m.runBusy, m.feBusy, m.at = procs, busy, feBusy, now
+	m.procCPU, m.feBusy, m.runBusy, m.sources, m.at = procs, feBusy, busy, sources, now
 	total.CPUPercent = round(total.CPUPercent, 1)
 	total.MemoryMB = round(total.MemoryMB, 1)
 	m.engine = total
-	rep.Engine = total
+}
+
+// reportFor is the usage event for one caller: the engine's totals, and the
+// caller's own streams, sources and analyses.
+func (m *meter) reportFor(c *caller) UsageReport {
+	m.mu.Lock()
+	rep := UsageReport{Engine: m.engine, Streams: map[string]Usage{}, Analyses: map[string]Usage{}, Sources: map[string]Usage{}}
+	full := m.sources
+	m.mu.Unlock()
+	for _, s := range c.streamList() {
+		s.mu.Lock()
+		rep.Streams[s.id] = s.lastUsage
+		runs := s.runList()
+		s.mu.Unlock()
+		if u, ok := full[s.src]; ok {
+			rep.Sources[s.id] = u
+		}
+		for _, r := range runs {
+			r.mu.Lock()
+			rep.Analyses[r.source()] = r.lastUsage
+			r.mu.Unlock()
+		}
+	}
 	return rep
 }
 

@@ -57,7 +57,7 @@ var (
 // probe connects to input once, listens for listen seconds and reports what
 // arrives. One connection: the codec and rate come from ffmpeg's own
 // report of the input, the level from the decoded samples.
-func (e *Engine) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *apiError) {
+func (c *caller) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *apiError) {
 	res := ProbeResult{Problems: []Problem{}}
 	listen := req.ListenS
 	if listen == 0 {
@@ -67,26 +67,32 @@ func (e *Engine) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *api
 		return res, &apiError{status: 422, code: "invalid", message: "listen_s must be between 1 and 30",
 			errors: []FieldError{{"listen_s", "out_of_range", "must be between 1 and 30"}}}
 	}
-	e.mu.Lock()
-	for _, s := range e.streams {
+	c.mu.Lock()
+	for _, s := range c.streams {
 		if s.input == req.Input {
 			id := s.id
 			res.Exists = &id
 			res.Problems = append(res.Problems, Problem{Code: "exists", Message: "this address is already stream " + id})
 		}
 	}
-	e.mu.Unlock()
+	c.mu.Unlock()
 	if res.Exists != nil {
 		return res, nil
 	}
-	if p, _ := e.policy.check(ctx, req.Input); p != nil {
+	// Read already, for another caller: no connection; the answer comes
+	// from the running source.
+	if src := c.e.source(req.Input); src != nil {
+		res.OK, res.Shared, res.SampleRate = true, true, src.rate
+		return res, nil
+	}
+	if p, _ := c.e.policy.check(ctx, req.Input); p != nil {
 		res.Problems = append(res.Problems, *p)
 		return res, nil
 	}
-	if !e.probes.enter(req.Input) {
+	if !c.e.probes.enter(req.Input) {
 		return res, &apiError{status: 429, code: "busy", message: "too many probes at once; try again shortly"}
 	}
-	defer e.probes.leave(req.Input)
+	defer c.e.probes.leave(req.Input)
 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(listen+15)*time.Second)
 	defer cancel()
@@ -96,7 +102,7 @@ func (e *Engine) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *api
 	}
 	args = append(args, "-t", strconv.Itoa(listen), "-i", req.Input,
 		"-vn", "-sn", "-dn", "-ac", "1", "-ar", strconv.Itoa(probeRate), "-f", "f32le", "pipe:1")
-	cmd := exec.CommandContext(ctx, e.opts.FFmpeg, args...)
+	cmd := exec.CommandContext(ctx, c.e.opts.FFmpeg, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return res, &apiError{status: 500, code: "internal", message: err.Error()}
@@ -155,8 +161,8 @@ func (e *Engine) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *api
 	if n > 0 && res.Codec == "" {
 		res.Problems = append(res.Problems, Problem{Code: "not_audio", Message: "the address delivers no audio stream"})
 	}
-	if res.BitrateKbps > e.opts.Limits.MaxBitrateKbps {
-		res.Problems = append(res.Problems, Problem{Code: "bitrate", Message: fmt.Sprintf("%d kbit/s is above the limit of %d kbit/s", res.BitrateKbps, e.opts.Limits.MaxBitrateKbps)})
+	if res.BitrateKbps > c.e.opts.Limits.MaxBitrateKbps {
+		res.Problems = append(res.Problems, Problem{Code: "bitrate", Message: fmt.Sprintf("%d kbit/s is above the limit of %d kbit/s", res.BitrateKbps, c.e.opts.Limits.MaxBitrateKbps)})
 	}
 	if res.Silent {
 		res.Problems = append(res.Problems, Problem{Code: "silent", Message: fmt.Sprintf("only silence arrived in %d seconds", listen)})

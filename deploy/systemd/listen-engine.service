@@ -1,9 +1,10 @@
 # The engine process for the Listening Observatory Workbench: many streams and
-# analyses in one process, configured by the Workbench through the control API
-# on /run/listen-engine/control.sock (mode 0660, group listen-engine; the
-# Workbench's user joins that group). Memories and the saved configuration live
-# in /var/lib/listen-engine. Runs beside the Observatory's listen-listener@
-# instances, under its own user.
+# analyses in one process, each source read once and shared, configured by the
+# Workbench through the control API on /run/listen-engine/control.sock (mode
+# 0660, group listen-engine; the Workbench's user joins that group) and by
+# internal work on /run/listen-engine/internal.sock (0600). Memories and the
+# saved configuration live in /var/lib/listen-engine. Runs beside the
+# Observatory's listen-listener@ instances, under its own user.
 #
 # Setup (root, once):
 #   useradd --system --home-dir /var/lib/listen-engine --shell /usr/sbin/nologin listen-engine
@@ -24,7 +25,10 @@ Type=simple
 User=listen-engine
 Group=listen-engine
 EnvironmentFile=-/etc/listen-engine/engine.env
-ExecStart=/usr/local/bin/listen-engine -socket /run/listen-engine/control.sock -memory-dir /var/lib/listen-engine/memory -state /var/lib/listen-engine/state.json $ENGINE_ARGS
+# Two callers, each on its own socket and in its own namespace: the Workbench
+# (group listen-engine) and internal work such as tests (the engine's user and
+# root only). A source both name is read once.
+ExecStart=/usr/local/bin/listen-engine -caller workbench=/run/listen-engine/control.sock:0660 -caller internal=/run/listen-engine/internal.sock:0600 -memory-dir /var/lib/listen-engine/memory -state /var/lib/listen-engine/state.json $ENGINE_ARGS
 Restart=always
 RestartSec=5
 RuntimeDirectory=listen-engine

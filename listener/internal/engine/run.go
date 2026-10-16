@@ -119,7 +119,7 @@ func (r *run) apply(c checked) error {
 }
 
 func (r *run) memoryDir(key string) string {
-	return filepath.Join(r.s.e.opts.MemoryDir, r.s.id, r.id, key)
+	return filepath.Join(r.s.c.memDir, r.s.id, r.id, key)
 }
 
 // openMemory opens the memory for c: on disk under the stream's, the
@@ -273,7 +273,7 @@ func (r *run) fail(p any) {
 	r.failed = &Problem{Code: "analysis_failed", Message: fmt.Sprintf("the analysis stopped after an internal error: %v", p), At: &now}
 	r.running = false
 	r.mu.Unlock()
-	r.s.e.notifyAnalysis(r)
+	r.s.c.notifyAnalysis(r)
 	r.emitStatus()
 }
 
@@ -319,7 +319,7 @@ func (r *run) emitStatus() {
 	}
 	stream, reconnects := r.s.status()
 	p := events.Status{
-		Stream: stream, Analysis: r.state(), LatencyMs: float64(r.s.delay.Load()),
+		Stream: stream, Analysis: r.state(), LatencyMs: float64(r.s.src.delay.Load()),
 		Input: "live", SampleRate: r.s.rate, UptimeS: float64(int(time.Since(r.started).Seconds())),
 		Reconnects: reconnects, Label: label, MemoryKey: key,
 	}

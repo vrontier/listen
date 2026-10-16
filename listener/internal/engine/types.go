@@ -81,6 +81,11 @@ type Usage struct {
 	InKbps          float64 `json:"in_kbps,omitempty"`
 	InMeasured      *bool   `json:"in_measured,omitempty"`
 	MemoryEstimated bool    `json:"memory_estimated,omitempty"`
+	// A stream's usage is its equal share of its source's cost; the
+	// source's full cost is given once beside it.
+	SourceCPUPercent *float64 `json:"source_cpu_percent,omitempty"`
+	SourceMemoryMB   *float64 `json:"source_memory_mb,omitempty"`
+	Shared           int      `json:"shared,omitempty"`
 }
 
 // StreamView is a stream as GET /v1/streams/{stream} shows it.
@@ -100,6 +105,8 @@ type StreamView struct {
 	Analyses   []string   `json:"analyses"`
 	View       *View      `json:"view,omitempty"`
 	Usage      Usage      `json:"usage"`
+	Shared     int        `json:"shared"` // streams of all callers on this stream's source, this one included
+	Source     string     `json:"source"` // network, file, later local
 }
 
 // AnalysisSpec is the body of PUT …/analyses/{analysis}. Every part is
@@ -227,6 +234,7 @@ type ProbeResult struct {
 	LevelDB     float64   `json:"level_db"`
 	Silent      bool      `json:"silent"`
 	StationTime bool      `json:"station_time"`
+	Shared      bool      `json:"shared,omitempty"` // read already, for another caller: no connection was opened
 	Problems    []Problem `json:"problems"`
 }
 
