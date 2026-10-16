@@ -70,6 +70,11 @@ func TestResults(t *testing.T) {
 		t.Fatalf("events.csv: %d bytes downloaded, %d shown (%v)", len(events), n, err)
 	}
 
+	// The Runs page leads to the results from the run's row.
+	if _, page, _ := r.get(member, "/runs"); !strings.Contains(page, `(<a href="`+runURL+`">Results</a>)`) || !strings.Contains(page, "Started (UTC)") {
+		t.Fatal("runs page: no way to the results")
+	}
+
 	// All files in one archive.
 	code, body, _ := r.get(member, runURL+"/all.zip")
 	if code != 200 {
@@ -114,5 +119,8 @@ func TestResults(t *testing.T) {
 	}
 	if _, page, _ = r.get(member, "/results"); strings.Contains(page, runURL+"/all.zip") || !strings.Contains(page, "No data sets yet") {
 		t.Fatal("a deleted data set is still listed")
+	}
+	if _, page, _ = r.get(member, "/runs"); !strings.Contains(page, "(results deleted)") {
+		t.Fatal("runs page does not say the results are deleted")
 	}
 }

@@ -45,16 +45,14 @@
   <h2>Finished</h2>
   {{if .Finished}}
   <table>
-    <thead><tr><th>Analysis</th><th>#</th><th>Started</th><th>Ended</th><th>Length</th><th>Revisions</th><th>By</th><th>Data set</th></tr></thead>
+    <thead><tr><th>#</th><th class="wide">Analysis</th><th class="nowrap">Started (UTC)</th><th>Length</th><th>Revision</th><th>By</th></tr></thead>
     <tbody>{{range .Finished}}<tr>
-      <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
       <td><a href="/runs/{{.ID}}">{{.Number}}</a></td>
-      <td>{{when .Started}}</td>
-      <td>{{when .Stopped}}{{if .StoppedBy}} <span class="meta">stopped by {{.StoppedBy}}</span>{{else if and .EndNote (ne .EndReason "planned")}} <span class="meta">by itself: {{.EndNote}}</span>{{else}} <span class="meta">as planned</span>{{end}}</td>
+      <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a> {{if or (eq .Dataset "ready") (eq .Dataset "freezing") (eq .Dataset "failed")}}(<a href="/runs/{{.ID}}">Results</a>){{else if eq .Dataset "deleted"}}<span class="meta">(results deleted)</span>{{else}}<span class="meta">(no results)</span>{{end}}</td>
+      <td class="nowrap">{{day .Started}}</td>
       <td>{{.Duration}}</td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
       <td>{{.StartedBy}}</td>
-      <td>{{template "dataset-link" .}}</td>
     </tr>{{end}}</tbody>
   </table>
   {{else}}<p class="meta">No finished runs yet.</p>{{end}}

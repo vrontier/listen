@@ -277,6 +277,13 @@ var funcs = template.FuncMap{
 		}
 		return t.UTC().Format("2006-01-02 15:04") + " UTC"
 	},
+	// day is when without the zone, for columns that name it in their head.
+	"day": func(t time.Time) string {
+		if t.IsZero() {
+			return "—"
+		}
+		return t.UTC().Format("2006-01-02 15:04")
+	},
 	"since": func(t time.Time) string {
 		if t.IsZero() {
 			return "—"
