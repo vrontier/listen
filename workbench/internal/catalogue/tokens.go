@@ -34,6 +34,7 @@ type APIToken struct {
 	Created  time.Time
 	LastUsed time.Time // zero: never
 	Revoked  time.Time // zero: valid
+	Limits   TokenLimits
 }
 
 // Has reports whether the token carries a scope.
@@ -47,36 +48,37 @@ func (t APIToken) Has(scope string) bool {
 }
 
 // CreateAPIToken makes a token and returns its secret, which is shown once.
-func (d *DB) CreateAPIToken(ctx context.Context, userID int64, name string, scopes []string) (string, APIToken, error) {
+func (d *DB) CreateAPIToken(ctx context.Context, userID int64, name string, scopes []string, limits TokenLimits) (string, APIToken, error) {
 	raw, _ := NewToken()
 	secret := TokenPrefix + raw
 	now := d.now()
-	t := APIToken{UserID: userID, Name: name, Hint: secret[:len(TokenPrefix)+4], Scopes: scopes, Created: now}
+	t := APIToken{UserID: userID, Name: name, Hint: secret[:len(TokenPrefix)+4], Scopes: scopes, Created: now, Limits: limits}
 	err := d.tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `INSERT INTO api_tokens (user_id, name, hash, hint, scopes, created) VALUES (?, ?, ?, ?, ?, ?)`,
-			userID, name, HashToken(secret), t.Hint, strings.Join(scopes, ","), stamp(now))
+		res, err := tx.ExecContext(ctx, `INSERT INTO api_tokens (user_id, name, hash, hint, scopes, created, limits) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			userID, name, HashToken(secret), t.Hint, strings.Join(scopes, ","), stamp(now), limits.json())
 		if err != nil {
 			return err
 		}
 		t.ID, _ = res.LastInsertId()
-		after, _ := json.Marshal(map[string]any{"token": t.ID, "name": name, "hint": t.Hint, "scopes": scopes})
+		after, _ := json.Marshal(map[string]any{"token": t.ID, "name": name, "hint": t.Hint, "scopes": scopes, "limits": limits})
 		return audit(ctx, tx, now, userID, "user", userID, "token create", "", string(after))
 	})
 	return secret, t, err
 }
 
-const tokenSelect = `SELECT id, user_id, name, hint, scopes, created, coalesce(last_used, ''), coalesce(revoked, '') FROM api_tokens `
+const tokenSelect = `SELECT id, user_id, name, hint, scopes, created, coalesce(last_used, ''), coalesce(revoked, ''), limits FROM api_tokens `
 
 func scanAPIToken(row interface{ Scan(...any) error }) (APIToken, error) {
 	var t APIToken
-	var scopes, created, used, revoked string
-	if err := row.Scan(&t.ID, &t.UserID, &t.Name, &t.Hint, &scopes, &created, &used, &revoked); err != nil {
+	var scopes, created, used, revoked, limits string
+	if err := row.Scan(&t.ID, &t.UserID, &t.Name, &t.Hint, &scopes, &created, &used, &revoked, &limits); err != nil {
 		return t, notFound(err)
 	}
 	if scopes != "" {
 		t.Scopes = strings.Split(scopes, ",")
 	}
 	t.Created, t.LastUsed, t.Revoked = parseStamp(created), parseStamp(used), parseStamp(revoked)
+	t.Limits = parseLimits(limits)
 	return t, nil
 }
 

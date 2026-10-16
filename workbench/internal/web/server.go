@@ -223,6 +223,7 @@ func (s *Server) routes() {
 	})
 	m.HandleFunc("POST /account/tokens", s.member(s.tokenCreate))
 	m.HandleFunc("POST /account/tokens/{token}/revoke", s.member(s.tokenRevoke))
+	m.HandleFunc("POST /account/tokens/{token}", s.member(s.tokenUpdate))
 	keys := func(h http.HandlerFunc) http.HandlerFunc {
 		return s.member(func(w http.ResponseWriter, r *http.Request) {
 			if !s.cfg.LLMKeys {
@@ -307,6 +308,12 @@ var funcs = template.FuncMap{
 	},
 	// moment is a time to the second, without the zone.
 	"moment": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05") },
+	// changeTool reports whether an MCP call changes things.
+	"changeTool": isControlTool,
+	// newTokenPerms is what the form for a new token starts from.
+	"newTokenPerms": func(l catalogue.TokenLimits) catalogue.APIToken {
+		return catalogue.APIToken{Scopes: []string{catalogue.ScopeStream}, Limits: l}
+	},
 	"ms": func(n int64) string {
 		if n < 1000 {
 			return strconv.FormatInt(n, 10) + " ms"

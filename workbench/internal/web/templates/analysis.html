@@ -267,7 +267,7 @@
       <td>{{if .Active}}<span class="run-on">running</span>{{if not .Ends.IsZero}} <span class="meta">until {{when .Ends}}</span>{{end}}{{else}}{{when .Stopped}}{{if .StoppedBy}} <span class="meta">stopped by {{.StoppedBy}}</span>{{else}} <span class="meta">as planned</span>{{end}}{{end}}</td>
       <td>{{.Duration}}</td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
-      <td>{{.StartedBy}}</td>
+      <td>{{.StartedBy}}{{with .Token}} <span class="meta small">token {{.}}</span>{{end}}</td>
       <td>{{template "dataset-link" .}}</td>
     </tr>{{end}}</tbody>
   </table>

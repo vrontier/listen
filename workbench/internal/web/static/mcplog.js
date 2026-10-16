@@ -20,7 +20,7 @@
 
   const params = new URLSearchParams(location.search);
   if (params.get("failed") === "on" && !params.get("status")) params.set("status", "failed"); // the old form's way
-  for (const name of ["q", "token", "via", "what", "status"]) {
+  for (const name of ["q", "token", "via", "kind", "what", "status"]) {
     const v = params.get(name);
     const el = form.elements[name];
     if (v && el) {
@@ -37,6 +37,7 @@
     if (f.token && d.token !== f.token) return false;
     if (f.via && d.via !== f.via) return false;
     if (f.what && d.what !== f.what) return false;
+    if (f.kind && d.kind !== f.kind) return false;
     if (f.status === "failed" ? !failed[d.status] : f.status && d.status !== f.status) return false;
     return !f.q || e.textContent.toLowerCase().includes(f.q);
   }
@@ -46,6 +47,7 @@
       q: form.elements.q.value.trim().toLowerCase(),
       token: form.elements.token.value,
       via: form.elements.via.value,
+      kind: form.elements.kind.value,
       what: form.elements.what.value,
       status: form.elements.status.value,
     };

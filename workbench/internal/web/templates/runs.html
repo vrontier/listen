@@ -17,7 +17,7 @@
       <td class="nowrap">{{day .Started}}</td>
       <td>{{.Duration}} <span class="meta">so far, {{if .Ends.IsZero}}until stopped{{else}}until {{day .Ends}}{{end}}</span></td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
-      <td>{{.StartedBy}}</td>
+      <td>{{.StartedBy}}{{with .Token}} <span class="meta small">token {{.}}</span>{{end}}</td>
       <td><form method="post" action="/analyses/{{.AnalysisID}}/stop" class="inline-form">
         <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="back" value="runs">
         <button class="secondary">Stop</button>
@@ -54,7 +54,7 @@
       <td class="nowrap">{{day .Started}}</td>
       <td>{{.Duration}}</td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
-      <td>{{.StartedBy}}</td>
+      <td>{{.StartedBy}}{{with .Token}} <span class="meta small">token {{.}}</span>{{end}}</td>
     </tr>{{end}}</tbody>
   </table>
   <p><button form="delete-runs" class="danger">Delete the selected runs</button></p>

@@ -104,12 +104,13 @@ func (s *Server) mcpExtra(ctx context.Context, method string, params json.RawMes
 
 // readResource reads one low:// address for the member.
 func (s *Server) readResource(ctx context.Context, user int64, uri string) (string, string, string) {
+	tok, _ := ctx.Value(tokenKey).(catalogue.APIToken)
 	rest, ok := strings.CutPrefix(uri, resourceScheme)
 	if !ok {
 		return "", "", "Unknown resource " + uri + "; resources/list names them."
 	}
 	if rest == "guide" {
-		return mcpGuide(nil), "text/plain", ""
+		return mcpGuide(nil, tok.Has(catalogue.ScopeControl)), "text/plain", ""
 	}
 	parts := strings.Split(rest, "/")
 	if len(parts) != 3 || parts[0] != "runs" {

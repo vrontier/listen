@@ -18,6 +18,7 @@ type Run struct {
 	Number       int // counted per analysis, from 1
 	Started      time.Time
 	StartedBy    string
+	Token        string    // the token's name, when a token started it
 	Ends         time.Time // planned end; zero: until stopped
 	Stopped      time.Time // zero while it runs
 	StoppedBy    string    // empty when it ended at its planned end
@@ -80,14 +81,15 @@ var ErrNoRun = errors.New("the analysis is not running")
 const runSelect = `SELECT r.id, r.analysis_id, an.name,
 	(SELECT count(*) FROM runs x WHERE x.analysis_id = r.analysis_id AND x.id <= r.id),
 	r.started, su.name, coalesce(r.ends, ''), coalesce(r.stopped, ''), coalesce(tu.name, ''), r.revision,
-	r.dataset, r.dataset_bytes, r.dataset_note, r.summary, r.offline_stop, r.end_reason, r.end_note
-	FROM runs r JOIN analyses an ON an.id = r.analysis_id JOIN users su ON su.id = r.started_by LEFT JOIN users tu ON tu.id = r.stopped_by `
+	r.dataset, r.dataset_bytes, r.dataset_note, r.summary, r.offline_stop, r.end_reason, r.end_note, coalesce(tk.name, '')
+	FROM runs r JOIN analyses an ON an.id = r.analysis_id JOIN users su ON su.id = r.started_by LEFT JOIN users tu ON tu.id = r.stopped_by
+	LEFT JOIN api_tokens tk ON tk.id = r.token_id `
 
 func scanRun(row interface{ Scan(...any) error }) (Run, error) {
 	var r Run
 	var started, ends, stopped, summary string
 	if err := row.Scan(&r.ID, &r.AnalysisID, &r.AnalysisName, &r.Number, &started, &r.StartedBy, &ends, &stopped, &r.StoppedBy, &r.Revision,
-		&r.Dataset, &r.DatasetBytes, &r.DatasetNote, &summary, &r.OfflineStop, &r.EndReason, &r.EndNote); err != nil {
+		&r.Dataset, &r.DatasetBytes, &r.DatasetNote, &summary, &r.OfflineStop, &r.EndReason, &r.EndNote, &r.Token); err != nil {
 		return r, notFound(err)
 	}
 	r.Summary = json.RawMessage(summary)

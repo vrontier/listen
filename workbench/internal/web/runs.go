@@ -128,30 +128,22 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request, a catalogue.An
 		}
 		offline = n
 	}
-	if why, err := s.capRefusal(r.Context(), sess.User.ID, a, true); err != nil || why != "" {
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		s.redirect(w, r, back, "Not started: "+why)
-		return
-	}
-	var ends time.Time
-	if length > 0 {
-		ends = time.Now().UTC().Add(length)
-	}
-	if _, err := s.db.StartRunWith(r.Context(), a.ID, sess.User.ID, ends, offline); err != nil {
-		if errors.Is(err, catalogue.ErrRunActive) {
-			s.redirect(w, r, back, a.Name+" is already running.")
-			return
-		}
+	_, why, note, err := s.startRunAs(r.Context(), sess.User.ID, a, length, offline, nil)
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.sync.endPreview(a.ID)
+	if why != "" {
+		if strings.HasSuffix(why, "already running.") {
+			s.redirect(w, r, back, why)
+		} else {
+			s.redirect(w, r, back, "Not started: "+why)
+		}
+		return
+	}
 	flash := "Run of " + a.Name + " started. Its sources stay connected until it ends, whether or not a page is open; what it finds goes into its data set."
-	if err := s.pushSources(r, a.Sources); err != nil {
-		flash += " The engine has not taken it yet; it will be sent again."
+	if note != "" {
+		flash += " " + note
 	}
 	s.redirect(w, r, back, flash)
 }
@@ -162,22 +154,14 @@ func (s *Server) analysisRunStop(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	run, active, err := s.db.ActiveRun(r.Context(), a.ID)
-	if err == nil && active {
-		err = s.db.StopRun(r.Context(), a.ID, sess.User.ID)
-	}
-	if err != nil || !active {
-		if !active || errors.Is(err, catalogue.ErrNoRun) {
-			s.redirect(w, r, backTo(r, analysisPath(a)), a.Name+" was not running.")
-			return
-		}
+	run, why, err := s.stopRunAs(r.Context(), sess.User.ID, a)
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.sync.endTrial(a.ID)
-	s.data.refresh(r.Context()) // freezes the data set, then lets the sources go
-	if s.data.dir == "" {
-		s.pushSources(r, a.Sources)
+	if why != "" {
+		s.redirect(w, r, backTo(r, analysisPath(a)), a.Name+" was not running.")
+		return
 	}
 	s.redirect(w, r, runPath(run.ID), "Run stopped. Its data set is being put together.")
 }
@@ -230,23 +214,23 @@ func (s *Server) analysisPreviewStart(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, inRun, _ := s.db.ActiveRun(r.Context(), a.ID); inRun {
-		s.redirect(w, r, analysisPath(a), "The analysis is running; its live view is on.")
-		return
-	}
 	sess, _ := sessionFrom(r)
-	if why, err := s.capRefusal(r.Context(), sess.User.ID, a, false); err != nil || why != "" {
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		s.redirect(w, r, analysisPath(a), "No preview: "+why)
+	_, why, note, err := s.startPreviewAs(r.Context(), sess.User.ID, a)
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
-	s.sync.startPreview(a.ID, time.Now().Add(previewLength))
+	if why != "" {
+		if strings.Contains(why, "in a run") {
+			s.redirect(w, r, analysisPath(a), "The analysis is running; its live view is on.")
+		} else {
+			s.redirect(w, r, analysisPath(a), "No preview: "+why)
+		}
+		return
+	}
 	flash := "Preview for ten minutes. Nothing of it is recorded."
-	if err := s.pushSources(r, a.Sources); err != nil {
-		flash += " The engine has not taken it yet; it will be sent again."
+	if note != "" {
+		flash += " " + note
 	}
 	s.redirect(w, r, analysisPath(a), flash)
 }
@@ -256,8 +240,7 @@ func (s *Server) analysisPreviewEnd(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.sync.endPreview(a.ID)
-	s.pushSources(r, a.Sources)
+	s.endPreviewOf(r.Context(), a)
 	s.redirect(w, r, analysisPath(a), "Preview ended.")
 }
 

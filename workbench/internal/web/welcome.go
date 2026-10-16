@@ -23,6 +23,8 @@ type welcomeData struct {
 	Quota      int64
 	UsedPct    int
 	Tokens     int // valid tokens
+	Control    int // of them, those allowed control
+	ByTokens   int // runs going on that a token started
 	Accesses   int // with them in the last 24 hours
 	MaxSources int
 	Publishing bool
@@ -83,6 +85,12 @@ func (s *Server) welcome(w http.ResponseWriter, r *http.Request) {
 	for _, t := range tokens {
 		if t.Revoked.IsZero() {
 			d.Tokens++
+			if t.Has(catalogue.ScopeControl) {
+				d.Control++
+				if _, active, err := s.db.TokenRuns(ctx, t.ID, time.Now()); err == nil {
+					d.ByTokens += active
+				}
+			}
 		}
 	}
 	for _, a := range activity {

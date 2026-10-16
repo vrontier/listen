@@ -165,6 +165,9 @@ func (s *Server) noteRPC(r *http.Request, q rpcRequest, resp rpcResponse, answer
 			if c, ok := res["content"].([]map[string]any); ok && len(c) > 0 {
 				a.Note, _ = c[0]["text"].(string)
 			}
+			if strings.HasPrefix(a.Note, refused) {
+				a.Status = catalogue.AccessRefused
+			}
 		}
 		if b, err := json.Marshal(resp.Result); err == nil && resp.Result != nil {
 			a.Bytes = int64(len(b))

@@ -176,7 +176,7 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 	name      TEXT NOT NULL,
 	hash      TEXT NOT NULL UNIQUE,
 	hint      TEXT NOT NULL,                 -- the first characters, shown to tell tokens apart
-	scopes    TEXT NOT NULL,                 -- stream, mcp, comma-separated
+	scopes    TEXT NOT NULL,                 -- stream, mcp, control, comma-separated
 	created   TEXT NOT NULL,
 	last_used TEXT,
 	revoked   TEXT
@@ -291,7 +291,10 @@ func migrate(db *sql.DB) error {
 	if err := migrateRunEnds(db); err != nil {
 		return err
 	}
-	return migrateRunRemoved(db)
+	if err := migrateRunRemoved(db); err != nil {
+		return err
+	}
+	return migrateControl(db)
 }
 
 // migrateRunRemoved adds the deletion of finished runs (2026-10-16).

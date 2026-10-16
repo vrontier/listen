@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/vrontier/listen-workbench/internal/catalogue"
 )
 
 // The MCP guide says in plain words how the tools fit together, so that a
@@ -16,6 +18,7 @@ import (
 // toolDoc is one tool as the MCP page lists it.
 type toolDoc struct {
 	Name, Title, Description string
+	Control                  bool // only for a token allowed control
 	Args                     []argDoc
 	Example                  string // a tools/call message
 }
@@ -59,6 +62,10 @@ func exampleArgs(t mcpTool, ids guideIDs) map[string]any {
 			out[name] = ids.Run
 		case "file":
 			out[name] = fileEvents
+		case "title":
+			out[name] = "Night watch"
+		case "source_ids":
+			out[name] = []int64{ids.Source}
 		}
 	}
 	return out
@@ -66,8 +73,8 @@ func exampleArgs(t mcpTool, ids guideIDs) map[string]any {
 
 func toolDocs(ids guideIDs) []toolDoc {
 	var out []toolDoc
-	for _, t := range mcpTools {
-		d := toolDoc{Name: t.Name, Title: t.Title, Description: t.Description}
+	for _, t := range toolsFor(catalogue.APIToken{Scopes: []string{catalogue.ScopeControl}}) {
+		d := toolDoc{Name: t.Name, Title: t.Title, Description: t.Description, Control: isControlTool(t.Name)}
 		props, _ := t.InputSchema["properties"].(map[string]any)
 		req, _ := t.InputSchema["required"].([]string)
 		var names []string
@@ -105,11 +112,16 @@ func toolDocs(ids guideIDs) []toolDoc {
 
 // mcpGuide is the guide in plain text; with examples it shows each tool's
 // arguments filled in with ids.
-func mcpGuide(ids *guideIDs) string {
+func mcpGuide(ids *guideIDs, control bool) string {
 	var b strings.Builder
-	b.WriteString(`Listen Workbench: how to use its MCP tools
+	readOnly, changing := "nothing you do starts, stops or changes anything.", ""
+	if control {
+		readOnly = "with this token you may also change things, as section 7 says."
+		changing = guideControl
+	}
+	b.WriteString(strings.NewReplacer("{{readonly}}", readOnly, "{{control}}", changing, "{{runrule}}", map[bool]string{true: "Change things only when the member asks for it, and say what you changed.", false: "Nothing you do starts, stops or changes a run."}[control]).Replace(`Listen Workbench: how to use its MCP tools
 
-What it is: the Workbench analyses live audio streams for a member. An analysis has one or more sources (streams); for each source the engine finds spectral events (transients, resonances) and motifs, recurring patterns it learns. A run is a period in which an analysis runs; each finished run leaves a data set. You read only this member's own analyses; nothing you do starts, stops or changes anything.
+What it is: the Workbench analyses live audio streams for a member. An analysis has one or more sources (streams); for each source the engine finds spectral events (transients, resonances) and motifs, recurring patterns it learns. A run is a period in which an analysis runs; each finished run leaves a data set. You read only this member's own analyses; {{readonly}}
 
 How to go about it:
 1. Always start with list_analyses. It gives each analysis's id, its state ("run", "preview" or "idle"), and its sources with their ids. Never guess an id; take it from an earlier answer.
@@ -126,13 +138,17 @@ How to go about it:
    - read_dataset_file (run_id, file): the raw lines, up to 500 at a time. The last line of the answer, in [brackets], says which lines you got of how many and the offset for the next call.
 6. If a tool answers with an error, read its text: it names the id that was wrong or why the data is not there (not running, a preview, no data set yet) and which call to make instead. Do not repeat the same call unchanged.
 
-Rules: times are UTC. Ids are integers. Prefer summaries (summarize_analysis, get_events_since with limit 0, get_dataset) over reading whole files or large answers. Tell the member what you read. Nothing you do starts, stops or changes a run.
+Rules: times are UTC. Ids are integers. Prefer summaries (summarize_analysis, get_events_since with limit 0, get_dataset) over reading whole files or large answers. Tell the member what you read. {{runrule}}
 
-The server also offers resources (the guide; each finished run's summary and files, as low://runs/<run_id>/summary and low://runs/<run_id>/<file>) and prompts (summarize_run, watch_analysis, compare_sources), for clients that show them.
+{{control}}The server also offers resources (the guide; each finished run's summary and files, as low://runs/<run_id>/summary and low://runs/<run_id>/<file>) and prompts (summarize_run, watch_analysis, compare_sources), for clients that show them.
 
 Tools (a ? marks an optional argument):
-`)
-	for _, t := range mcpTools {
+`))
+	tools := toolsFor(catalogue.APIToken{})
+	if control {
+		tools = toolsFor(catalogue.APIToken{Scopes: []string{catalogue.ScopeControl}})
+	}
+	for _, t := range tools {
 		var args []string
 		props, _ := t.InputSchema["properties"].(map[string]any)
 		req, _ := t.InputSchema["required"].([]string)
@@ -157,3 +173,15 @@ Tools (a ? marks an optional argument):
 	}
 	return b.String()
 }
+
+// guideControl is the guide's part for a token allowed control.
+const guideControl = `7. Changing things (this token is allowed control; its member set limits for it):
+   - list_sources: the sources you may put into analyses, with their ids.
+   - create_analysis (title, source_ids): a new analysis with default settings; it does not start.
+   - update_analysis (analysis_id, title?, description?): texts only.
+   - set_sources (analysis_id, source_ids, compare?) and update_source_settings (analysis_id, source_id, …): a new revision each; the engine checks settings first. Give only what changes; null returns a setting to its default; rules replace all rules. Read the current settings with get_analysis. Not during a run.
+   - start_preview / stop_preview (analysis_id): ten minutes live, nothing recorded.
+   - start_run (analysis_id, hours?, offline_stop_min?) / stop_run (analysis_id): a run records a data set; the member gets a mail when you start one. After stop_run, get_dataset once the data set is ready.
+   An answer that begins "Refused:" names the limit or permission that stopped it; do not try again until the member changes it. Check with summarize_analysis that a change did what you meant.
+
+`

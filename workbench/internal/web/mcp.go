@@ -108,6 +108,7 @@ func init() {
 	for i := range mcpTools {
 		mcpTools[i].Annotations = readOnly
 	}
+	listSourcesTool.Annotations = readOnly
 }
 
 // mcp answers MCP requests. The token is checked before anything else.
@@ -187,6 +188,7 @@ func (s *Server) rpc(r *http.Request, q rpcRequest) (rpcResponse, bool) {
 		return rpcResponse{}, false
 	}
 	resp := rpcResponse{JSONRPC: "2.0", ID: q.ID}
+	tok, _ := tokenFrom(r)
 	if q.JSONRPC != "2.0" || q.Method == "" {
 		resp.Error = &rpcError{-32600, "invalid request"}
 		return resp, true
@@ -206,12 +208,12 @@ func (s *Server) rpc(r *http.Request, q rpcRequest) (rpcResponse, bool) {
 			"capabilities": map[string]any{"tools": map[string]any{"listChanged": false},
 				"resources": map[string]any{"listChanged": false, "subscribe": false}, "prompts": map[string]any{"listChanged": false}},
 			"serverInfo":   map[string]any{"name": "listen-workbench", "title": s.cfg.SiteName, "version": "1"},
-			"instructions": mcpGuide(nil),
+			"instructions": mcpGuide(nil, tok.Has(catalogue.ScopeControl)),
 		}
 	case "ping":
 		resp.Result = map[string]any{}
 	case "tools/list":
-		resp.Result = map[string]any{"tools": mcpTools}
+		resp.Result = map[string]any{"tools": toolsFor(tok)}
 	case "tools/call":
 		var p struct {
 			Name      string          `json:"name"`
@@ -221,8 +223,8 @@ func (s *Server) rpc(r *http.Request, q rpcRequest) (rpcResponse, bool) {
 			resp.Error = &rpcError{-32602, "invalid params"}
 			return resp, true
 		}
-		known := false
-		for _, t := range mcpTools {
+		known := isControlTool(p.Name) // a token without control is told why
+		for _, t := range toolsFor(tok) {
 			known = known || t.Name == p.Name
 		}
 		if !known {
@@ -281,7 +283,12 @@ func (s *Server) callTool(ctx context.Context, name string, rawArgs json.RawMess
 		}
 		return an, ""
 	}
+	if isControlTool(name) {
+		return s.callControl(ctx, name, rawArgs)
+	}
 	switch name {
+	case "list_sources":
+		return s.listSources(ctx, user)
 	case "list_analyses":
 		as, err := s.db.AnalysesOf(ctx, user)
 		if err != nil {

@@ -51,7 +51,7 @@ func (s *Server) mcpPage(w http.ResponseWriter, r *http.Request) {
 	// token; the page keeps them when it goes back in time.
 	page := func(before int64) string {
 		v := url.Values{}
-		for _, k := range []string{"token", "via", "status", "what", "q", "sort"} {
+		for _, k := range []string{"token", "via", "kind", "status", "what", "q", "sort"} {
 			if x := q.Get(k); x != "" {
 				v.Set(k, x)
 			}
@@ -73,7 +73,7 @@ func (s *Server) mcpPage(w http.ResponseWriter, r *http.Request) {
 	}
 	ids := s.guideIDsOf(ctx, sess.User.ID)
 	d.Tools = toolDocs(ids)
-	d.Guide = mcpGuide(&ids)
+	d.Guide = mcpGuide(&ids, true)
 	d.Base = s.cfg.BaseURL
 	s.render(w, r, 200, "mcp", "MCP", d)
 }

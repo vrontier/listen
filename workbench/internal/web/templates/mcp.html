@@ -2,7 +2,7 @@
 <h1>MCP</h1>
 {{with .Data}}
 {{$d := .}}
-<p class="meta">How AI assistants read your analyses through MCP: what they and your programs have read, every tool they can call, a guide to give them, and how to connect. A token only reads, so nothing an assistant does here changes anything.</p>
+<p class="meta">How AI assistants work with your analyses through MCP: what they and your programs have done, every tool they can call, a guide to give them, and how to connect. A token reads only, unless you allowed it control under Tokens; then an assistant may also make and change analyses and start and stop previews and runs, within the token's limits.</p>
 <p class="meta"><a href="#activity">Activity</a> · <a href="#tools">Tools</a> · <a href="#guide">Guide for assistants</a> · <a href="#connect">Connecting</a></p>
 
 <h2 id="activity">Activity</h2>
@@ -29,8 +29,9 @@
     <label>Search <input type="search" name="q" placeholder="tool, argument, message" autocomplete="off"></label>
     <label>Token <select name="token"><option value="">all</option>{{range .Tokens}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
     <label>Through <select name="via"><option value="">MCP and data stream</option><option value="mcp">MCP</option><option value="stream">data stream</option></select></label>
+    <label>Kind <select name="kind"><option value="">reads and changes</option><option value="change">changes</option><option value="read">reads</option></select></label>
     <label>Call <select name="what"><option value="">all</option></select></label>
-    <label>Result <select name="status"><option value="">all</option><option value="ok">ok</option><option value="failed">failed</option><option value="open">streaming</option></select></label>
+    <label>Result <select name="status"><option value="">all</option><option value="ok">ok</option><option value="failed">failed</option><option value="open">streaming</option><option value="refused">refused</option></select></label>
     <button type="reset" class="secondary">Clear</button>
   </form>
   <p class="meta small" id="log-count" aria-live="polite"></p>
@@ -45,12 +46,12 @@
       <th class="num" data-key="ms"><button type="button" class="link">Took</button></th>
       <th class="num" data-key="bytes"><button type="button" class="link">Size</button></th>
     </tr></thead>
-    {{range .Rows}}<tbody class="entry" data-at="{{.At.UnixMilli}}" data-token="{{.TokenID}}" data-token-name="{{.TokenName}}" data-via="{{.Via}}" data-what="{{.What}}" data-status="{{.Status}}" data-ms="{{.Ms}}" data-bytes="{{.Bytes}}">
+    {{range .Rows}}<tbody class="entry" data-at="{{.At.UnixMilli}}" data-token="{{.TokenID}}" data-token-name="{{.TokenName}}" data-via="{{.Via}}" data-what="{{.What}}" data-kind="{{if changeTool .What}}change{{else}}read{{end}}" data-status="{{.Status}}" data-ms="{{.Ms}}" data-bytes="{{.Bytes}}">
       <tr class="l1">
         <td class="nowrap">{{moment .At}}</td>
         <td>{{.TokenName}}{{with .Client}} <span class="meta small">{{.}}</span>{{end}}</td>
         <td class="nowrap">{{if eq .Via "mcp"}}MCP{{else}}data stream{{end}}</td>
-        <td><code>{{.What}}</code></td>
+        <td><code>{{.What}}</code>{{if changeTool .What}} <span class="state state-paused">change</span>{{end}}</td>
         <td class="nowrap">{{if eq .Status "ok"}}ok{{else if eq .Status "open"}}<span class="state state-production">streaming</span>{{else if eq .Status "cut"}}<span class="field-error">cut off</span>{{else}}<span class="field-error">{{.Status}}</span>{{end}}</td>
         <td class="num nowrap">{{if ne .Status "open"}}{{ms .Ms}}{{end}}</td>
         <td class="num nowrap">{{if .Bytes}}{{bytes .Bytes}}{{end}}</td>
@@ -66,10 +67,10 @@
 
 <section>
   <h2 id="tools">Tools</h2>
-  <p class="meta">What an assistant can call. Each reads only; the examples use ids of your own analyses and runs. An assistant gets this list by itself when it connects ("tools/list").</p>
+  <p class="meta">What an assistant can call; the examples use ids of your own analyses and runs. An assistant gets this list by itself when it connects ("tools/list"). The tools marked "needs control" change things; an assistant sees them only with a token you allowed control under <a href="/account/tokens">Tokens</a>, and only within that token's limits.</p>
   {{range .Tools}}
   <article class="card tool">
-    <h3><code>{{.Name}}</code> <span class="meta">{{.Title}}</span></h3>
+    <h3><code>{{.Name}}</code> <span class="meta">{{.Title}}</span>{{if .Control}} <span class="state state-paused">needs control</span>{{end}}</h3>
     <p>{{.Description}}</p>
     {{if .Args}}
     <table>

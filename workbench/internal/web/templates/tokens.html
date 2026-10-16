@@ -2,7 +2,7 @@
 {{$csrf := .CSRF}}
 <h1>Tokens</h1>
 {{with .Data}}
-<p class="meta">A token lets a program or an AI assistant read your analyses: their settings, their live events while they are in a run or a preview, and your runs' data sets. It never starts or changes anything, so it never connects a source by itself. It reads only your own analyses.</p>
+<p class="meta">A token lets a program or an AI assistant read your analyses: their settings, their live events while they are in a run or a preview, and your runs' data sets. It reads only your own analyses. Only if you allow <strong>control</strong> for a token may an assistant also make and change analyses and start and stop previews and runs with it, through MCP, within the limits you set for that token; it never registers, shares or deletes anything. You get a mail whenever a token starts a run.</p>
 
 {{if .Secret}}
 <section class="notice">
@@ -16,13 +16,24 @@
   <h2>Your tokens</h2>
   {{if .Tokens}}
   <table>
-    <thead><tr><th>Name</th><th>Begins</th><th>For</th><th>Made</th><th>Last used</th><th></th></tr></thead>
-    <tbody>{{range .Tokens}}<tr{{if not .Revoked.IsZero}} class="meta"{{end}}>
+    <thead><tr><th>Name</th><th>Begins</th><th>For</th><th>Limits</th><th>Made</th><th>Last used</th><th></th></tr></thead>
+    {{range .Tokens}}<tbody><tr{{if not .Revoked.IsZero}} class="meta"{{end}}>
       <td>{{.Name}}</td><td><code>{{.Hint}}…</code></td>
-      <td>{{range $i, $s := .Scopes}}{{if $i}}, {{end}}{{if eq $s "stream"}}data stream{{else if eq $s "mcp"}}MCP{{else}}{{$s}}{{end}}{{end}}</td>
+      <td>{{range $i, $s := .Scopes}}{{if $i}}, {{end}}{{if eq $s "stream"}}data stream{{else if eq $s "mcp"}}MCP{{else if eq $s "control"}}<strong>control</strong>{{else}}{{$s}}{{end}}{{end}}</td>
+      <td class="small">{{if .Has "control"}}{{template "token-limits" .Limits}}{{else}}<span class="meta">reads only</span>{{end}}</td>
       <td>{{when .Created}}</td><td>{{if .LastUsed.IsZero}}never{{else}}{{when .LastUsed}}{{end}}</td>
       <td>{{if .Revoked.IsZero}}<form method="post" action="/account/tokens/{{.ID}}/revoke" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="link">revoke</button></form>{{else}}revoked {{when .Revoked}}{{end}}</td>
-    </tr>{{end}}</tbody>
+    </tr>
+    {{if .Revoked.IsZero}}<tr><td colspan="7">
+      <details class="token-edit"><summary>Change what {{.Name}} may do</summary>
+        <form method="post" action="/account/tokens/{{.ID}}" class="stack">
+          <input type="hidden" name="csrf" value="{{$csrf}}">
+          {{template "token-perms" .}}
+          <button>Save</button>
+        </form>
+      </details>
+    </td></tr>{{end}}
+    </tbody>{{end}}
   </table>
   {{else}}<p class="meta">None yet.</p>{{end}}
 
@@ -30,8 +41,7 @@
   <form method="post" action="/account/tokens" class="stack">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <label>Name <small>where it is used, so that you know which to revoke</small><input name="name" value="{{.Name}}" required maxlength="60"></label>
-    <label class="check"><input type="checkbox" name="stream" checked> Data stream: JSON and live events over HTTP, for programs</label>
-    <label class="check"><input type="checkbox" name="mcp"> MCP: the same data for AI assistants</label>
+    {{template "token-perms" (newTokenPerms .Limits)}}
     <button>Make a token</button>
   </form>
 </section>
@@ -45,10 +55,26 @@
     <tr><th><code>GET /api/v1/analyses/&lt;id&gt;/sources/&lt;source&gt;/state</code></th><td>also <code>motifs</code>, <code>history/events</code>, <code>history/features</code>, during a run or a preview</td></tr>
     <tr><th><code>GET /api/v1/runs</code></th><td>your runs and their data sets</td></tr>
     <tr><th><code>GET /api/v1/runs/&lt;id&gt;/events.csv</code></th><td>a file of a finished data set: also <code>dataset.json</code>, <code>comparison.csv</code></td></tr>
-    <tr><th><code>POST /mcp</code></th><td>MCP over HTTP (streamable HTTP), for AI assistants</td></tr>
+    <tr><th><code>POST /mcp</code></th><td>MCP over HTTP (streamable HTTP), for AI assistants; with control also making and changing analyses, previews and runs. The tools are listed on the <a href="/account/mcp#tools">MCP</a> page.</td></tr>
   </table>
   <p>For example:</p>
   <pre><code>curl -N -H "Authorization: Bearer $LOW_TOKEN" {{.Base}}/api/v1/analyses/{{.Example}}/events?types=event.resonance</code></pre>
 </section>
 {{end}}
+{{end}}
+
+{{define "token-limits"}}{{if .Unlimited}}none{{else}}{{if .RunHours}}runs up to {{.RunHours}} h{{else}}runs of any length{{end}}; {{if .RunsPerDay}}{{.RunsPerDay}}{{else}}any number of{{end}} runs a day, {{if .RunsAtOnce}}{{.RunsAtOnce}}{{else}}any number{{end}} at once; {{if .PreviewsPerDay}}{{.PreviewsPerDay}}{{else}}any number of{{end}} previews and {{if .ChangesPerDay}}{{.ChangesPerDay}}{{else}}any number of{{end}} changes a day{{end}}{{end}}
+
+{{define "token-perms"}}
+<label class="check"><input type="checkbox" name="stream" {{if .Has "stream"}}checked{{end}}> Data stream: JSON and live events over HTTP, for programs</label>
+<label class="check"><input type="checkbox" name="mcp" {{if .Has "mcp"}}checked{{end}}> MCP: the same data for AI assistants</label>
+<label class="check"><input type="checkbox" name="control" {{if .Has "control"}}checked{{end}}> Control, through MCP: make and change analyses (texts, sources, settings and filter rules, as new revisions), start and stop previews and runs</label>
+<fieldset class="limits">
+  <legend>Limits for control <small>used only with control; an empty field is no limit</small></legend>
+  <label>Longest run, hours <small>empty: runs until stopped are allowed too</small><input name="run_hours" inputmode="numeric" size="6" value="{{with .Limits.RunHours}}{{.}}{{end}}"></label>
+  <label>Runs started a day<input name="runs_per_day" inputmode="numeric" size="6" value="{{with .Limits.RunsPerDay}}{{.}}{{end}}"></label>
+  <label>Its runs at once<input name="runs_at_once" inputmode="numeric" size="6" value="{{with .Limits.RunsAtOnce}}{{.}}{{end}}"></label>
+  <label>Previews a day<input name="previews_per_day" inputmode="numeric" size="6" value="{{with .Limits.PreviewsPerDay}}{{.}}{{end}}"></label>
+  <label>Changes to analyses a day<input name="changes_per_day" inputmode="numeric" size="6" value="{{with .Limits.ChangesPerDay}}{{.}}{{end}}"></label>
+</fieldset>
 {{end}}

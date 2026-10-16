@@ -15,8 +15,8 @@ func TestActivity(t *testing.T) {
 	ctx := context.Background()
 	u, _ := r.db.CreateUser(ctx, "m@example.org", "M", false)
 	r.db.CreateUser(ctx, "o@example.org", "O", false)
-	both, _, _ := r.db.CreateAPIToken(ctx, u.ID, "laptop", []string{catalogue.ScopeStream, catalogue.ScopeMCP})
-	mcpOnly, _, _ := r.db.CreateAPIToken(ctx, u.ID, "assistant", []string{catalogue.ScopeMCP})
+	both, _, _ := r.db.CreateAPIToken(ctx, u.ID, "laptop", []string{catalogue.ScopeStream, catalogue.ScopeMCP}, catalogue.TokenLimits{})
+	mcpOnly, _, _ := r.db.CreateAPIToken(ctx, u.ID, "assistant", []string{catalogue.ScopeMCP}, catalogue.TokenLimits{})
 
 	r.mcpCall(both, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"test-client","version":"0.1"}}}`)
 	r.mcpCall(both, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
@@ -92,7 +92,7 @@ func TestActivity(t *testing.T) {
 	}
 	// Each access over two lines, with what the browser filters and sorts by.
 	log := page[strings.Index(page, `id="accesses"`):strings.Index(page, `id="tools"`)] // the tools are listed below
-	for _, s := range []string{`class="log-scroll"`, `data-what="get_analysis" data-status="error"`, `data-via="stream"`, `class="l2"`,
+	for _, s := range []string{`class="log-scroll"`, `data-what="get_analysis" data-kind="read" data-status="error"`, `data-via="stream"`, `class="l2"`,
 		`data-key="ms"`, "mcplog.js", "There is no analysis 999 of yours"} {
 		if !strings.Contains(log, s) && !strings.Contains(page, s) {
 			t.Fatalf("log lacks %q", s)
