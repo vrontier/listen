@@ -15,7 +15,7 @@ import (
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	if r2, ok := s.loadSession(r); ok {
-		http.Redirect(w, r2, "/analyses", http.StatusSeeOther)
+		s.welcome(w, r2)
 		return
 	}
 	s.render(w, r, 200, "home", "", nil)
@@ -33,7 +33,7 @@ func (d loginData) FormError() string { return d.Err }
 // safeNext keeps a redirect target on this site.
 func safeNext(next string) string {
 	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.Contains(next, "\\") {
-		return "/analyses"
+		return "/"
 	}
 	return next
 }

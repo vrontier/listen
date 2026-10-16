@@ -140,3 +140,27 @@ func TestResults(t *testing.T) {
 		t.Fatalf("deleted run's page: %d", code)
 	}
 }
+
+func TestHome(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	r.db.CreateUser(ctx, "m@example.org", "Mira", false)
+	member := r.loginAs("m@example.org")
+	code, page, _ := r.get(member, "/")
+	if code != 200 {
+		t.Fatalf("home: %d", code)
+	}
+	for _, want := range []string{"Welcome, Mira", `href="/sources/new"`, `href="/analyses/new"`, `href="/runs"`, `href="/results"`, `href="/account/tokens"`, `href="/account/mcp"`,
+		"0 sources of your own", "nothing running", "Source code on GitHub", `<a href="/">Home</a>`} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("home lacks %q", want)
+		}
+	}
+	if strings.Contains(page, `href="/admin"`) {
+		t.Fatal("a member is shown the admin page")
+	}
+	// Visitors still get the public front page.
+	if _, page, _ := r.get(http.DefaultClient, "/"); !strings.Contains(page, "log in") || strings.Contains(page, "Welcome,") {
+		t.Fatal("visitor's front page")
+	}
+}

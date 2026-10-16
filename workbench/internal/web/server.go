@@ -185,7 +185,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /invite/{token}", s.inviteForm)
 	m.HandleFunc("POST /invite/{token}", s.inviteAccept)
 
-	m.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/analyses", http.StatusSeeOther) })
+	m.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", http.StatusSeeOther) })
 
 	m.HandleFunc("GET /sources", s.member(s.sources))
 	m.HandleFunc("GET /sources/new", s.member(s.streamNewForm))

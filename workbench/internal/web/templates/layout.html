@@ -11,6 +11,7 @@
   <a class="brand" href="/">{{.Site}}</a>
   <nav>
     {{if .User}}
+      <a href="/">Home</a>
       {{if .Research}}<a href="/research">Research</a>{{end}}
       <a href="/sources">Sources</a>
       <a href="/analyses">Analyses</a>
@@ -34,7 +35,7 @@
   {{if .Error}}<p class="banner bad">{{.Error}}</p>{{end}}
   {{template "content" .}}
 </main>
-<footer>© 2026 Mike Quest · <a href="https://github.com/vrontier/listen-workbench">GitHub</a></footer>
+<footer>© 2026 Mike Quest · <a href="https://github.com/vrontier/listen-workbench" rel="noopener">Source code on GitHub</a></footer>
 </body>
 </html>
 

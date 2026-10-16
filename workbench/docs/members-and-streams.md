@@ -262,6 +262,7 @@ No user-written code or expressions run on the server: filters and motif definit
 | Path | Content |
 |---|---|
 | `/login` | email link |
+| `/` | for members, Home (**decided** 2026-10-16, the landing page after login): the way through the Workbench step by step (source, analysis and preview, run and trial, results, tokens and MCP, publishing when it is on), with links and where the member stands at each step; for visitors, the front page |
 | `/sources` | own sources, with state |
 | `/sources/new`, `/sources/<slug>` | register and edit, invite members, move to production, pause, delete; who is connected; new analysis with this source |
 | `/analyses` | own analyses with their sources |
