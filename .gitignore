@@ -24,3 +24,5 @@ site/_config/mail.php
 feedback/
 # The source catalogue is local configuration (see sources.example.json), never committed
 site/_config/sources.json
+# Notes from the Workbench project about this engine, kept local
+docs/engine-for-the-workbench.md
