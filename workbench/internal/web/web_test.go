@@ -490,7 +490,7 @@ func TestRunKeepsSourceConnected(t *testing.T) {
 	if !strings.Contains(page, `class="stop-x" title="Stop run 1"`) || !strings.Contains(page, `data-confirm="Stop run 1 of`) || !strings.Contains(page, "Run 1 since") {
 		t.Fatal("running analysis page does not offer to stop")
 	}
-	if _, list, _ := r.get(member, "/analyses"); !strings.Contains(list, "running · private") {
+	if _, list, _ := r.get(member, "/analyses"); !strings.Contains(list, `<span class="state tone-info">Running</span> <span class="state tone-neutral">Private</span>`) {
 		t.Fatal("analysis list does not show the run")
 	}
 	if code, _, _ := r.post(member, aURL+"/stop", url.Values{"csrf": {csrf}}); code != http.StatusSeeOther {

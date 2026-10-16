@@ -403,6 +403,16 @@ func (s *Server) parseTemplates() error {
 	funcs["asset"] = func(name string) string { return "/static/" + name + "?v=" + staticVersion }
 	funcs["hasPrefix"] = strings.HasPrefix
 	funcs["aiPages"] = func() []aiLink { return aiPages }
+	funcs["navItem"] = navItem
+	funcs["status"] = statusOf
+	funcs["connWords"] = connWords
+	funcs["brandName"] = func(site string) string { name, _ := strings.CutSuffix(site, " Workbench"); return name }
+	funcs["brandSub"] = func(site string) string {
+		if strings.HasSuffix(site, " Workbench") {
+			return "Workbench"
+		}
+		return ""
+	}
 	s.pages = map[string]*template.Template{}
 	names, err := fs.Glob(templateFS, "templates/*.html")
 	if err != nil {

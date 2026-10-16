@@ -5,7 +5,7 @@
 <p class="crumbs"><a href="/analyses">Analyses</a></p>
 <div class="heading-row">
   <h1>{{.Analysis.Name}}</h1>
-  <span class="state state-{{.Analysis.State}}">{{if .Run}}running · {{end}}{{.Analysis.State}} · {{.Analysis.Label}}</span>
+  <span class="states">{{if .Run}}{{template "status" (status "activity" "run")}}{{else if not .Preview.IsZero}}{{template "status" (status "activity" "preview")}}{{else}}{{template "status" (status "activity" "idle")}}{{end}} {{template "status" (status "visibility" .Analysis.State)}} <span class="meta">{{.Analysis.Label}}</span></span>
 </div>
 {{if .Analysis.Description}}<p>{{.Analysis.Description}}</p>{{end}}
 <p class="meta">Start a run or a preview here, and watch each source live while it lasts. Below: each source's settings and filter rules, its memories, which sources the analysis uses, its runs and revisions. Settings are fixed while a run lasts; a trial tries changed settings next to it.</p>
@@ -62,7 +62,7 @@
 <section class="compare"{{if .Comparing}} data-state="/analyses/{{.Analysis.ID}}/compare/state" data-live="/analyses/{{.Analysis.ID}}/compare/live"{{end}}>
   <div class="live-head">
     <h2 class="live-title">Comparison</h2>
-    {{if .Comparing}}<span class="status conn">connecting…</span> <span class="compare-status meta"></span>{{end}}
+    {{if .Comparing}}<span class="status conn conn-info">Connecting…</span> <span class="compare-status meta"></span>{{end}}
   </div>
   {{if .Comparing}}
   <ol class="lane-names" hidden>{{range .Sources}}{{if .Running}}<li data-stream="{{.Stream.EngineID}}"{{with .Stream.Texts.Lat}} data-lat="{{.}}"{{end}}{{with .Stream.Texts.Lon}} data-lon="{{.}}"{{end}}>{{.Stream.Texts.Name}}</li>{{end}}{{end}}</ol>
@@ -101,7 +101,7 @@
 <section class="live source-block" {{if .Live}}data-live="{{.LivePath}}" data-data="{{.DataPath}}"{{end}}>
   <div class="live-head">
     <h2 class="live-title"><a href="/sources/{{.Stream.Slug}}">{{.Stream.Texts.Name}}</a></h2>
-    {{if .Live}}<span class="status conn">connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else if not .Running}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{else}}<span class="meta">{{.Stream.SampleRate}} Hz · live during a run or a preview</span>{{end}}
+    {{if .Live}}<span class="status conn conn-info">Connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else if not .Running}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{else}}<span class="meta">{{.Stream.SampleRate}} Hz · live during a run or a preview</span>{{end}}
   </div>
   {{if .Live}}
   <div class="spectro">
@@ -183,7 +183,7 @@
 <section class="live trial-block" data-live="{{.TrialPath}}" data-data="{{.TrialData}}">
   <div class="live-head">
     <h2 class="live-title">Trial on {{.Stream.Texts.Name}}</h2>
-    <span class="status conn">connecting…</span> <span class="clock meta"></span> <span class="level meta"></span>
+    <span class="status conn conn-info">Connecting…</span> <span class="clock meta"></span> <span class="level meta"></span>
   </div>
   <div class="spectro">
     <div class="axis"><span class="axis-max"></span><span class="axis-min"></span></div>

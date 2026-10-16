@@ -8,7 +8,7 @@
 <section class="compare" data-state="{{.Base}}/compare/state" data-live="{{.Base}}/compare/live">
   <div class="live-head">
     <h2 class="live-title">Comparison</h2>
-    <span class="status conn">connecting…</span> <span class="compare-status meta"></span>
+    <span class="status conn conn-info">Connecting…</span> <span class="compare-status meta"></span>
   </div>
   <ol class="lane-names" hidden>{{range .Sources}}{{if .Live}}<li data-stream="{{.Stream.EngineID}}"{{if and .Stream.Texts.Lat .Stream.Texts.Lon}} data-lat="{{publicCoord .Stream.Texts.Lat}}" data-lon="{{publicCoord .Stream.Texts.Lon}}"{{end}}>{{.Stream.Texts.Name}}</li>{{end}}{{end}}</ol>
   <div class="compare-map" hidden></div>
@@ -31,7 +31,7 @@
 <section class="live source-block" data-live="{{.LivePath}}" data-data="{{.DataPath}}">
   <div class="live-head">
     <h2 class="live-title">{{.Stream.Texts.Name}}</h2>
-    <span class="status conn">connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>
+    <span class="status conn conn-info">Connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>
   </div>
   <div class="spectro">
     <div class="axis"><span class="axis-max"></span><span class="axis-min"></span></div>

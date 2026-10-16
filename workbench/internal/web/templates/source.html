@@ -3,7 +3,7 @@
 {{with .Data}}
 <div class="heading-row">
   <h1>{{.Stream.Texts.Name}}</h1>
-  <span class="state state-{{.Stream.State}}">{{.Stream.State}}</span>
+  {{template "status" (status "source" .Stream.State)}}
 </div>
 <p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz · registered {{when .Stream.Created}} by {{.Stream.OwnerName}}</p>
 <p class="meta">{{if .IsOwner}}Your source: its connection, who uses it, its description, with whom you share it, and every change made to it. Its settings for analysis live in each analysis, not here.{{else}}A source {{.Stream.OwnerName}} shares with you: its connection and who uses it. You can use it in your own analyses; its description and state stay with {{.Stream.OwnerName}}.{{end}}</p>
@@ -12,7 +12,7 @@
 <section>
   <h2>Connection</h2>
   {{if .InEngine}}
-    <p>State: <span class="conn conn-{{.Engine.State}}">{{.Engine.State}}</span> for {{since .Engine.Since}}.
+    <p>State: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}} for {{since .Engine.Since}}.
     {{if .Engine.LastData}}Last audio {{since (deref .Engine.LastData)}} ago.{{end}}</p>
     {{if .Engine.LastError}}<p class="field-error">{{.Engine.LastError.Message}}</p>{{end}}
   {{else}}
@@ -27,7 +27,7 @@
     <tbody>
     {{$slug := .Stream.Slug}}
     {{range .Consumers}}
-      <tr><td>{{if .Mine}}<a href="/analyses/{{.Analysis.ID}}">{{.Analysis.Name}}</a>{{else}}{{.Analysis.Name}}{{end}}</td><td>{{.Owner}}</td><td>{{.State}}</td>
+      <tr><td>{{if .Mine}}<a href="/analyses/{{.Analysis.ID}}">{{.Analysis.Name}}</a>{{else}}{{.Analysis.Name}}{{end}}</td><td>{{.Owner}}</td><td>{{template "status" (status "activity" .State)}}</td>
       <td>{{.Readers.People}} page{{if ne .Readers.People 1}}s{{end}}, {{.Readers.Programs}} token{{if ne .Readers.Programs 1}}s{{end}}</td></tr>
     {{end}}
     {{if not .Consumers}}<tr><td colspan="4" class="meta">No analysis uses this source yet.</td></tr>{{end}}
@@ -41,7 +41,7 @@
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="resume">Resume</button></form>
     {{else}}
       {{if eq .Stream.State "draft"}}
-      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="production">Move to production</button></form>
+      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="production">Put in service</button></form>
       {{else}}
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="draft" class="secondary">Back to draft</button></form>
       {{end}}

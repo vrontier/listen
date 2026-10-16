@@ -15,6 +15,12 @@
     return "rgb(" + r + "," + g + "," + b + ")";
   }
 
+  // The words for a connection's state, from the page (statuses.go).
+  function connWord(state) {
+    const w = (window.LOW_CONN || {})[state];
+    return w || { Word: state ? state.charAt(0).toUpperCase() + state.slice(1) : "Unknown", Tone: "neutral" };
+  }
+
   function fmtHz(hz) {
     return hz >= 1000 ? (hz / 1000).toFixed(hz >= 10000 ? 0 : 1) + " kHz" : Math.round(hz) + " Hz";
   }
@@ -97,8 +103,9 @@
     }
 
     function setStatus(s) {
-      statusEl.textContent = s.stream;
-      statusEl.className = "status conn conn-" + s.stream;
+      const w = connWord(s.stream);
+      statusEl.textContent = w.Word;
+      statusEl.className = "status conn conn-" + w.Tone;
     }
 
     async function loadMotifs() {
@@ -155,7 +162,7 @@
           if (t.startsWith("motif.")) loadMotifs();
         });
       }
-      es.onerror = () => { statusEl.textContent = "reconnecting…"; statusEl.className = "status conn conn-reconnecting"; };
+      es.onerror = () => { statusEl.textContent = "Reconnecting…"; statusEl.className = "status conn conn-warn"; };
     }
 
     ctx.fillStyle = getComputedStyle(canvas).backgroundColor;

@@ -41,7 +41,7 @@
     const w = canvas.width, h = canvas.height;
     const text = css("--text"), muted = css("--muted"), line = css("--line"), accent = css("--accent");
     ctx.clearRect(0, 0, w, h);
-    ctx.font = "11px 'JetBrains Mono', monospace";
+    ctx.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
     const end = latest || Date.now();
     const start = end - WINDOW * 1000;
     const x = (t) => ((t - start) / (WINDOW * 1000)) * w;
@@ -132,11 +132,11 @@
 
   function connect() {
     const es = new EventSource(root.dataset.live);
-    es.onopen = () => { statusEl.textContent = "connected"; statusEl.className = "status conn conn-connected"; };
+    es.onopen = () => { statusEl.textContent = "Live"; statusEl.className = "status conn conn-ok"; };
     es.addEventListener("group.activity", (m) => { addActivity(JSON.parse(m.data)); draw(); });
     es.addEventListener("group.status", (m) => showStatus(JSON.parse(m.data).payload));
     es.addEventListener("group.correlation", (m) => showCorrelation(JSON.parse(m.data).payload));
-    es.onerror = () => { statusEl.textContent = "reconnecting…"; statusEl.className = "status conn conn-reconnecting"; };
+    es.onerror = () => { statusEl.textContent = "Reconnecting…"; statusEl.className = "status conn conn-warn"; };
   }
 
   // --- the map: stations, pairs, night ---

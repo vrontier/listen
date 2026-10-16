@@ -48,3 +48,6 @@ deploy/local.mk
 # Local MCP servers; they name hosts
 .mcp.json
 .playwright-mcp/
+
+# The UX proposal, kept local
+/docs/style-guide/

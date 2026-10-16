@@ -3,7 +3,7 @@
   <h1>Sources</h1>
   <a class="button" href="/sources/new">Register a source</a>
 </div>
-<p class="meta">A source is a live audio stream: one you run, or one whose operator has agreed to its analysis here. The Workbench keeps one connection to it however many analyses use it, and connects only while an analysis that uses it is in a run or a preview. Here are your own sources and those other members share with you. Draft and production connect alike for now; paused stops a source for everyone, and suspended is the master admin's.</p>
+<p class="meta">A source is a live audio stream: one you run, or one whose operator has agreed to its analysis here. The Workbench keeps one connection to it however many analyses use it, and connects only while an analysis that uses it is in a run or a preview. Here are your own sources and those other members share with you. Draft and in service connect alike for now; paused stops a source for everyone, and suspended is the master admin's.</p>
 {{with .Data}}
 {{if not .Streams}}
   <p class="empty">No sources yet. Register a stream you run, or one whose operator has agreed to its analysis here.</p>
@@ -12,9 +12,9 @@
 <article class="card">
   <div class="heading-row">
     <h2><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></h2>
-    <span class="state state-{{.State}}">{{.State}}</span>
+    {{template "status" (status "source" .State)}}
   </div>
-  <p class="meta">{{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: <span class="conn conn-{{.Engine.State}}">{{.Engine.State}}</span>{{else}}not in the engine{{end}}</p>
+  <p class="meta">{{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}}{{else}}not in the engine{{end}}</p>
   <p class="meta">{{if .Analyses}}Used by {{range $i, $a := .Analyses}}{{if $i}}, {{end}}{{$a.Name}} ({{$a.OwnerName}}){{end}}.{{else}}No analysis uses it yet.{{end}}</p>
 </article>
 {{end}}
@@ -25,9 +25,9 @@
 <article class="card">
   <div class="heading-row">
     <h2><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></h2>
-    <span class="state state-{{.State}}">{{.State}}</span>
+    {{template "status" (status "source" .State)}}
   </div>
-  <p class="meta">{{.OwnerName}}'s · {{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: <span class="conn conn-{{.Engine.State}}">{{.Engine.State}}</span>{{else}}not in the engine{{end}}</p>
+  <p class="meta">{{.OwnerName}}'s · {{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}}{{else}}not in the engine{{end}}</p>
 </article>
 {{end}}
 {{end}}

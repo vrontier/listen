@@ -265,6 +265,18 @@ The limits in [members-and-streams.md](members-and-streams.md) ask that a stream
 
 The listen repository's draft makes the timing analyses conditional on a premise test with `activity`; [groups.md](groups.md#the-premise-test) takes this over.
 
+## Look and feel
+
+**Decided** (2026-10-16): the pages take the design language of a designer's proposal ("Field Station", kept outside this repository), fitted to the Workbench: a light, quiet workspace around dark listening instruments. Its sections are the Workbench's own (Home, Sources, Analyses, Runs, Results, AI); an analysis's title is never a section.
+
+- **Night theme.** **Decided** (2026-10-16): from the start, with the same colour roles, not an inversion. It follows the system unless the member chooses light or night in the sidebar (**proposed**: kept in the browser).
+- **Fonts.** **Decided** (2026-10-16): Source Sans 3 for the text, Source Serif 4 for page titles, IBM Plex Mono for values, times and code; served by the Workbench, under the SIL Open Font License. They replace JetBrains Mono.
+- **Navigation.** **Decided** (2026-10-16): a sidebar; on narrow screens a bar with a menu button. **Proposed**: AI's pages (Access, MCP, Activity) appear beneath AI in the sidebar while one is open, in place of a sub-menu on the page.
+- **Home.** **Decided** (2026-10-16): stays the step-by-step page, in the new look; the proposal's dashboard is not taken over.
+- **Colours.** **Proposed**: the proposal's tokens (warm canvas, white surfaces, teal for actions and what works, copper as an accent, a dark instrument surface), with night values of the same roles; every text pair at least 4.5:1, checked for both themes.
+- **Status words.** **Proposed** (2026-10-16): one word per meaning on every page, always with its colour: teal working, blue in progress, amber needs a look, red failed, grey at rest. Sources: Draft, In service, Paused, Suspended. Connections: Not connected, Connecting, Live, Waiting for audio, Reconnecting, Not reachable. Analyses: Running, Preview, Idle; Private, Published, Withdrawn. Data sets: Recording, Finishing, Ready, Failed, Deleted, No data set. Accesses: OK, Failed, Refused, Streaming, Cut off. The stored values, and what MCP and the data stream return, do not change. Not built yet: "Stale since …" for a live view that hears nothing while its connection says live, and the words for how a run ended.
+- **Spectral landscape.** **Proposed** (2026-10-16), not built: a ridgeline view of the last 60 seconds of `signal.spectrum` per source, flat rather than in perspective, frequency on a log axis, height as relative level (the engine sends 0 to 1, not dB) on a fixed scale; spectrum lines in the instrument's colour and detected peaks and resonances in copper; gaps shown as gaps; values on hover, focus or tap; a pause that freezes only the drawing; reduced motion redraws every 5 s. The default view per source, with the spectrogram one click away.
+
 ## Order of work
 
 **Decided** (2026-10-14, question 5): the member area comes first, kept narrow; the data-stream token follows, MCP after it. **Decided** (question 6): the first installation is on the intranet. The rest of the order is **proposed**. Two views were on record:

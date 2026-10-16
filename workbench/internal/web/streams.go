@@ -411,7 +411,7 @@ func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, e
 	for _, a := range analyses {
 		state := "idle"
 		if d.Engine.State == "connected" {
-			state = "running"
+			state = "run"
 		}
 		d.Consumers = append(d.Consumers, consumer{Analysis: a, Owner: a.OwnerName,
 			Readers: s.live.readers(st.EngineID(), a.EngineID()).add(s.live.readers(st.EngineID(), previewID(a))), State: state, Mine: a.OwnerID == sess.User.ID})
@@ -477,7 +477,7 @@ func (s *Server) streamState(w http.ResponseWriter, r *http.Request) {
 	case "draft":
 		state, flash = catalogue.StreamDraft, "Back in draft."
 	case "production":
-		state, flash = catalogue.StreamProduction, "In production."
+		state, flash = catalogue.StreamProduction, "In service."
 	case "pause":
 		state, flash = catalogue.StreamPaused, "Paused. The stream is disconnected; its memories are kept."
 	case "resume":

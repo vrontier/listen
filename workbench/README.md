@@ -99,7 +99,8 @@ Details: [docs/design.md](docs/design.md#dependencies).
 
 | Part | Use | Licence |
 |---|---|---|
-| [JetBrains Mono](https://www.jetbrains.com/lp/mono/) 2.304 | the pages' font, served by the Workbench (`internal/web/static/fonts`) | SIL Open Font License 1.1 |
+| [Source Sans 3](https://github.com/adobe-fonts/source-sans) and [Source Serif 4](https://github.com/adobe-fonts/source-serif), from @fontsource 5.2.9 | the pages' text and page titles, served by the Workbench (`internal/web/static/fonts`) | SIL Open Font License 1.1 |
+| [IBM Plex Mono](https://github.com/IBM/plex), from @fontsource 5.2.7 | values, times and code, served by the Workbench (`internal/web/static/fonts`) | SIL Open Font License 1.1 |
 | [Leaflet](https://leafletjs.com) 1.9.4 | the map pop-up for a stream's coordinates, served by the Workbench (`internal/web/static/leaflet`) | BSD 2-Clause |
 | [OpenStreetMap](https://www.openstreetmap.org/copyright) | map tiles and place search in that pop-up, loaded by the member's browser from openstreetmap.org | data ODbL; tiles and search under the OpenStreetMap Foundation's usage policies |
 | [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) | the catalogue database | BSD 3-Clause |

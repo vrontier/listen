@@ -1,6 +1,5 @@
 {{define "content"}}
 <h1>AI: activity</h1>
-{{template "ai-nav" .}}
 {{with .Data}}
 {{$d := .}}
 <p class="meta">Every access made with your tokens over the last 30 days: what AI assistants asked and changed through MCP, and what programs read from the data stream. Times are UTC. The tokens themselves are never noted.</p>
@@ -48,8 +47,8 @@
         <td class="nowrap">{{moment .At}}</td>
         <td>{{.TokenName}}{{with .Client}} <span class="meta small">{{.}}</span>{{end}}</td>
         <td class="nowrap">{{if eq .Via "mcp"}}MCP{{else}}data stream{{end}}</td>
-        <td><code>{{.What}}</code>{{if changeTool .What}} <span class="state state-paused">change</span>{{end}}</td>
-        <td class="nowrap">{{if eq .Status "ok"}}ok{{else if eq .Status "open"}}<span class="state state-production">streaming</span>{{else if eq .Status "cut"}}<span class="field-error">cut off</span>{{else}}<span class="field-error">{{.Status}}</span>{{end}}</td>
+        <td><code>{{.What}}</code>{{if changeTool .What}} <span class="state tone-warn">change</span>{{end}}</td>
+        <td class="nowrap">{{template "status" (status "access" .Status)}}</td>
         <td class="num nowrap">{{if ne .Status "open"}}{{ms .Ms}}{{end}}</td>
         <td class="num nowrap">{{if .Bytes}}{{bytes .Bytes}}{{end}}</td>
       </tr>

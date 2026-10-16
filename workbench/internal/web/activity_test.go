@@ -82,7 +82,7 @@ func TestActivity(t *testing.T) {
 	member := r.loginAs("m@example.org")
 	_, page, _ := r.get(member, "/ai/activity")
 	for _, s := range []string{"<h1>AI: activity</h1>", "laptop", "assistant", "get_analysis", "{&#34;analysis_id&#34;:999}", "test-client 0.1", `href="/ai/activity?token=`,
-		`<a href="/ai/activity" aria-current="page">Activity</a>`, `<a href="/ai" aria-current="page">AI</a>`} {
+		`<a href="/ai/activity" aria-current="page">Activity</a>`, `<a href="/ai" aria-current="true">`} {
 		if !strings.Contains(page, s) {
 			t.Fatalf("page lacks %q", s)
 		}
@@ -120,7 +120,7 @@ func TestActivity(t *testing.T) {
 
 	// The overview says how to give an assistant access, and where the member stands.
 	if _, page, _ := r.get(member, "/ai"); !strings.Contains(page, "How to give an assistant access") || !strings.Contains(page, `href="/ai/access"`) ||
-		!strings.Contains(page, "accesses in the last 24 hours") || !strings.Contains(page, `<a href="/ai" aria-current="page">Overview</a>`) {
+		!strings.Contains(page, "accesses in the last 24 hours") || !strings.Contains(page, `<a href="/ai" aria-current="page">`) {
 		t.Fatal("AI overview")
 	}
 

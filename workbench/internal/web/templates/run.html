@@ -5,7 +5,7 @@
 <p class="crumbs"><a href="/runs">Runs</a> · <a href="/analyses/{{.Analysis.ID}}">{{.Analysis.Name}}</a></p>
 <div class="heading-row">
   <h1>{{.Analysis.Name}}, run {{.Run.Number}}</h1>
-  <span class="state">{{if .Run.Active}}running{{else}}ended{{end}} · data set {{.Run.Dataset}}</span>
+  <span class="states">{{if .Run.Active}}{{template "status" (status "activity" "run")}}{{else}}<span class="state tone-neutral">Ended</span>{{end}} <span class="meta">data set</span> {{template "status" (status "dataset" .Run.Dataset)}}</span>
 </div>
 {{if or (eq .Run.Dataset "recording") (eq .Run.Dataset "freezing")}}<meta http-equiv="refresh" content="{{if .Run.Active}}60{{else}}3{{end}}">{{end}}
 <p class="meta">One run of the analysis: when it ran, with which revision, how it ended, and the data set it recorded. The data set holds the events of each source and of the comparison, with the times a source was not heard; it does not depend on the engine keeping anything.</p>
