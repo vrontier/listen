@@ -497,6 +497,54 @@ func (s *Server) runsPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, 200, "runs", "Runs", d)
 }
 
+// runsDelete deletes the finished runs ticked on the Runs page, with their
+// data sets. Runs of other members, and runs not finished, are left alone.
+func (s *Server) runsDelete(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	ctx := r.Context()
+	r.ParseForm()
+	n, skipped := 0, 0
+	for _, v := range r.PostForm["run"] {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			continue
+		}
+		run, err := s.db.Run(ctx, id)
+		if err != nil {
+			continue
+		}
+		a, err := s.db.Analysis(ctx, run.AnalysisID)
+		if err != nil || a.OwnerID != sess.User.ID {
+			continue
+		}
+		switch err := s.db.DeleteRun(ctx, run.ID, sess.User.ID); {
+		case errors.Is(err, catalogue.ErrRunNotFinished):
+			skipped++
+			continue
+		case err != nil:
+			s.fail(w, r, err)
+			return
+		}
+		if s.data.dir != "" {
+			os.RemoveAll(s.data.runDir(run.ID))
+		}
+		n++
+	}
+	var flash string
+	switch n {
+	case 0:
+		flash = "Nothing deleted: tick the finished runs to delete first."
+	case 1:
+		flash = "1 run deleted, with its data set."
+	default:
+		flash = fmt.Sprintf("%d runs deleted, with their data sets.", n)
+	}
+	if skipped > 0 {
+		flash += " A run whose data set is still being put together can be deleted once it is ready."
+	}
+	s.redirect(w, r, "/runs", flash)
+}
+
 // runsStart starts a run of the analysis chosen on the Runs page.
 func (s *Server) runsStart(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)

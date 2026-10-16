@@ -226,6 +226,7 @@ func (s *Server) routes() {
 
 	m.HandleFunc("GET /runs", s.member(s.runsPage))
 	m.HandleFunc("POST /runs", s.member(s.runsStart))
+	m.HandleFunc("POST /runs/delete", s.member(s.runsDelete))
 	m.HandleFunc("GET /runs/{run}", s.member(s.runPage))
 	m.HandleFunc("GET /runs/{run}/all.zip", s.member(s.runZip))
 	m.HandleFunc("GET /runs/{run}/{file}", s.member(s.runFile))

@@ -115,3 +115,49 @@ func TestMigrateRuns(t *testing.T) {
 		t.Fatalf("after the migration: %q %q", ra[0].Dataset, rb[0].Dataset)
 	}
 }
+
+func TestDeleteRun(t *testing.T) {
+	d, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	d.now = func() time.Time { return now }
+	u, _ := d.CreateUser(ctx, "m@example.org", "M", false)
+	st, _ := d.CreateStream(ctx, NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050, Texts: StreamTexts{Name: "A"}, Probe: []byte(`{}`)})
+	a, _ := d.CreateAnalysis(ctx, u.ID, "x", "", []int64{st.ID}, nil)
+	var ids []int64
+	for i := 0; i < 3; i++ {
+		r, err := d.StartRun(ctx, a.ID, u.ID, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, r.ID)
+		now = now.Add(time.Minute)
+		if i < 2 {
+			d.StopRun(ctx, a.ID, u.ID)
+			d.SetDataset(ctx, r.ID, DatasetReady, 1000, "", nil)
+		}
+	}
+	if err := d.DeleteRun(ctx, ids[2], u.ID); !errors.Is(err, ErrRunNotFinished) {
+		t.Fatalf("deleted a running run: %v", err)
+	}
+	if err := d.DeleteRun(ctx, ids[0], u.ID); err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := d.Runs(ctx, a.ID)
+	if len(runs) != 2 || runs[0].Number != 3 || runs[1].Number != 2 {
+		t.Fatalf("after deleting run 1: %+v", runs)
+	}
+	if _, err := d.Run(ctx, ids[0]); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted run still found: %v", err)
+	}
+	if n, _ := d.DatasetBytesOf(ctx, u.ID); n != 1000 {
+		t.Fatalf("data sets count %d bytes", n)
+	}
+	if err := d.DeleteRun(ctx, ids[0], u.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted twice: %v", err)
+	}
+}

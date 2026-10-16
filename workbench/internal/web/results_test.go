@@ -123,4 +123,20 @@ func TestResults(t *testing.T) {
 	if _, page, _ = r.get(member, "/runs"); !strings.Contains(page, "(results deleted)") {
 		t.Fatal("runs page does not say the results are deleted")
 	}
+
+	// Deleting the run itself: not by another member; by its member it goes
+	// from the Runs page and its page is gone.
+	id := strconv.FormatInt(run.ID, 10)
+	_, opage, _ = r.get(other, "/runs")
+	r.post(other, "/runs/delete", url.Values{"csrf": {csrfOf(t, opage)}, "run": {id}})
+	if _, err := r.db.Run(ctx, run.ID); err != nil {
+		t.Fatal("another member deleted the run")
+	}
+	_, _, hdr = r.post(member, "/runs/delete", url.Values{"csrf": {csrf}, "run": {id}})
+	if _, page, _ = r.get(member, hdr.Get("Location")); !strings.Contains(page, "1 run deleted") || strings.Contains(page, `href="`+runURL+`"`) {
+		t.Fatal("run not deleted from the Runs page")
+	}
+	if code, _, _ := r.get(member, runURL); code != 404 {
+		t.Fatalf("deleted run's page: %d", code)
+	}
 }

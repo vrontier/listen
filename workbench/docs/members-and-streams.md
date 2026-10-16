@@ -262,7 +262,7 @@ No user-written code or expressions run on the server: filters and motif definit
 | `/sources/new`, `/sources/<slug>` | register and edit, invite members, move to production, pause, delete; who is connected; new analysis with this source |
 | `/analyses` | own analyses with their sources |
 | `/analyses/new`, `/analyses/<id>` | start and stop a run, or a ten-minute preview; from two sources the comparison (during runs); per source together: spectrogram, events and motifs (during a run or a preview), settings and filter rules (fixed during a run), memories (listed during runs); the choice of sources and comparison; title and description; runs with their data sets, revisions |
-| `/runs` | runs of the member's analyses: running now (stop), start a run, finished runs, each with a link to its results |
+| `/runs` | runs of the member's analyses: running now (stop), start a run, finished runs (delete), each with a link to its results |
 | `/runs/<id>` | one run: when, revisions, its data set (what it holds, the files singly at their uncompressed size or together as one zip, delete) |
 | `/results` | own data sets (download, delete), disk space as a bar, memories, CPU, RAM and bandwidth against the caps |
 | `/account/tokens` | create and revoke tokens |

@@ -100,12 +100,12 @@ const activeWhere = `r.stopped IS NULL AND (r.ends IS NULL OR r.ends > ?)`
 
 // Runs lists an analysis's runs, newest first.
 func (d *DB) Runs(ctx context.Context, analysisID int64) ([]Run, error) {
-	return d.queryRuns(ctx, `WHERE r.analysis_id = ? ORDER BY r.id DESC`, analysisID)
+	return d.queryRuns(ctx, `WHERE r.analysis_id = ? AND r.removed IS NULL ORDER BY r.id DESC`, analysisID)
 }
 
 // RunsOf lists the runs of a member's analyses, newest first.
 func (d *DB) RunsOf(ctx context.Context, userID int64) ([]Run, error) {
-	return d.queryRuns(ctx, `WHERE an.owner_id = ? ORDER BY r.id DESC LIMIT 500`, userID)
+	return d.queryRuns(ctx, `WHERE an.owner_id = ? AND r.removed IS NULL ORDER BY r.id DESC LIMIT 500`, userID)
 }
 
 func (d *DB) queryRuns(ctx context.Context, where string, args ...any) ([]Run, error) {
@@ -262,9 +262,36 @@ func closeEnded(ctx context.Context, tx *sql.Tx, now time.Time) error {
 	return nil
 }
 
-// Run returns one run.
+// Run returns one run; a deleted run is not found.
 func (d *DB) Run(ctx context.Context, id int64) (Run, error) {
-	return scanRun(d.db.QueryRowContext(ctx, runSelect+`WHERE r.id = ?`, id))
+	return scanRun(d.db.QueryRowContext(ctx, runSelect+`WHERE r.id = ? AND r.removed IS NULL`, id))
+}
+
+// ErrRunNotFinished is returned when a run that goes on, or whose data set
+// is still being put together, is deleted.
+var ErrRunNotFinished = errors.New("the run has not finished")
+
+// DeleteRun deletes a finished run: it goes from every list, its data set
+// is marked deleted (the caller removes the files), and the audit trail
+// keeps what it was. The other runs of the analysis keep their numbers.
+func (d *DB) DeleteRun(ctx context.Context, runID, by int64) error {
+	now := d.now()
+	return d.tx(ctx, func(tx *sql.Tx) error {
+		r, err := scanRun(tx.QueryRowContext(ctx, runSelect+`WHERE r.id = ? AND r.removed IS NULL`, runID))
+		if err != nil {
+			return err
+		}
+		if r.Active(now) || r.Dataset == DatasetRecording || r.Dataset == DatasetFreezing {
+			return ErrRunNotFinished
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE runs SET removed = ?, dataset = 'deleted', dataset_bytes = 0, mailed = coalesce(mailed, ?) WHERE id = ?`,
+			stamp(now), stamp(now), runID); err != nil {
+			return err
+		}
+		before, _ := json.Marshal(map[string]any{"run": runID, "number": r.Number, "started": stamp(r.Started), "revision": r.Revision,
+			"dataset": r.Dataset, "bytes": r.DatasetBytes})
+		return audit(ctx, tx, now, by, "analysis", r.AnalysisID, "run delete", string(before), "")
+	})
 }
 
 // ActiveRuns lists the runs going on now, of every member.

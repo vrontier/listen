@@ -9,15 +9,15 @@
   <h2>Running now</h2>
   {{if .Active}}
   <table>
-    <thead><tr><th>Analysis</th><th>#</th><th>Since</th><th>Until</th><th>So far</th><th>Revisions</th><th>Data set</th><th></th></tr></thead>
+    <thead><tr><th></th><th>#</th><th class="wide">Analysis</th><th class="nowrap">Started (UTC)</th><th>Length</th><th>Revision</th><th>By</th><th></th></tr></thead>
     <tbody>{{range .Active}}<tr>
-      <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
+      <td></td>
       <td><a href="/runs/{{.ID}}">{{.Number}}</a></td>
-      <td>{{when .Started}}</td>
-      <td>{{if .Ends.IsZero}}until stopped{{else}}{{when .Ends}}{{end}}</td>
-      <td>{{.Duration}}</td>
+      <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a> (<a href="/runs/{{.ID}}">Results</a>)</td>
+      <td class="nowrap">{{day .Started}}</td>
+      <td>{{.Duration}} <span class="meta">so far, {{if .Ends.IsZero}}until stopped{{else}}until {{day .Ends}}{{end}}</span></td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
-      <td>{{template "dataset-link" .}}</td>
+      <td>{{.StartedBy}}</td>
       <td><form method="post" action="/analyses/{{.AnalysisID}}/stop" class="inline-form">
         <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="back" value="runs">
         <button class="secondary">Stop</button>
@@ -44,9 +44,11 @@
 <section>
   <h2>Finished</h2>
   {{if .Finished}}
+  <form method="post" action="/runs/delete" id="delete-runs"><input type="hidden" name="csrf" value="{{$csrf}}"></form>
   <table>
-    <thead><tr><th>#</th><th class="wide">Analysis</th><th class="nowrap">Started (UTC)</th><th>Length</th><th>Revision</th><th>By</th></tr></thead>
+    <thead><tr><th></th><th>#</th><th class="wide">Analysis</th><th class="nowrap">Started (UTC)</th><th>Length</th><th>Revision</th><th>By</th></tr></thead>
     <tbody>{{range .Finished}}<tr>
+      <td>{{if not (or (eq .Dataset "recording") (eq .Dataset "freezing"))}}<input type="checkbox" form="delete-runs" name="run" value="{{.ID}}" aria-label="select run {{.Number}} of {{.AnalysisName}}">{{end}}</td>
       <td><a href="/runs/{{.ID}}">{{.Number}}</a></td>
       <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a> {{if or (eq .Dataset "ready") (eq .Dataset "freezing") (eq .Dataset "failed")}}(<a href="/runs/{{.ID}}">Results</a>){{else if eq .Dataset "deleted"}}<span class="meta">(results deleted)</span>{{else}}<span class="meta">(no results)</span>{{end}}</td>
       <td class="nowrap">{{day .Started}}</td>
@@ -55,6 +57,8 @@
       <td>{{.StartedBy}}</td>
     </tr>{{end}}</tbody>
   </table>
+  <p><button form="delete-runs" class="danger">Delete the selected runs</button></p>
+  <p class="meta">Deleting a run removes it from this list, from its analysis and from what is published, together with its data set; the change log keeps a record. The other runs keep their numbers. To free space but keep the run listed, delete only its data set under <a href="/results">Results</a>.</p>
   {{else}}<p class="meta">No finished runs yet.</p>{{end}}
 </section>
 {{end}}

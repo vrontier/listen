@@ -122,7 +122,8 @@ CREATE TABLE IF NOT EXISTS runs (
 	offline_stop  INTEGER NOT NULL DEFAULT 0, -- minutes a source may send nothing before the run stops; 0: no such stop
 	end_reason    TEXT NOT NULL DEFAULT '',  -- planned, offline, silent, disk; '' while it runs or when its member stopped it
 	end_note      TEXT NOT NULL DEFAULT '',  -- in words, for the data set and the mail
-	mailed        TEXT                       -- when its member was told it ended
+	mailed        TEXT,                      -- when its member was told it ended
+	removed       TEXT                       -- when its member deleted it; it then counts only for the numbers of the others
 );
 CREATE INDEX IF NOT EXISTS runs_analysis ON runs(analysis_id);
 CREATE TABLE IF NOT EXISTS usage_minutes (
@@ -272,7 +273,20 @@ func migrate(db *sql.DB) error {
 	if err := migrateRuns(db); err != nil {
 		return err
 	}
-	return migrateRunEnds(db)
+	if err := migrateRunEnds(db); err != nil {
+		return err
+	}
+	return migrateRunRemoved(db)
+}
+
+// migrateRunRemoved adds the deletion of finished runs (2026-10-16).
+func migrateRunRemoved(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('runs') WHERE name = 'removed'`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := db.Exec(`ALTER TABLE runs ADD COLUMN removed TEXT`)
+	return err
 }
 
 // migrateRunEnds adds how a run ended (2026-10-15 night). Runs ended
