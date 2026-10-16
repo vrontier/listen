@@ -31,6 +31,7 @@ type Info struct {
 	Instance      string       `json:"instance"`
 	Started       time.Time    `json:"started"`
 	Limits        Limits       `json:"limits"`
+	LimitsScope   string       `json:"limits_scope,omitempty"` // "engine": the limits hold for all callers together
 	Capabilities  Capabilities `json:"capabilities"`
 	Counts        Counts       `json:"counts"`
 	Host          Host         `json:"host"`
@@ -87,6 +88,12 @@ type Usage struct {
 	InKbps          float64 `json:"in_kbps,omitempty"`
 	InMeasured      bool    `json:"in_measured,omitempty"`
 	MemoryEstimated bool    `json:"memory_estimated,omitempty"`
+	// A stream's usage is its equal share of its source's cost when other
+	// streams, of any caller, share the source; the source's full cost is
+	// given once beside it (decided 2026-10-16).
+	SourceCPUPercent float64 `json:"source_cpu_percent,omitempty"`
+	SourceMemoryMB   float64 `json:"source_memory_mb,omitempty"`
+	Shared           int     `json:"shared,omitempty"`
 }
 
 // Stream modes.
@@ -144,7 +151,12 @@ type Stream struct {
 	DelayMs    int        `json:"delay_ms"`
 	Analyses   []string   `json:"analyses"`
 	View       *View      `json:"view,omitempty"`
-	Usage      Usage      `json:"usage"`
+	// Shared counts the streams, of all callers, on this stream's source,
+	// this one included; Source says where it is read: "network", "file"
+	// (development) or "local" (an Observatory listener's tap).
+	Shared int    `json:"shared,omitempty"`
+	Source string `json:"source,omitempty"`
+	Usage  Usage  `json:"usage"`
 }
 
 // Problem is an error or a probe problem with a code for programs and a
@@ -262,16 +274,19 @@ type ProbeRequest struct {
 }
 
 type ProbeResult struct {
-	OK          bool      `json:"ok"`
-	Exists      *string   `json:"exists"`
-	ContentType *string   `json:"content_type"`
-	Codec       string    `json:"codec"`
-	SampleRate  int       `json:"sample_rate"`
-	Channels    int       `json:"channels"`
-	BitrateKbps int       `json:"bitrate_kbps"`
-	LevelDB     float64   `json:"level_db"`
-	Silent      bool      `json:"silent"`
-	Problems    []Problem `json:"problems"`
+	OK          bool    `json:"ok"`
+	Exists      *string `json:"exists"`
+	ContentType *string `json:"content_type"`
+	Codec       string  `json:"codec"`
+	SampleRate  int     `json:"sample_rate"`
+	Channels    int     `json:"channels"`
+	BitrateKbps int     `json:"bitrate_kbps"`
+	LevelDB     float64 `json:"level_db"`
+	Silent      bool    `json:"silent"`
+	// Shared: the address is read already (by another caller); the probe
+	// opened no connection and SampleRate is the rate it is decoded at.
+	Shared   bool      `json:"shared,omitempty"`
+	Problems []Problem `json:"problems"`
 }
 
 // Memory is one memory kept on disk for an analysis.
@@ -313,6 +328,9 @@ type UsageReport struct {
 	Engine   Usage            `json:"engine"`
 	Streams  map[string]Usage `json:"streams"`
 	Analyses map[string]Usage `json:"analyses"` // keyed "stream/analysis"
+	// Sources gives each source's full cost once, keyed by this caller's
+	// stream on it, so that totals do not count a shared source twice.
+	Sources map[string]Usage `json:"sources,omitempty"`
 }
 
 // Error is an error answer of the engine.

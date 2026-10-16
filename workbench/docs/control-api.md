@@ -27,6 +27,15 @@ Not part of version 1.0: audio (relay and captures), the language-model interpre
 - **Requests:** the engine refuses a body with a field it does not know (`400`, code `unknown_field`). A misspelt setting is then an error and not a setting silently left out.
 - **Responses:** the Workbench ignores fields it does not know. That is what allows additions within version 1.
 
+### Callers
+
+**Decided (engine)** (2026-10-16, with the maintainer's go; the Workbench's answers accepted): one engine per host serves several callers, one socket each, set when the engine starts (`-caller name=/path.sock[:mode]`; on the intranet host `workbench` on `/run/listen-engine/control.sock`, 0660, group `listen-engine`, and `internal` on `internal.sock`, 0600). The socket a request arrives on is the caller; nothing in a request can claim another.
+
+- **Each caller has its own namespace:** its streams, analyses and groups, its `GET /v1/streams` and `GET /v1/events`, its saved configuration and its memories (`<memory-dir>/<caller>/…`). The Workbench sees only its own, so "delete what it does not know" stays safe.
+- **Sources are shared across callers:** inside the engine a source is one address at one decode rate, with one connection, one decode and one spectrum. Every caller's stream of that address attaches to it; the source is connected while any stream on it wants it. Each stream keeps its own analyses and its own view.
+- **Limits hold for the whole engine** (`"limits_scope": "engine"` in `GET /v1/engine`); its `counts` are the caller's.
+- A caller learns nothing about the others beyond `shared`, the number of streams on a source.
+
 ## Versions
 
 | | |
@@ -147,8 +156,9 @@ engine
 
 - `input` and `sample_rate` cannot be changed on an existing stream (`409`, code `immutable`). A different address or rate is a different stream with a new identifier, because memories made from one do not compare with the other.
 - `mode`, `idle_after_s`, `retry_max_s` and `view` can be changed at any time without interrupting the connection. With `view` set, every `signal.spectrum` of every analysis of the stream carries `payload.view` (`min_hz`, `max_hz`, `scale`, `bands`) next to the analysis's own bands, which do not change; the stream's response reports `view` with its effective values.
+- A stream's response has `shared`, the number of streams of all callers on its source (this one included), and `source`: `network`, `file` (development) or `local` (an Observatory listener's tap, later). **Decided** (2026-10-16).
 - A stream without analyses holds no connection, whatever its mode.
-- The engine connects to an address once, however many analyses and subscribers there are. It refuses a second stream with the same `input` (`409`, code `duplicate_input`, with the existing stream's identifier). Addresses are compared as written; recognising two spellings of one stream is the Workbench's task.
+- The engine connects to an address once, however many analyses and subscribers there are. Within one caller it refuses a second stream with the same `input` (`409`, code `duplicate_input`, with the existing stream's identifier). Addresses are compared as written; recognising two spellings of one stream is the Workbench's task.
 
 Response to `PUT` and `GET`:
 
@@ -329,6 +339,7 @@ The engine measures; the Workbench records, adds up, counts each member's share 
 | engine, stream | `usage.in_kbps` | incoming bandwidth |
 | stream | `usage.cpu_percent`, `usage.memory_mb` | the stream's ffmpeg process: connection and decode |
 | stream | `usage.in_measured` | `false` while `in_kbps` is the bit rate the probe found, not a measurement |
+| stream | `usage.shared`, `usage.source_cpu_percent`, `usage.source_memory_mb` | **decided** (2026-10-16): when several streams, of any caller, share a source, the stream's `cpu_percent` and `memory_mb` are its equal share of the source's cost; `shared` says among how many, and the source's full cost is given once beside it. The `usage` event carries each source once under `sources`, keyed by the caller's stream on it, so that totals add up |
 | analysis | `usage.cpu_percent` | time spent in this analysis's work |
 | analysis | `usage.memory_mb`, `usage.memory_estimated` | memory held by the analysis; `true` while this is an estimate |
 
@@ -394,6 +405,7 @@ The engine connects, listens for `listen_s` seconds (default 10, at most 30) and
 ```
 
 - `ok` is false if the address is not allowed, nothing answers, the content is not audio, it cannot be decoded, the bit rate is above `limits.max_bitrate_kbps`, or only silence arrived. `problems` then lists `code` and `message` for each reason.
+- **An address read already** (by another caller's stream): **decided** (2026-10-16), the engine opens no connection and answers `ok: true`, `shared: true` and the rate the source is decoded at as `sample_rate`; codec and bit rate only if known. The Workbench then offers only that rate.
 - A probe is a connection to the operator's server. If a stream with this `input` already exists, the engine opens no connection and answers `"ok": false` with `exists` set to that stream's identifier; the Workbench then offers to join the shared stream. A running decode could not answer anyway: it delivers samples at the stream's chosen rate and knows nothing of the codec or the stream's own rate.
 - `codec`, `sample_rate`, `channels` and `bitrate_kbps` describe the stream as sent, as ffprobe reports them. `content_type` stays `null` until the engine opens the HTTP connection itself, since ffmpeg does not pass it on.
 - `station_time` is true when the stream carries timestamps of the receiving station (in 1.0 always false; from 1.1, once the engine reads them).
@@ -561,7 +573,7 @@ Every error has this body:
 |---|---|---|
 | 400 | `bad_request`, `unknown_field`, `bad_id` | the request cannot be read |
 | 404 | `not_found` | no such stream, analysis, motif or memory |
-| 409 | `immutable`, `duplicate_input`, `in_use`, `limit_reached` | the request conflicts with what exists |
+| 409 | `immutable`, `duplicate_input`, `in_use`, `limit_reached`, `rate_conflict` | the request conflicts with what exists; `rate_conflict` (**decided** 2026-10-16): another caller already decodes the address at another rate, which the message names |
 | 422 | `invalid` | the settings were refused; `errors` lists why, as in validation |
 | 429 | `busy` | too many probes at once |
 | 503 | `starting`, `stopping` | the engine is not ready |
@@ -631,7 +643,7 @@ The paths the Observatory's site uses today (`/<slug>/ws/live` and the others) a
 go run ./cmd/engine-check -engine /run/listen-engine/control.sock -input <a stream address the engine may reach> -phase 1
 ```
 
-The failure of an analysis cannot be provoked from outside; that check runs against the stand-in only.
+The failure of an analysis can be provoked only where the engine offers it: the stand-in in the Workbench's tests, and an engine started with `-test-hooks` on a loopback port (`-engine http://127.0.0.1:<port>`; on a socket the check is skipped). With `-engine2 <the internal socket>` (as root) the checks of callers and shared sources run too, from phase 2: namespaces apart, `limits_scope`, one source for one address in two callers, `rate_conflict`, and with `-input` both callers' analyses fed by one connection, the usage split and the probe of a shared address. The stand-in has one caller, so these checks run against the engine only.
 
 ## Answers to the open points
 

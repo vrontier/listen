@@ -188,6 +188,16 @@ func checkTexts(tf *textsForm, errs map[string]string) {
 	}
 }
 
+// ratesOf are the decode rates a member may choose for a probed stream:
+// only the rate in use when the address is read already on this server
+// (the engine shares that connection and decodes it at one rate).
+func ratesOf(res engine.ProbeResult) []int {
+	if res.Shared && res.SampleRate > 0 {
+		return []int{res.SampleRate}
+	}
+	return ratesFor(res.SampleRate)
+}
+
 func ratesFor(native int) []int {
 	var out []int
 	for _, r := range sampleRates {
@@ -262,7 +272,7 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 			}
 			s.probes[key] = probeEntry{time.Now(), res}
 			s.probesMu.Unlock()
-			d.Rates = ratesFor(res.SampleRate)
+			d.Rates = ratesOf(res)
 			d.SampleRate = d.Rates[0]
 		}
 		if d.Texts.TimeZone == "" {
@@ -282,7 +292,7 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Probe = &p.result
-	d.Rates = ratesFor(p.result.SampleRate)
+	d.Rates = ratesOf(p.result)
 	checkTexts(&d.Texts, d.Errs)
 	rateOK := false
 	for _, x := range d.Rates {
@@ -325,7 +335,11 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	s.probesMu.Unlock()
 	flash := "Source registered, in draft. Create an analysis with it to see what it hears."
 	defer s.syncGroups(r.Context())
-	if err := s.sync.push(r.Context(), st); err != nil {
+	if err := s.sync.push(r.Context(), st); engine.IsCode(err, "rate_conflict") {
+		var ee *engine.Error
+		errors.As(err, &ee)
+		flash = "Source registered, but the engine does not take it: the station is read on this server at another rate (" + ee.Message + "). Register it again at that rate, or ask the master admin."
+	} else if err != nil {
 		log.Printf("push %s: %v", st.EngineID(), err)
 		flash = "Source registered. The engine has not taken it yet; it will be sent again when the engine is reachable."
 	}

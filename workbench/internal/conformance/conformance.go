@@ -42,6 +42,10 @@ type Options struct {
 	// stand-in does, for tests). Without it the check of the state
 	// "failed" is skipped.
 	Fail func(stream, analysis string) bool
+	// Second is the same engine reached as another caller (another socket,
+	// e.g. listen-engine's internal.sock). With it the checks of callers
+	// and shared sources run (decided 2026-10-16).
+	Second *engine.Client
 }
 
 // Result is the outcome of one check.
@@ -72,6 +76,7 @@ type run struct {
 	results []Result
 	streams []string // made by the checks, deleted at the end
 	groups  []string
+	second  []string // made through the second caller
 	info    engine.Info
 }
 
@@ -224,6 +229,9 @@ func Run(ctx context.Context, c *engine.Client, opt Options) []Result {
 	if opt.Phase >= 3 {
 		r.phase3()
 	}
+	if opt.Second != nil {
+		r.callers()
+	}
 	return r.results
 }
 
@@ -235,6 +243,9 @@ func (r *run) cleanUp() {
 	}
 	for _, s := range r.streams {
 		r.c.DeleteStream(ctx, s, true)
+	}
+	for _, s := range r.second {
+		r.opt.Second.DeleteStream(ctx, s, true)
 	}
 }
 

@@ -33,6 +33,7 @@ func main() {
 		phase   = flag.Int("phase", 1, "check up to this phase: 1 streams, 2 several analyses and view, 3 groups")
 		timeout = flag.Duration("timeout", 20*time.Second, "how long a check waits for events")
 		prefix  = flag.String("prefix", "ct", "prefix of the identifiers the checks make")
+		engine2 = flag.String("engine2", "", "the same engine as another caller (e.g. /run/listen-engine/internal.sock, as root): adds the checks of callers and shared sources")
 	)
 	flag.Parse()
 
@@ -40,9 +41,20 @@ func main() {
 	raw := rawClient(*addr)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	results := conformance.Run(ctx, c, conformance.Options{
-		Input: *input, SampleRate: *rate, Phase: *phase, Timeout: *timeout, Prefix: *prefix, Raw: raw,
-	})
+	opt := conformance.Options{Input: *input, SampleRate: *rate, Phase: *phase, Timeout: *timeout, Prefix: *prefix, Raw: raw}
+	if *engine2 != "" {
+		opt.Second = engine.Dial(*engine2)
+	}
+	if strings.HasPrefix(*addr, "http://") {
+		// An engine started with -test-hooks offers, on a loopback port
+		// only, a way to make an analysis fail; without it the check says
+		// so and fails, so leave out -test-hooks only knowingly.
+		opt.Fail = func(stream, analysis string) bool {
+			status, _, err := raw("POST", "/v1/streams/"+stream+"/analyses/"+analysis+"/fail", nil)
+			return err == nil && status >= 200 && status < 300
+		}
+	}
+	results := conformance.Run(ctx, c, opt)
 	counts := map[string]int{}
 	for _, r := range results {
 		counts[r.Status]++
