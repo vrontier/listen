@@ -17,8 +17,7 @@
       <a href="/analyses">Analyses</a>
       <a href="/runs">Runs</a>
       <a href="/results">Results</a>
-      <a href="/account/tokens">Tokens</a>
-      <a href="/account/mcp">MCP</a>
+      <a href="/ai"{{if hasPrefix .Path "/ai"}} aria-current="page"{{end}}>AI</a>
       {{if .Keys}}<a href="/account/keys">Keys</a>{{end}}
       {{if .User.Admin}}<a href="/admin">Admin</a>{{end}}
       <span class="who">{{.User.Name}}</span>
@@ -49,6 +48,7 @@
 </body>
 </html>
 
+{{define "ai-nav"}}<nav class="subnav" aria-label="AI">{{range aiPages}}<a href="{{.Path}}"{{if eq .Path $.Path}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
 {{define "mappicker"}}
 <dialog id="map-picker" class="map-picker">
   <form method="dialog" class="map-head">

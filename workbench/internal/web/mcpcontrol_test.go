@@ -15,9 +15,9 @@ import (
 // makeTokenWith makes a token on the Tokens page from a filled form.
 func (r *rig) makeTokenWith(c *http.Client, form url.Values) string {
 	r.t.Helper()
-	_, page, _ := r.get(c, "/account/tokens")
+	_, page, _ := r.get(c, "/ai/access")
 	form.Set("csrf", csrfOf(r.t, page))
-	code, page, _ := r.post(c, "/account/tokens", form)
+	code, page, _ := r.post(c, "/ai/access", form)
 	secret := secretRE.FindString(page)
 	if code != 200 || secret == "" {
 		r.t.Fatalf("token not shown: %d", code)
@@ -44,8 +44,8 @@ func TestMCPControl(t *testing.T) {
 	}
 
 	// Control without MCP is not offered.
-	_, page, _ := r.get(member, "/account/tokens")
-	if code, page, _ := r.post(member, "/account/tokens", url.Values{"csrf": {csrfOf(t, page)}, "name": {"odd"}, "stream": {"on"}, "control": {"on"}}); code != 400 || !strings.Contains(page, "tick MCP as well") {
+	_, page, _ := r.get(member, "/ai/access")
+	if code, page, _ := r.post(member, "/ai/access", url.Values{"csrf": {csrfOf(t, page)}, "name": {"odd"}, "stream": {"on"}, "control": {"on"}}); code != 400 || !strings.Contains(page, "tick MCP as well") {
 		t.Fatalf("control without MCP: %d", code)
 	}
 
@@ -179,9 +179,9 @@ func TestMCPControl(t *testing.T) {
 	if refusedN < 5 {
 		t.Fatalf("%d refused notes", refusedN)
 	}
-	_, page, _ = r.get(member, "/account/mcp")
-	if !strings.Contains(page, `data-kind="change"`) || !strings.Contains(page, "needs control") {
-		t.Fatal("MCP page does not mark changes")
+	_, page, _ = r.get(member, "/ai/activity")
+	if !strings.Contains(page, `data-kind="change"`) {
+		t.Fatal("activity does not mark changes")
 	}
 	if code, page, _ := r.get(member, "/runs/"+jsonInt(run.ID)); !strings.Contains(page, `through the token`) || !strings.Contains(page, `assistant`) {
 		i := max(strings.Index(page, "Started"), 0)
@@ -190,9 +190,9 @@ func TestMCPControl(t *testing.T) {
 
 	// Without limits, a run may last until stopped; the limits are changed
 	// on the Tokens page.
-	_, page, _ = r.get(member, "/account/tokens")
+	_, page, _ = r.get(member, "/ai/access")
 	form := url.Values{"csrf": {csrfOf(t, page)}, "mcp": {"on"}, "control": {"on"}}
-	if code, _, _ := r.post(member, "/account/tokens/"+jsonInt(tok.ID), form); code != http.StatusSeeOther && code != 200 {
+	if code, _, _ := r.post(member, "/ai/access/"+jsonInt(tok.ID), form); code != http.StatusSeeOther && code != 200 {
 		t.Fatalf("change token: %d", code)
 	}
 	toks, _ = r.db.APITokensOf(ctx, u.ID)

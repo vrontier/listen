@@ -558,7 +558,7 @@ func (s *Server) tellRunStarted(u catalogue.User, a catalogue.Analysis, run cata
 	if !run.Ends.IsZero() {
 		ends = "until " + run.Ends.UTC().Format("2006-01-02 15:04") + " UTC"
 	}
-	body := fmt.Sprintf("Your token \"%s\" (%s…) started run %d of your analysis \"%s\" at %s UTC. It runs %s.\n\nThe run:\n%s/runs/%s\n\nWhat the token may do, and its limits, are under Tokens:\n%s/account/tokens\n",
+	body := fmt.Sprintf("Your token \"%s\" (%s…) started run %d of your analysis \"%s\" at %s UTC. It runs %s.\n\nThe run:\n%s/runs/%s\n\nWhat the token may do, and its limits, are under AI, Access:\n%s/ai/access\n",
 		t.Name, t.Hint, run.Number, a.Name, run.Started.UTC().Format("2006-01-02 15:04"), ends, s.cfg.BaseURL, strconv.FormatInt(run.ID, 10), s.cfg.BaseURL)
 	go func() {
 		if err := s.mail.Send(u.Email, fmt.Sprintf("A token started run %d of %s", run.Number, a.Name), body); err != nil {

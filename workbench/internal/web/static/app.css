@@ -54,6 +54,9 @@ h3 { font-size: 1rem; margin: 1.2rem 0 0.4rem; }
 .brand { font-weight: 600; color: var(--text); text-decoration: none; }
 .top nav { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
 .who { color: var(--muted); }
+.top nav a[aria-current="page"] { font-weight: 600; }
+.subnav { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; margin: -0.4rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--line); }
+.subnav a[aria-current="page"] { font-weight: 600; text-decoration: none; color: var(--text); }
 main { max-width: 1100px; margin: 0 auto; padding: 1rem 16px 3rem; }
 footer { max-width: 1100px; margin: 0 auto; padding: 1rem 16px 2rem; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); }
 .narrow { max-width: 560px; }
@@ -195,7 +198,7 @@ textarea.guide { width: 100%; font: inherit; font-size: 0.8rem; line-height: 1.4
 .steps { padding-left: 1.6rem; }
 .steps > li { margin-bottom: 1rem; }
 .steps > li::marker { font-weight: 700; color: var(--accent); }
-.steps h2 { margin: 0.6rem 0 0.3rem; font-size: 1.1rem; }
+.steps h2, .steps h3 { margin: 0.6rem 0 0.3rem; font-size: 1.1rem; }
 
 /* The MCP page's log: a scrolling box, one access over two lines. */
 .log-filter { margin: 0.5rem 0; }

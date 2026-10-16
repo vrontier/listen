@@ -212,18 +212,32 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /account/usage", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/results", http.StatusMovedPermanently)
 	})
-	m.HandleFunc("GET /account/tokens", s.member(s.tokensPage))
-	m.HandleFunc("GET /account/mcp", s.member(s.mcpPage))
-	m.HandleFunc("GET /account/activity", func(w http.ResponseWriter, r *http.Request) {
-		to := "/account/mcp"
-		if r.URL.RawQuery != "" { // a token chosen on the old page
-			to += "?" + r.URL.RawQuery
+	m.HandleFunc("GET /ai", s.member(s.aiPage))
+	m.HandleFunc("GET /ai/access", s.member(s.tokensPage))
+	m.HandleFunc("GET /ai/mcp", s.member(s.mcpPage))
+	m.HandleFunc("GET /ai/activity", s.member(s.activityPage))
+	m.HandleFunc("POST /ai/access", s.member(s.tokenCreate))
+	m.HandleFunc("POST /ai/access/{token}/revoke", s.member(s.tokenRevoke))
+	m.HandleFunc("POST /ai/access/{token}", s.member(s.tokenUpdate))
+	// The pages' earlier addresses, in mails and bookmarks.
+	moved := func(to string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			dest := to
+			if r.URL.RawQuery != "" { // a token chosen in the activity
+				dest += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, dest, http.StatusMovedPermanently)
 		}
-		http.Redirect(w, r, to, http.StatusMovedPermanently)
+	}
+	m.HandleFunc("GET /account/tokens", moved("/ai/access"))
+	m.HandleFunc("GET /account/activity", moved("/ai/activity"))
+	m.HandleFunc("GET /account/mcp", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != "" {
+			moved("/ai/activity")(w, r)
+			return
+		}
+		moved("/ai/mcp")(w, r)
 	})
-	m.HandleFunc("POST /account/tokens", s.member(s.tokenCreate))
-	m.HandleFunc("POST /account/tokens/{token}/revoke", s.member(s.tokenRevoke))
-	m.HandleFunc("POST /account/tokens/{token}", s.member(s.tokenUpdate))
 	keys := func(h http.HandlerFunc) http.HandlerFunc {
 		return s.member(func(w http.ResponseWriter, r *http.Request) {
 			if !s.cfg.LLMKeys {
@@ -387,6 +401,8 @@ var staticVersion = func() string {
 
 func (s *Server) parseTemplates() error {
 	funcs["asset"] = func(name string) string { return "/static/" + name + "?v=" + staticVersion }
+	funcs["hasPrefix"] = strings.HasPrefix
+	funcs["aiPages"] = func() []aiLink { return aiPages }
 	s.pages = map[string]*template.Template{}
 	names, err := fs.Glob(templateFS, "templates/*.html")
 	if err != nil {
@@ -415,13 +431,14 @@ type page struct {
 	Flash         string
 	Error         string
 	EngineProblem string
-	Research      bool // something is published, so the menu offers it
-	Keys          bool // the language-model keys page is offered
+	Research      bool   // something is published, so the menu offers it
+	Keys          bool   // the language-model keys page is offered
+	Path          string // the page's address, for the menus
 	Data          any
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name, title string, data any) {
-	p := page{Site: s.cfg.SiteName, Title: title, Data: data, Keys: s.cfg.LLMKeys}
+	p := page{Site: s.cfg.SiteName, Title: title, Data: data, Keys: s.cfg.LLMKeys, Path: r.URL.Path}
 	if pub, err := s.db.AnyPublished(r.Context()); err == nil {
 		p.Research = pub
 	}

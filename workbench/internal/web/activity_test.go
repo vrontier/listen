@@ -80,18 +80,26 @@ func TestActivity(t *testing.T) {
 
 	// The page shows it, filtered; the secrets are nowhere.
 	member := r.loginAs("m@example.org")
-	_, page, _ := r.get(member, "/account/mcp")
-	for _, s := range []string{"<h1>MCP</h1>", "laptop", "assistant", "get_analysis", "{&#34;analysis_id&#34;:999}", "test-client 0.1", `href="/account/mcp"`,
-		"read_dataset_file", "Always start with list_analyses", "claude mcp add"} {
+	_, page, _ := r.get(member, "/ai/activity")
+	for _, s := range []string{"<h1>AI: activity</h1>", "laptop", "assistant", "get_analysis", "{&#34;analysis_id&#34;:999}", "test-client 0.1", `href="/ai/activity?token=`,
+		`<a href="/ai/activity" aria-current="page">Activity</a>`, `<a href="/ai" aria-current="page">AI</a>`} {
 		if !strings.Contains(page, s) {
 			t.Fatalf("page lacks %q", s)
 		}
 	}
-	if strings.Contains(page, both) || strings.Contains(page, mcpOnly) {
-		t.Fatal("a secret is on the page")
+	_, docs, _ := r.get(member, "/ai/mcp")
+	for _, s := range []string{"<h1>AI: MCP</h1>", "read_dataset_file", "Always start with list_analyses", "claude mcp add", "needs control"} {
+		if !strings.Contains(docs, s) {
+			t.Fatalf("MCP page lacks %q", s)
+		}
+	}
+	for _, p := range []string{page, docs} {
+		if strings.Contains(p, both) || strings.Contains(p, mcpOnly) {
+			t.Fatal("a secret is on the page")
+		}
 	}
 	// Each access over two lines, with what the browser filters and sorts by.
-	log := page[strings.Index(page, `id="accesses"`):strings.Index(page, `id="tools"`)] // the tools are listed below
+	log := page[strings.Index(page, `id="accesses"`):]
 	for _, s := range []string{`class="log-scroll"`, `data-what="get_analysis" data-kind="read" data-status="error"`, `data-via="stream"`, `class="l2"`,
 		`data-key="ms"`, "mcplog.js", "There is no analysis 999 of yours"} {
 		if !strings.Contains(log, s) && !strings.Contains(page, s) {
@@ -102,17 +110,23 @@ func TestActivity(t *testing.T) {
 		t.Fatalf("%d entries, want %d", n, len(want))
 	}
 
-	// The old address leads here, with a chosen token.
-	if code, _, hdr := r.get(member, "/account/activity"); code != http.StatusMovedPermanently || hdr.Get("Location") != "/account/mcp" {
-		t.Fatalf("old address: %d", code)
+	// The old addresses lead to the AI pages, keeping a chosen token.
+	for from, to := range map[string]string{"/account/activity": "/ai/activity", "/account/activity?token=1": "/ai/activity?token=1",
+		"/account/mcp": "/ai/mcp", "/account/mcp?token=1": "/ai/activity?token=1", "/account/tokens": "/ai/access"} {
+		if code, _, hdr := r.get(member, from); code != http.StatusMovedPermanently || hdr.Get("Location") != to {
+			t.Fatalf("%s: %d to %s", from, code, hdr.Get("Location"))
+		}
 	}
-	if _, _, hdr := r.get(member, "/account/activity?token=1"); hdr.Get("Location") != "/account/mcp?token=1" {
-		t.Fatalf("old address with a token: %s", hdr.Get("Location"))
+
+	// The overview says how to give an assistant access, and where the member stands.
+	if _, page, _ := r.get(member, "/ai"); !strings.Contains(page, "How to give an assistant access") || !strings.Contains(page, `href="/ai/access"`) ||
+		!strings.Contains(page, "accesses in the last 24 hours") || !strings.Contains(page, `<a href="/ai" aria-current="page">Overview</a>`) {
+		t.Fatal("AI overview")
 	}
 
 	// Another member sees none of it.
 	other := r.loginAs("o@example.org")
-	if _, page, _ := r.get(other, "/account/mcp"); strings.Contains(page, "laptop") || !strings.Contains(page, "No token has been used") {
+	if _, page, _ := r.get(other, "/ai/activity"); strings.Contains(page, "laptop") || !strings.Contains(page, "No token has been used") {
 		t.Fatal("another member sees the activity")
 	}
 }

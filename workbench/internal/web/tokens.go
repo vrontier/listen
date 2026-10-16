@@ -11,7 +11,7 @@ import (
 	"github.com/vrontier/listen-workbench/internal/catalogue"
 )
 
-// The member's tokens (members-and-streams.md, Tokens).
+// The member's tokens, under AI, Access (members-and-streams.md, Tokens).
 
 // maxTokens bounds the valid tokens of one member.
 const maxTokens = 20
@@ -47,7 +47,7 @@ func (s *Server) tokensPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, 200, "tokens", "Tokens", d)
+	s.render(w, r, 200, "ai-access", "AI: access", d)
 }
 
 // tokenCreate makes a token and shows it once, on the page itself rather
@@ -77,7 +77,7 @@ func (s *Server) tokenCreate(w http.ResponseWriter, r *http.Request) {
 		d.Err = "Not made: you have " + strconv.Itoa(maxTokens) + " valid tokens. Revoke one you no longer use."
 	}
 	if d.Err != "" {
-		s.render(w, r, 400, "tokens", "Tokens", d)
+		s.render(w, r, 400, "ai-access", "AI: access", d)
 		return
 	}
 	secret, _, err := s.db.CreateAPIToken(r.Context(), sess.User.ID, d.Name, scopes, limits)
@@ -87,7 +87,7 @@ func (s *Server) tokenCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Tokens, _ = s.db.APITokensOf(r.Context(), sess.User.ID)
 	d.Secret, d.Name, d.Limits = secret, "", catalogue.DefaultTokenLimits
-	s.render(w, r, 200, "tokens", "Tokens", d)
+	s.render(w, r, 200, "ai-access", "AI: access", d)
 }
 
 func (s *Server) tokenRevoke(w http.ResponseWriter, r *http.Request) {
@@ -95,13 +95,13 @@ func (s *Server) tokenRevoke(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("token"), 10, 64)
 	if err := s.db.RevokeAPIToken(r.Context(), sess.User.ID, id); err != nil {
 		if isNotFound(err) {
-			s.redirect(w, r, "/account/tokens", "That token was revoked already.")
+			s.redirect(w, r, "/ai/access", "That token was revoked already.")
 			return
 		}
 		s.fail(w, r, err)
 		return
 	}
-	s.redirect(w, r, "/account/tokens", "Token revoked. Programs using it are refused from now on.")
+	s.redirect(w, r, "/ai/access", "Token revoked. Programs using it are refused from now on.")
 }
 
 // limitFields are the form's names of a token's limits.
@@ -153,16 +153,16 @@ func (s *Server) tokenUpdate(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("token"), 10, 64)
 	scopes, limits, why := tokenForm(r)
 	if why != "" {
-		s.redirect(w, r, "/account/tokens", "Not changed: "+why)
+		s.redirect(w, r, "/ai/access", "Not changed: "+why)
 		return
 	}
 	if err := s.db.UpdateAPIToken(r.Context(), sess.User.ID, id, scopes, limits); err != nil {
 		if isNotFound(err) {
-			s.redirect(w, r, "/account/tokens", "That token is revoked or not yours.")
+			s.redirect(w, r, "/ai/access", "That token is revoked or not yours.")
 			return
 		}
 		s.fail(w, r, err)
 		return
 	}
-	s.redirect(w, r, "/account/tokens", "Token changed. It counts from its next call on.")
+	s.redirect(w, r, "/ai/access", "Token changed. It counts from its next call on.")
 }

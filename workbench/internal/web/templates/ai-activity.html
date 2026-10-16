@@ -1,29 +1,26 @@
 {{define "content"}}
-<h1>MCP</h1>
+<h1>AI: activity</h1>
+{{template "ai-nav" .}}
 {{with .Data}}
 {{$d := .}}
-<p class="meta">How AI assistants work with your analyses through MCP: what they and your programs have done, every tool they can call, a guide to give them, and how to connect. A token reads only, unless you allowed it control under Tokens; then an assistant may also make and change analyses and start and stop previews and runs, within the token's limits.</p>
-<p class="meta"><a href="#activity">Activity</a> · <a href="#tools">Tools</a> · <a href="#guide">Guide for assistants</a> · <a href="#connect">Connecting</a></p>
-
-<h2 id="activity">Activity</h2>
-<p class="meta">Every access made with your tokens over the last 30 days: what AI assistants asked through MCP, and what programs read from the data stream. Times are UTC. The tokens themselves are never noted.</p>
+<p class="meta">Every access made with your tokens over the last 30 days: what AI assistants asked and changed through MCP, and what programs read from the data stream. Times are UTC. The tokens themselves are never noted.</p>
 
 <section>
-  <h3>By token</h3>
+  <h2>By token</h2>
   {{if .Summary}}
   <table>
     <thead><tr><th class="wide">Token</th><th>Last 24 hours</th><th>Failed</th><th>Last 30 days</th><th>Streams open</th><th class="nowrap">Last access (UTC)</th></tr></thead>
     <tbody>{{range .Summary}}<tr>
-      <td><a href="/account/mcp?token={{.TokenID}}#accesses">{{.Name}}</a> <code class="small">{{.Hint}}…</code>{{if .Revoked}} <span class="meta">revoked</span>{{end}}</td>
+      <td><a href="/ai/activity?token={{.TokenID}}#accesses">{{.Name}}</a> <code class="small">{{.Hint}}…</code>{{if .Revoked}} <span class="meta">revoked</span>{{end}}</td>
       <td>{{.Day}}</td><td>{{if .DayFails}}<span class="field-error">{{.DayFails}}</span>{{else}}0{{end}}</td><td>{{.Month}}</td><td>{{.Open}}</td>
       <td class="nowrap">{{moment .Last}}</td>
     </tr>{{end}}</tbody>
   </table>
-  {{else}}<p class="meta">No token has been used in the last 30 days. Make one under <a href="/account/tokens">Tokens</a>; that page also says how to connect.</p>{{end}}
+  {{else}}<p class="meta">No token has been used in the last 30 days. Make one under <a href="/ai/access">Access</a>; <a href="/ai/mcp#connect">MCP</a> says how to connect an assistant.</p>{{end}}
 </section>
 
 <section>
-  <h3 id="accesses">Accesses</h3>
+  <h2 id="accesses">Accesses</h2>
   {{if .Rows}}
   <form class="inline-form log-filter" id="log-filter" hidden>
     <label>Search <input type="search" name="q" placeholder="tool, argument, message" autocomplete="off"></label>
@@ -65,41 +62,6 @@
   {{else}}<p class="meta">Nothing yet.</p>{{end}}
 </section>
 
-<section>
-  <h2 id="tools">Tools</h2>
-  <p class="meta">What an assistant can call; the examples use ids of your own analyses and runs. An assistant gets this list by itself when it connects ("tools/list"). The tools marked "needs control" change things; an assistant sees them only with a token you allowed control under <a href="/account/tokens">Tokens</a>, and only within that token's limits.</p>
-  {{range .Tools}}
-  <article class="card tool">
-    <h3><code>{{.Name}}</code> <span class="meta">{{.Title}}</span>{{if .Control}} <span class="state state-paused">needs control</span>{{end}}</h3>
-    <p>{{.Description}}</p>
-    {{if .Args}}
-    <table>
-      <thead><tr><th>Argument</th><th>Type</th><th>Meaning</th></tr></thead>
-      <tbody>{{range .Args}}<tr><td class="nowrap"><code>{{.Name}}</code>{{if .Required}} <span class="meta">required</span>{{end}}</td><td>{{.Type}}</td><td class="meta">{{.Description}}</td></tr>{{end}}</tbody>
-    </table>
-    {{else}}<p class="meta">No arguments.</p>{{end}}
-    <pre><code class="small">{{.Example}}</code></pre>
-  </article>
-  {{end}}
-</section>
-
-<section>
-  <h2 id="guide">Guide for assistants</h2>
-  <p class="meta">A smaller or less capable model may not find its way through the tools on its own. Copy this text into its session first: it says what the Workbench is, in which order to call the tools, and what to do with an error. Every assistant also receives it, without your ids, as the server's instructions when it connects.</p>
-  <textarea class="guide" readonly rows="24" spellcheck="false" aria-label="Guide for assistants">{{.Guide}}</textarea>
-</section>
-
-<section>
-  <h2 id="connect">Connecting</h2>
-  <p class="meta">Make a token with "MCP" ticked under <a href="/account/tokens">Tokens</a>, and keep it out of files you share: the examples read it from the environment variable <code>LOW_WORKBENCH_TOKEN</code>.</p>
-  <table class="facts">
-    <tr><th>Endpoint</th><td><code>{{.Base}}/mcp</code>, MCP over streamable HTTP, header <code>Authorization: Bearer low_…</code></td></tr>
-    <tr><th>Claude Code</th><td><pre><code class="small">claude mcp add --transport http low-workbench {{.Base}}/mcp --header "Authorization: Bearer $LOW_WORKBENCH_TOKEN"</code></pre></td></tr>
-    <tr><th><code>.mcp.json</code></th><td><pre><code class="small">{"mcpServers": {"low-workbench": {"type": "http", "url": "{{.Base}}/mcp",
-  "headers": {"Authorization": "Bearer ${LOW_WORKBENCH_TOKEN}"}}}}</code></pre></td></tr>
-  </table>
-  <p class="meta">The assistant must reach this address: one on your machine or network can, a service in someone's cloud cannot reach an intranet address.</p>
-</section>
 {{end}}
 <script src="{{asset "mcplog.js"}}" defer></script>
 {{end}}

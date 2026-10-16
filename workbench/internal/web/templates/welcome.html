@@ -26,10 +26,10 @@
   </li>
   <li class="card">
     <h2>Work with an AI assistant or a program</h2>
-    <p>A token lets an AI assistant (through MCP) or your own program (through the data stream) read your analyses, their live events and your data sets. Make one under <a href="/account/tokens">Tokens</a>; a token reads only, unless you allow it more.</p>
+    <p>A token lets an AI assistant (through MCP) or your own program (through the data stream) read your analyses, their live events and your data sets. Make one under <a href="/ai/access">AI, Access</a>; a token reads only, unless you allow it more.</p>
     <p>With <strong>control</strong> allowed for a token, an assistant can also work for you: list your sources, make an analysis, rename it, choose its sources and tune their settings and filter rules (each change a new revision, checked by the engine), preview it for ten minutes, and start and stop runs. You set the limits per token, or none: the longest run, runs a day and at once, previews and changes a day. You get a mail whenever a token starts a run, and the run names the token. An assistant never registers, shares, publishes or deletes anything.</p>
-    <p>For long sessions an assistant can ask for a short summary of an analysis and, during a run, only what is new since it last looked. The <a href="/account/mcp">MCP</a> page shows everything done with your tokens, the changes marked, every tool an assistant can call, a guide to give it, and how to connect.</p>
-    <p class="meta">Now: {{.Tokens}} token{{if ne .Tokens 1}}s{{end}}{{if .Control}}, {{.Control}} with control{{end}}; {{.Accesses}} access{{if ne .Accesses 1}}es{{end}} in the last 24 hours{{if .ByTokens}}; {{.ByTokens}} run{{if ne .ByTokens 1}}s{{end}} started by a token going on{{end}}. <a href="/account/mcp">MCP</a></p>
+    <p>For long sessions an assistant can ask for a short summary of an analysis and, during a run, only what is new since it last looked. The <a href="/ai">AI</a> pages say how to give an assistant access step by step, list every tool it can call with a guide to give it and how to connect, and show everything done with your tokens, the changes marked.</p>
+    <p class="meta">Now: {{.Tokens}} token{{if ne .Tokens 1}}s{{end}}{{if .Control}}, {{.Control}} with control{{end}}; {{.Accesses}} access{{if ne .Accesses 1}}es{{end}} in the last 24 hours{{if .ByTokens}}; {{.ByTokens}} run{{if ne .ByTokens 1}}s{{end}} started by a token going on{{end}}. <a href="/ai">AI</a></p>
   </li>
   {{if .Publishing}}
   <li class="card">

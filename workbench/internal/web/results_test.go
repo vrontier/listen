@@ -150,7 +150,7 @@ func TestHome(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("home: %d", code)
 	}
-	for _, want := range []string{"Welcome, Mira", `href="/sources/new"`, `href="/analyses/new"`, `href="/runs"`, `href="/results"`, `href="/account/tokens"`, `href="/account/mcp"`,
+	for _, want := range []string{"Welcome, Mira", `href="/sources/new"`, `href="/analyses/new"`, `href="/runs"`, `href="/results"`, `href="/ai/access"`, `href="/ai"`,
 		"0 sources of your own", "nothing running", "Source code on GitHub", `<a href="/">Home</a>`} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("home lacks %q", want)

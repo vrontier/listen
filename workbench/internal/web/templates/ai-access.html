@@ -1,6 +1,7 @@
 {{define "content"}}
 {{$csrf := .CSRF}}
-<h1>Tokens</h1>
+<h1>AI: access</h1>
+{{template "ai-nav" .}}
 {{with .Data}}
 <p class="meta">A token lets a program or an AI assistant read your analyses: their settings, their live events while they are in a run or a preview, and your runs' data sets. It reads only your own analyses. Only if you allow <strong>control</strong> for a token may an assistant also make and change analyses and start and stop previews and runs with it, through MCP, within the limits you set for that token; it never registers, shares or deletes anything. You get a mail whenever a token starts a run.</p>
 
@@ -22,11 +23,11 @@
       <td>{{range $i, $s := .Scopes}}{{if $i}}, {{end}}{{if eq $s "stream"}}data stream{{else if eq $s "mcp"}}MCP{{else if eq $s "control"}}<strong>control</strong>{{else}}{{$s}}{{end}}{{end}}</td>
       <td class="small">{{if .Has "control"}}{{template "token-limits" .Limits}}{{else}}<span class="meta">reads only</span>{{end}}</td>
       <td>{{when .Created}}</td><td>{{if .LastUsed.IsZero}}never{{else}}{{when .LastUsed}}{{end}}</td>
-      <td>{{if .Revoked.IsZero}}<form method="post" action="/account/tokens/{{.ID}}/revoke" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="link">revoke</button></form>{{else}}revoked {{when .Revoked}}{{end}}</td>
+      <td>{{if .Revoked.IsZero}}<form method="post" action="/ai/access/{{.ID}}/revoke" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="link">revoke</button></form>{{else}}revoked {{when .Revoked}}{{end}}</td>
     </tr>
     {{if .Revoked.IsZero}}<tr><td colspan="7">
       <details class="token-edit"><summary>Change what {{.Name}} may do</summary>
-        <form method="post" action="/account/tokens/{{.ID}}" class="stack">
+        <form method="post" action="/ai/access/{{.ID}}" class="stack">
           <input type="hidden" name="csrf" value="{{$csrf}}">
           {{template "token-perms" .}}
           <button>Save</button>
@@ -38,7 +39,7 @@
   {{else}}<p class="meta">None yet.</p>{{end}}
 
   <h3>New token</h3>
-  <form method="post" action="/account/tokens" class="stack">
+  <form method="post" action="/ai/access" class="stack">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <label>Name <small>where it is used, so that you know which to revoke</small><input name="name" value="{{.Name}}" required maxlength="60"></label>
     {{template "token-perms" (newTokenPerms .Limits)}}
@@ -55,7 +56,7 @@
     <tr><th><code>GET /api/v1/analyses/&lt;id&gt;/sources/&lt;source&gt;/state</code></th><td>also <code>motifs</code>, <code>history/events</code>, <code>history/features</code>, during a run or a preview</td></tr>
     <tr><th><code>GET /api/v1/runs</code></th><td>your runs and their data sets</td></tr>
     <tr><th><code>GET /api/v1/runs/&lt;id&gt;/events.csv</code></th><td>a file of a finished data set: also <code>dataset.json</code>, <code>comparison.csv</code></td></tr>
-    <tr><th><code>POST /mcp</code></th><td>MCP over HTTP (streamable HTTP), for AI assistants; with control also making and changing analyses, previews and runs. The tools are listed on the <a href="/account/mcp#tools">MCP</a> page.</td></tr>
+    <tr><th><code>POST /mcp</code></th><td>MCP over HTTP (streamable HTTP), for AI assistants; with control also making and changing analyses, previews and runs. The tools are listed under <a href="/ai/mcp#tools">MCP</a>, with how to connect an assistant.</td></tr>
   </table>
   <p>For example:</p>
   <pre><code>curl -N -H "Authorization: Bearer $LOW_TOKEN" {{.Base}}/api/v1/analyses/{{.Example}}/events?types=event.resonance</code></pre>

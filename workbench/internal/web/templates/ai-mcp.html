@@ -1,0 +1,44 @@
+{{define "content"}}
+<h1>AI: MCP</h1>
+{{template "ai-nav" .}}
+{{with .Data}}
+<p class="meta">How an AI assistant works with the Workbench through MCP: every tool it can call, a guide to give it, and how to connect it. A token reads only, unless you allowed it control under <a href="/ai/access">Access</a>; then an assistant may also make and change analyses and start and stop previews and runs, within the token's limits.</p>
+<p class="meta"><a href="#tools">Tools</a> · <a href="#guide">Guide for assistants</a> · <a href="#connect">Connecting</a></p>
+
+<section>
+  <h2 id="tools">Tools</h2>
+  <p class="meta">What an assistant can call; the examples use ids of your own analyses and runs. An assistant gets this list by itself when it connects ("tools/list"). The tools marked "needs control" change things; an assistant sees them only with a token you allowed control under <a href="/ai/access">Access</a>, and only within that token's limits.</p>
+  {{range .Tools}}
+  <article class="card tool">
+    <h3><code>{{.Name}}</code> <span class="meta">{{.Title}}</span>{{if .Control}} <span class="state state-paused">needs control</span>{{end}}</h3>
+    <p>{{.Description}}</p>
+    {{if .Args}}
+    <table>
+      <thead><tr><th>Argument</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>{{range .Args}}<tr><td class="nowrap"><code>{{.Name}}</code>{{if .Required}} <span class="meta">required</span>{{end}}</td><td>{{.Type}}</td><td class="meta">{{.Description}}</td></tr>{{end}}</tbody>
+    </table>
+    {{else}}<p class="meta">No arguments.</p>{{end}}
+    <pre><code class="small">{{.Example}}</code></pre>
+  </article>
+  {{end}}
+</section>
+
+<section>
+  <h2 id="guide">Guide for assistants</h2>
+  <p class="meta">A smaller or less capable model may not find its way through the tools on its own. Copy this text into its session first: it says what the Workbench is, in which order to call the tools, and what to do with an error. Every assistant also receives it, without your ids, as the server's instructions when it connects.</p>
+  <textarea class="guide" readonly rows="24" spellcheck="false" aria-label="Guide for assistants">{{.Guide}}</textarea>
+</section>
+
+<section>
+  <h2 id="connect">Connecting</h2>
+  <p class="meta">Make a token with "MCP" ticked under <a href="/ai/access">Access</a>, and keep it out of files you share: the examples read it from the environment variable <code>LOW_WORKBENCH_TOKEN</code>.</p>
+  <table class="facts">
+    <tr><th>Endpoint</th><td><code>{{.Base}}/mcp</code>, MCP over streamable HTTP, header <code>Authorization: Bearer low_…</code></td></tr>
+    <tr><th>Claude Code</th><td><pre><code class="small">claude mcp add --transport http low-workbench {{.Base}}/mcp --header "Authorization: Bearer $LOW_WORKBENCH_TOKEN"</code></pre></td></tr>
+    <tr><th><code>.mcp.json</code></th><td><pre><code class="small">{"mcpServers": {"low-workbench": {"type": "http", "url": "{{.Base}}/mcp",
+  "headers": {"Authorization": "Bearer ${LOW_WORKBENCH_TOKEN}"}}}}</code></pre></td></tr>
+  </table>
+  <p class="meta">The assistant must reach this address: one on your machine or network can, a service in someone's cloud cannot reach an intranet address.</p>
+</section>
+{{end}}
+{{end}}

@@ -83,7 +83,7 @@
     else p.set("sort", (sort.dir < 0 ? "-" : "") + sort.key);
     const qs = p.toString();
     history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
-    for (const a of document.querySelectorAll('a[href^="/account/mcp?"][href*="before="], a[data-newest]')) {
+    for (const a of document.querySelectorAll('a[href^="/ai/activity?"][href*="before="], a[data-newest]')) {
       const u = new URL(a.href);
       const before = u.searchParams.get("before");
       const n = new URLSearchParams(p);

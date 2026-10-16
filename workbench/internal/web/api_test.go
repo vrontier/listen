@@ -21,12 +21,12 @@ var secretRE = regexp.MustCompile(`low_[A-Za-z0-9_-]{20,}`)
 // makeToken makes a token on the Tokens page and returns its secret.
 func (r *rig) makeToken(c *http.Client, name string, scopes ...string) string {
 	r.t.Helper()
-	_, page, _ := r.get(c, "/account/tokens")
+	_, page, _ := r.get(c, "/ai/access")
 	form := url.Values{"csrf": {csrfOf(r.t, page)}, "name": {name}}
 	for _, s := range scopes {
 		form.Set(s, "on")
 	}
-	code, page, _ := r.post(c, "/account/tokens", form)
+	code, page, _ := r.post(c, "/ai/access", form)
 	secret := secretRE.FindString(page)
 	if code != 200 || secret == "" {
 		r.t.Fatalf("token not shown: %d", code)
@@ -158,8 +158,8 @@ func TestTokensAndDataStream(t *testing.T) {
 	toks, _ := r.db.APITokensOf(ctx, u.ID)
 	for _, tk := range toks {
 		if tk.Name == "laptop" {
-			_, page, _ := r.get(member, "/account/tokens")
-			r.post(member, "/account/tokens/"+strconv.FormatInt(tk.ID, 10)+"/revoke", url.Values{"csrf": {csrfOf(t, page)}})
+			_, page, _ := r.get(member, "/ai/access")
+			r.post(member, "/ai/access/"+strconv.FormatInt(tk.ID, 10)+"/revoke", url.Values{"csrf": {csrfOf(t, page)}})
 			if tk.LastUsed.IsZero() {
 				t.Fatal("last use not noted")
 			}

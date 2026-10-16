@@ -8,9 +8,9 @@ import (
 	"github.com/vrontier/listen-workbench/internal/catalogue"
 )
 
-// The MCP page shows a member every access made with their tokens,
-// through MCP and the data stream, over the last 30 days; the MCP tools
-// with examples; the guide for assistants; and how to connect.
+// Under AI: Activity shows a member every access made with their tokens,
+// through MCP and the data stream, over the last 30 days; MCP shows the
+// tools with examples, the guide for assistants, and how to connect.
 
 // activityPage is how many notes the page loads at once; the browser
 // filters and sorts them.
@@ -22,12 +22,21 @@ type activityData struct {
 	Rows    []catalogue.Access
 	Older   string // the address of the next older page, or ""
 	Newest  string // the address of the newest page, when not on it
-	Tools   []toolDoc
-	Guide   string
-	Base    string
+}
+
+type mcpData struct {
+	Tools []toolDoc
+	Guide string
+	Base  string
 }
 
 func (s *Server) mcpPage(w http.ResponseWriter, r *http.Request) {
+	sess, _ := sessionFrom(r)
+	ids := s.guideIDsOf(r.Context(), sess.User.ID)
+	s.render(w, r, 200, "ai-mcp", "AI: MCP", mcpData{Tools: toolDocs(ids), Guide: mcpGuide(&ids, true), Base: s.cfg.BaseURL})
+}
+
+func (s *Server) activityPage(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)
 	ctx := r.Context()
 	q := r.URL.Query()
@@ -60,9 +69,9 @@ func (s *Server) mcpPage(w http.ResponseWriter, r *http.Request) {
 			v.Set("before", strconv.FormatInt(before, 10))
 		}
 		if len(v) == 0 {
-			return "/account/mcp#activity"
+			return "/ai/activity"
 		}
-		return "/account/mcp?" + v.Encode() + "#activity"
+		return "/ai/activity?" + v.Encode()
 	}
 	if len(d.Rows) > activityPage {
 		d.Rows = d.Rows[:activityPage]
@@ -71,9 +80,5 @@ func (s *Server) mcpPage(w http.ResponseWriter, r *http.Request) {
 	if f.Before > 0 {
 		d.Newest = page(0)
 	}
-	ids := s.guideIDsOf(ctx, sess.User.ID)
-	d.Tools = toolDocs(ids)
-	d.Guide = mcpGuide(&ids, true)
-	d.Base = s.cfg.BaseURL
-	s.render(w, r, 200, "mcp", "MCP", d)
+	s.render(w, r, 200, "ai-activity", "AI: activity", d)
 }
