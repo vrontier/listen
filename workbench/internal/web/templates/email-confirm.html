@@ -1,0 +1,9 @@
+{{define "content"}}
+<section class="narrow">
+  <h1>Confirm your new address</h1>
+  <p>From now on you log in with <strong>{{.Data.Email}}</strong>. Confirming ends every session of your account; this browser stays logged in.</p>
+  <form method="post" action="/account/email/{{.Data.Token}}" class="stack">
+    <button autofocus>Use this address</button>
+  </form>
+</section>
+{{end}}

@@ -13,11 +13,12 @@
       body.classList.toggle("open", open);
     });
   }
-  const choice = document.getElementById("theme-choice");
-  if (choice) {
+  const choices = document.querySelectorAll(".theme-choice");
+  for (const choice of choices) {
     choice.value = document.documentElement.dataset.theme || "";
     choice.addEventListener("change", () => {
       const v = choice.value;
+      for (const other of choices) other.value = v;
       if (v) document.documentElement.dataset.theme = v;
       else delete document.documentElement.dataset.theme;
       try {

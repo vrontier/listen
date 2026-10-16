@@ -40,8 +40,8 @@
     {{end}}
   </nav>
   <div class="sidebar-foot">
-    {{if .User}}<p class="who">{{.User.Name}}</p>{{end}}
-    <label class="theme">Theme <select id="theme-choice" aria-label="Theme"><option value="">as the system</option><option value="light">light</option><option value="dark">night</option></select></label>
+    {{if .User}}<a class="who" href="/account"{{if eq .Path "/account"}} aria-current="page"{{end}}>{{.User.Name}}</a>{{end}}
+    <label class="theme">Theme <select class="theme-choice" aria-label="Theme"><option value="">as the system</option><option value="light">light</option><option value="dark">night</option></select></label>
     {{if .User}}<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link">Log out</button></form>{{end}}
   </div>
   </div>

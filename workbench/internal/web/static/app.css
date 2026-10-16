@@ -169,7 +169,8 @@ h3 { font-size: 1.125rem; line-height: 1.45; font-weight: 600; margin: 1.4rem 0 
 .nav-sub a { font-weight: 400; padding: 5px 10px; border-left-width: 2px; }
 .nav-sub a[aria-current] { font-weight: 600; }
 .sidebar-foot { margin-top: auto; padding: 16px 12px 0; border-top: 1px solid var(--line); font-size: 0.9rem; display: flex; flex-direction: column; gap: 8px; }
-.sidebar-foot .who { margin: 0; color: var(--muted); }
+.sidebar-foot .who { color: var(--text); font-weight: 600; text-decoration: none; }
+.sidebar-foot .who:hover, .sidebar-foot .who[aria-current] { color: var(--accent); text-decoration: underline; }
 .sidebar-foot .theme { font-weight: 400; color: var(--muted); font-size: 0.85rem; }
 .sidebar-foot select { height: 2.1rem; font-size: 0.9rem; }
 .workspace { min-width: 0; display: flex; flex-direction: column; }

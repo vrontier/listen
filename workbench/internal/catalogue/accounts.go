@@ -260,6 +260,9 @@ func (d *DB) Sweep(ctx context.Context) error {
 	if _, err := d.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires < ?`, now); err != nil {
 		return err
 	}
-	_, err := d.db.ExecContext(ctx, `DELETE FROM login_links WHERE expires < ?`, now)
+	if _, err := d.db.ExecContext(ctx, `DELETE FROM login_links WHERE expires < ?`, now); err != nil {
+		return err
+	}
+	_, err := d.db.ExecContext(ctx, `DELETE FROM email_changes WHERE expires < ?`, now)
 	return err
 }

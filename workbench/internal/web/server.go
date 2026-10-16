@@ -185,8 +185,6 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /invite/{token}", s.inviteForm)
 	m.HandleFunc("POST /invite/{token}", s.inviteAccept)
 
-	m.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", http.StatusSeeOther) })
-
 	m.HandleFunc("GET /sources", s.member(s.sources))
 	m.HandleFunc("GET /sources/new", s.member(s.streamNewForm))
 	m.HandleFunc("POST /sources/new", s.member(s.streamNew))
@@ -212,6 +210,12 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /account/usage", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/results", http.StatusMovedPermanently)
 	})
+	m.HandleFunc("GET /account", s.member(s.accountPage))
+	m.HandleFunc("POST /account/name", s.member(s.accountName))
+	m.HandleFunc("POST /account/email", s.member(s.accountEmail))
+	m.HandleFunc("POST /account/email/cancel", s.member(s.accountEmailCancel))
+	m.HandleFunc("GET /account/email/{token}", s.emailConfirmForm)
+	m.HandleFunc("POST /account/email/{token}", s.emailConfirm)
 	m.HandleFunc("GET /ai", s.member(s.aiPage))
 	m.HandleFunc("GET /ai/access", s.member(s.tokensPage))
 	m.HandleFunc("GET /ai/mcp", s.member(s.mcpPage))

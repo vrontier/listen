@@ -212,6 +212,17 @@ A member creates tokens for programs and AI assistants. A token:
 - **Control by token.** **Decided** (2026-10-16): a member may allow a token to change things, per token; an assistant may then make and edit analyses and start and stop previews and runs; each such token has limits of its own, set by the member, including none; the member gets a mail whenever a token starts a run. **Built** against the stand-in, **proposed** in its detail: a third permission "control" next to "data stream" and "MCP" on the Tokens page, only together with MCP, changeable later on the same page; limits per token: the longest run in hours (empty: runs until stopped allowed too), runs started a day, the token's runs at once, previews a day, changes to analyses a day (offered: 24, 5, 1, 20, 50; an empty field is no limit). Through MCP only; the data stream stays read-only. Tools, shown only to a token with control: `create_analysis`, `update_analysis` (title, description), `set_sources`, `update_source_settings` (only the fields given change, `null` returns one to the default, `rules` replace all rules; the engine checks first; a new revision), `start_preview`, `stop_preview`, `start_run` (`hours`, `offline_stop_min`, 15 by default), `stop_run`; and for every MCP token the read tool `list_sources`. They go through the same checks as the pages: caps, disk quota, sharing, nothing of an analysis changes during a run. A token never registers, shares, publishes or deletes. A call over a limit or without control is answered "Refused: …" with the limit, and noted as refused. Every change is in the audit trail as "by token: <tool>" with the token, a run started by a token names it on the run's page and in the run lists, and the MCP page marks changes and filters by them. Counting: runs from the runs table; previews and changes from the token's successful calls in the last 24 hours (an unchanged save counts). The guide for assistants gets a section on changing things when the token has control.
 - **Open:** which assistants can send a static `Authorization` header. **Assumed**, not tested: Claude Code (`claude mcp add --transport http … --header "Authorization: Bearer low_…"`) and editors configured by a JSON file can; the custom connectors of the claude.ai and ChatGPT apps expect OAuth and cannot. If those are wanted, the Workbench needs OAuth 2.1 as the MCP specification describes it (question 14).
 
+## Account
+
+**Decided** (2026-10-16): a member changes their own display name and email address on a page of their own; the address, being the login, changes only once the new address has confirmed it. **Built** against the stand-in, **proposed** in its detail:
+
+- **The page.** `/account`, reached by the member's name at the bottom of the sidebar: the name, the address, and the theme (the same choice as in the sidebar).
+- **Name.** 2 to 60 characters, changed at once; in the audit trail.
+- **Address.** The member gives a new address; a link goes there, valid 24 hours, and only the newest request counts. Until it is opened nothing changes, and the member logs in with the old address. Opening the link shows a button first, so that a mail program's preview does not use it up. Confirming makes the new address the login, sends the old address a notice, ends every session and unused login link of the member, and logs in the browser that confirmed. The member can cancel a waiting change.
+- **Refusals.** An address that another account or an open invitation has is refused without saying whose ("cannot be used for your account"), on the request and again on confirmation. At most 5 requests an hour per member, counted from the audit trail.
+- **Audit.** Each request, each change of name and of address, with before and after.
+- Tokens are not affected; they belong to the account, not to the address.
+
 ## Language-model keys
 
 **Decided** (2026-10-16): the language-model interpretation of analyses goes into the backlog. The keys page is switched off: no menu entry, `/account/keys` not found, unless the Workbench runs with `LOW_LLM_KEYS=on` (not set on the intranet). Keys saved before stay sealed in the catalogue. What follows stands for when it comes back.
@@ -274,6 +285,7 @@ No user-written code or expressions run on the server: filters and motif definit
 | `/runs` | runs of the member's analyses: running now (stop), start a run, finished runs (delete), each with a link to its results |
 | `/runs/<id>` | one run: when, revisions, its data set (what it holds, the files singly at their uncompressed size or together as one zip, delete) |
 | `/results` | own data sets (download, delete), disk space as a bar, memories, CPU, RAM and bandwidth against the caps |
+| `/account` | own name, email address (changed once the new one confirms it) and theme |
 | `/ai` | AI overview: what an assistant can do, how to give it access step by step, where the member stands |
 | `/ai/access` | create tokens, change what they may do and their limits, revoke them |
 | `/ai/mcp` | the MCP tools with examples, a guide for assistants, how to connect |
