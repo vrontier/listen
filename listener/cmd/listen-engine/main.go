@@ -43,6 +43,8 @@ func main() {
 	flag.IntVar(&lim.SubscriptionsPerAnalysis, "max-subscriptions", lim.SubscriptionsPerAnalysis, "live subscriptions per analysis at most")
 	flag.IntVar(&lim.MaxSampleRate, "max-sample-rate", lim.MaxSampleRate, "highest decode rate a stream may ask for")
 	flag.IntVar(&lim.MaxBitrateKbps, "max-bitrate", lim.MaxBitrateKbps, "highest bit rate (kbit/s) a probe accepts")
+	flag.IntVar(&lim.Groups, "max-groups", lim.Groups, "groups the engine holds at most")
+	flag.IntVar(&lim.MembersPerGroup, "max-members-per-group", lim.MembersPerGroup, "analyses per group at most")
 	flag.Parse()
 
 	e, err := engine.New(engine.Options{

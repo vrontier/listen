@@ -45,6 +45,9 @@ type Engine struct {
 	streams map[string]*stream
 	saving  bool
 
+	gmu    sync.Mutex // groups; taken after e.mu, never while holding a group's lock
+	groups map[string]*group
+
 	wmu   sync.Mutex
 	watch map[chan change]struct{}
 
@@ -78,16 +81,17 @@ func New(opts Options) (*Engine, error) {
 		opts: opts, instance: hex.EncodeToString(b), started: time.Now().UTC(),
 		policy: newAddressPolicy(opts.AllowPrivate, opts.AllowFiles, opts.AllowHosts...),
 		ctx:    ctx, cancel: cancel, probes: newProbeGate(),
-		streams: map[string]*stream{}, watch: map[chan change]struct{}{},
+		streams: map[string]*stream{}, groups: map[string]*group{}, watch: map[chan change]struct{}{},
 	}
 	e.meter = newMeter(e)
 	if err := e.resume(); err != nil {
 		cancel()
 		return nil, err
 	}
-	e.loops.Add(2)
+	e.loops.Add(3)
 	go e.statusLoop()
 	go e.usageLoop()
+	go e.groupLoop()
 	return e, nil
 }
 
@@ -105,6 +109,11 @@ func (e *Engine) Close() {
 	}
 	e.cancel()
 	e.loops.Wait()
+	for _, g := range e.groupList() {
+		g.mu.Lock()
+		g.hist.close()
+		g.mu.Unlock()
+	}
 }
 
 func version() string {
@@ -351,6 +360,12 @@ func (e *Engine) find(sid, aid string) (*stream, *run, *apiError) {
 type savedConfig struct {
 	Version int           `json:"version"`
 	Streams []savedStream `json:"streams"`
+	Groups  []savedGroup  `json:"groups,omitempty"`
+}
+
+type savedGroup struct {
+	ID   string    `json:"id"`
+	Spec GroupSpec `json:"spec"`
 }
 
 type savedStream struct {
@@ -362,6 +377,13 @@ type savedStream struct {
 type savedAnalysis struct {
 	ID   string       `json:"id"`
 	Spec AnalysisSpec `json:"spec"`
+}
+
+// saveConfig is saveLocked for callers that do not hold e.mu.
+func (e *Engine) saveConfig() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.saveLocked()
 }
 
 // saveLocked writes the configuration as given, so that a restart resumes
@@ -383,6 +405,11 @@ func (e *Engine) saveLocked() {
 			r.mu.Unlock()
 		}
 		cfg.Streams = append(cfg.Streams, ss)
+	}
+	for _, g := range e.groupList() {
+		g.mu.Lock()
+		cfg.Groups = append(cfg.Groups, savedGroup{ID: g.id, Spec: g.spec})
+		g.mu.Unlock()
 	}
 	if err := writeJSONFile(e.opts.StateFile, cfg); err != nil {
 		log.Printf("engine: saving the configuration: %v", err)
@@ -419,6 +446,11 @@ func (e *Engine) resume() error {
 				continue
 			}
 			n++
+		}
+	}
+	for _, sg := range cfg.Groups {
+		if _, err := e.putGroup(sg.ID, sg.Spec); err != nil {
+			log.Printf("engine: resume: group %s: %s", sg.ID, err.message)
 		}
 	}
 	e.resumed = true

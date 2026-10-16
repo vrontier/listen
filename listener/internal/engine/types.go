@@ -12,7 +12,7 @@ import (
 // API version served.
 const (
 	APIMajor = 1
-	APIMinor = 0
+	APIMinor = 1 // 1.1: groups
 )
 
 // Limits are set by the engine's operator when it starts; the engine
@@ -24,12 +24,14 @@ type Limits struct {
 	SubscriptionsPerAnalysis int `json:"subscriptions_per_analysis"`
 	MaxSampleRate            int `json:"max_sample_rate"`
 	MaxBitrateKbps           int `json:"max_bitrate_kbps"`
+	Groups                   int `json:"groups"`
+	MembersPerGroup          int `json:"members_per_group"`
 }
 
 // DefaultLimits are the limits without flags.
 var DefaultLimits = Limits{
 	Streams: 40, AnalysesPerStream: 8, RulesPerAnalysis: 16, SubscriptionsPerAnalysis: 4,
-	MaxSampleRate: 48000, MaxBitrateKbps: 512,
+	MaxSampleRate: 48000, MaxBitrateKbps: 512, Groups: 20, MembersPerGroup: 8,
 }
 
 // Stream modes.

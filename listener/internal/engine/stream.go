@@ -177,7 +177,7 @@ func (s *stream) wanted() bool {
 			return true
 		}
 	}
-	return false
+	return s.e.groupWants(s.id) // a running group keeps its members' streams connected
 }
 
 // supervise connects and disconnects the stream as it is wanted.

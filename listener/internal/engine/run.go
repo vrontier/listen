@@ -46,8 +46,9 @@ type run struct {
 	stop      chan struct{}
 	done      chan struct{}
 	started   time.Time
-	busyNs    atomic.Int64 // time spent analysing
-	dropped   atomic.Int64 // frames lost because the queue was full
+	busyNs    atomic.Int64               // time spent analysing
+	observers atomic.Pointer[[]*gmember] // groups this analysis is a member of
+	dropped   atomic.Int64               // frames lost because the queue was full
 	lastUsage Usage
 
 	// Owned by the worker while it runs; replaced only while paused.
@@ -172,7 +173,10 @@ func (r *run) emit(m events.Message) {
 
 // out records m in the snapshot and hands it to the subscribers that want
 // its type. A subscriber whose queue is full misses it.
-func (r *run) out(m events.Message) { r.deliver(r.hub, m) }
+func (r *run) out(m events.Message) {
+	r.deliver(r.hub, m)
+	r.notifyObservers(m)
+}
 
 func (r *run) deliver(hb *hub.Hub, m events.Message) {
 	hb.Broadcast(m)

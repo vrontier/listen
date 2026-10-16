@@ -429,3 +429,120 @@ func TestProbeFile(t *testing.T) {
 		t.Errorf("probe of a loopback address: %+v", res)
 	}
 }
+
+func TestGroupActivity(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	w1, w2 := filepath.Join(dir, "one.wav"), filepath.Join(dir, "two.wav")
+	writeWAV(t, w1, 22050, 20)
+	writeWAV(t, w2, 22050, 20)
+	e, c := startEngine(t, dir)
+	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: w1, SampleRate: 22050}, nil)
+	c.do("PUT", "/v1/streams/s-2", StreamSpec{Input: w2, SampleRate: 22050}, nil)
+	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{}, nil)
+	c.do("PUT", "/v1/streams/s-2/analyses/a-2", map[string]any{}, nil)
+
+	var info map[string]any
+	c.do("GET", "/v1/engine", nil, &info)
+	if api := info["api"].(map[string]any); api["minor"].(float64) != 1 {
+		t.Fatalf("api %v", api)
+	}
+
+	var er map[string]map[string]any
+	if st := c.do("PUT", "/v1/groups/g-1", GroupSpec{Members: []GroupMember{{Stream: "s-1", Analysis: "a-1"}}}, &er); st != 422 {
+		t.Errorf("a group of one: %d", st)
+	}
+	if st := c.do("PUT", "/v1/groups/g-1", GroupSpec{
+		Members: []GroupMember{{Stream: "s-1", Analysis: "a-1"}, {Stream: "s-2", Analysis: "a-2"}}, Analyses: []string{"clock"},
+	}, &er); st != 422 || er["error"]["errors"].([]any)[0].(map[string]any)["code"] != "needs_station_time" {
+		t.Errorf("clock without station time: %d %v", st, er)
+	}
+	lat, lon := 45.0, 7.5
+	var gv map[string]any
+	if st := c.do("PUT", "/v1/groups/g-1", GroupSpec{
+		Members: []GroupMember{{Stream: "s-1", Analysis: "a-1", Lat: &lat, Lon: &lon}, {Stream: "s-2", Analysis: "a-2"}}, Label: "rev-1",
+	}, &gv); st != 200 || gv["state"] != "idle" {
+		t.Fatalf("PUT group: %d %v", st, gv)
+	}
+
+	// A subscription to the group connects both on-demand streams.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	// The first seconds come before the streams have connected: gaps.
+	acts := c.sse(ctx, "/v1/groups/g-1/events?types=group.activity", "group.activity", 12)
+	if len(acts) < 12 {
+		t.Fatalf("got %d activity events", len(acts))
+	}
+	last := acts[len(acts)-1]
+	if last["source"] != "g-1" || last["time_source"] != "wall" || last["label"] != "rev-1" {
+		t.Errorf("envelope %v", last)
+	}
+	both := 0
+	for _, ev := range acts {
+		present := 0
+		for _, m := range ev["payload"].(map[string]any)["members"].([]any) {
+			mm := m.(map[string]any)
+			if mm["present"] == true {
+				present++
+				if _, ok := mm["flux"]; !ok {
+					t.Errorf("present member without flux: %v", mm)
+				}
+			}
+		}
+		if present == 2 {
+			both++
+		}
+	}
+	if both < 5 {
+		t.Errorf("seconds with both members heard: %d of %d", both, len(acts))
+	}
+
+	var state map[string]json.RawMessage
+	c.do("GET", "/v1/groups/g-1/state", nil, &state)
+	if string(state["status"]) == "null" || len(state["activity"]) < 10 {
+		t.Errorf("state: status %s, activity %d bytes", state["status"], len(state["activity"]))
+	}
+	var hist struct{ Events []json.RawMessage }
+	c.do("GET", "/v1/groups/g-1/history/events?type=group.activity", nil, &hist)
+	if len(hist.Events) < 3 {
+		t.Errorf("history: %d events", len(hist.Events))
+	}
+
+	// Deleting a member's analysis: the group goes on, the member is removed.
+	c.do("DELETE", "/v1/streams/s-2/analyses/a-2", nil, nil)
+	waitFor(t, "the member to be removed", func() bool {
+		var g map[string]any
+		c.do("GET", "/v1/groups/g-1", nil, &g)
+		return g["members"].([]any)[1].(map[string]any)["state"] == MemberRemoved
+	})
+	if st := c.do("DELETE", "/v1/groups/g-1", nil, nil); st != 204 {
+		t.Errorf("DELETE group: %d", st)
+	}
+	_ = e
+}
+
+func TestCorrelationFindsLag(t *testing.T) {
+	rng := rand.New(rand.NewPCG(7, 8))
+	n := 900
+	sky := make([]float64, n+40)
+	for i := range sky {
+		sky[i] = rng.NormFloat64()
+		if i > 0 {
+			sky[i] += 0.5 * sky[i-1] // some memory, like real activity
+		}
+	}
+	a, b := make([]float64, n), make([]float64, n)
+	for k := 0; k < n; k++ {
+		a[k] = sky[k+20] + 0.3*rng.NormFloat64()
+		b[k] = sky[k+20-7] + 0.3*rng.NormFloat64() // b hears it 7 s later
+	}
+	b[100] = math.NaN() // an absent second is skipped
+	r, lag, used := bestLag(a, b, n-corrWindow, corrWindow, 0)
+	if lag != 7 || r < 0.8 || used < corrWindow-corrMaxLag { // late seconds have no partner yet
+		t.Errorf("r %.2f at lag %d over %d", r, lag, used)
+	}
+	br, _, _ := bestLag(a, b, n-corrWindow-baselineShift, corrWindow, baselineShift)
+	if math.Abs(br) > 0.3 {
+		t.Errorf("baseline r %.2f, want near 0", br)
+	}
+}

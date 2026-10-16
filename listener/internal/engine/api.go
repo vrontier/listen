@@ -49,6 +49,7 @@ func (e *Engine) Handler() http.Handler {
 	m.HandleFunc("DELETE /v1/streams/{s}/analyses/{a}/memories/{key}", e.deleteMemory)
 	m.HandleFunc("POST /v1/validate/analysis", e.validate)
 	m.HandleFunc("POST /v1/probes", e.handleProbe)
+	e.groupRoutes(m)
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeErr(w, errNotFound("resource")) })
 	return m
 }
@@ -103,7 +104,7 @@ func purge(r *http.Request) bool { return r.URL.Query().Get("purge") == "true" }
 // --- engine and changes ---
 
 func (e *Engine) getEngine(w http.ResponseWriter, r *http.Request) {
-	counts := map[string]int{"streams": 0, "connected": 0, "analyses": 0}
+	counts := map[string]int{"streams": 0, "connected": 0, "analyses": 0, "groups": len(e.groupList())}
 	e.mu.Lock()
 	counts["streams"] = len(e.streams)
 	streams := make([]*stream, 0, len(e.streams))
@@ -130,6 +131,7 @@ func (e *Engine) getEngine(w http.ResponseWriter, r *http.Request) {
 		"capabilities": map[string]any{
 			"rule_kinds": []string{RuleLine, RuleComb}, "detectors": []any{},
 			"file_inputs": e.opts.AllowFiles, "address_check": check,
+			"station_time": false, "group_analyses": groupAnalyses,
 		},
 		"counts": counts,
 		"host":   map[string]int{"cores": hostCores(), "memory_mb": hostMemoryMB()},
