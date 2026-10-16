@@ -39,7 +39,7 @@ What `deploy/install.sh` sets up there:
 | Programs | `/usr/local/bin/low-workbench`, `/usr/local/bin/low-standin` |
 | Engine | `low-engine.service`, socket `/run/low-engine/control.sock`; for now the stand-in, with made-up data |
 | Workbench | `low-workbench.service` on 127.0.0.1:8110, catalogue `/var/lib/low/workbench.db` |
-| Settings | `/etc/low/workbench.env` (base address, mail server, the sealing key of language-model keys); created once, then kept. Back up its `LOW_KEYS_SECRET` apart from the catalogue: without it, saved keys cannot be opened |
+| Settings | `/etc/low/workbench.env` (base address, mail server, the sealing key of language-model keys); created once, then kept. Back up its `LOW_KEYS_SECRET` apart from the catalogue: without it, saved keys cannot be opened. `LOW_PUBLISHING=on` and `LOW_LLM_KEYS=on` there turn on publishing and the keys page; both are off |
 | nginx | `/etc/nginx/sites-available/low.home.arpa` and `snippets/low-workbench-proxy.conf`; only the networks given in `deploy/local.mk` (`INTRANET_ALLOW`), plus the host itself |
 | TLS | key and signing request `/etc/ssl/home-arpa/low.{key,csr}`, made on the host. Until `low.crt`, signed by the internal CA, is installed there, the site is served over plain HTTP; the next deploy after that switches to HTTPS. |
 

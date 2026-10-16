@@ -208,6 +208,8 @@ A member creates tokens for programs and AI assistants. A token:
 
 ## Language-model keys
 
+**Decided** (2026-10-16): the language-model interpretation of analyses goes into the backlog. The keys page is switched off: no menu entry, `/account/keys` not found, unless the Workbench runs with `LOW_LLM_KEYS=on` (not set on the intranet). Keys saved before stay sealed in the catalogue. What follows stands for when it comes back.
+
 **Decided** (2026-10-14): a member who wants the language-model interpretation of their analyses registers their own API key, for the OpenAI API or the Anthropic API. The use is billed to the member's account with that provider; the Workbench handles no money.
 
 **Proposed:**
@@ -266,7 +268,7 @@ No user-written code or expressions run on the server: filters and motif definit
 | `/runs/<id>` | one run: when, revisions, its data set (what it holds, the files singly at their uncompressed size or together as one zip, delete) |
 | `/results` | own data sets (download, delete), disk space as a bar, memories, CPU, RAM and bandwidth against the caps |
 | `/account/tokens` | create and revoke tokens |
-| `/account/keys` | own API keys for the language-model interpretation |
+| `/account/keys` | own API keys for the language-model interpretation: switched off, in the backlog (decided 2026-10-16) |
 | `/library` | shared filter rule sets: taken out for the time being (decided 2026-10-16) |
 | `/research` | everything published |
 | `/research/<slug>` | a published research page |

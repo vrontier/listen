@@ -285,7 +285,7 @@ A **proposed** order that respects the first view:
 | 4b | MCP with the same tokens | 4 |
 | 5 | Defined motifs per analysis; captures and trial runs | the listener's defined-motif work |
 | 6 | Public research pages | 2; publishing is decided (at once, no review) |
-| 7 | Audio in the browser; the language-model interpretation | 2; questions 10 and 19 |
+| 7 | Audio in the browser; the language-model interpretation (in the backlog, decided 2026-10-16) | 2; questions 10 and 19 |
 | 8a | Groups in the control API (1.1) and the Workbench's group pages, against the stand-in | 0; [groups.md](groups.md) |
 | 8b | Engine: the group service with `activity` on wall time; then the premise test | 1a, 1b |
 | 8c | Engine: its own HTTP connection, station time, impulse times; then `clock` and `coincidence` | 8b, a positive premise test |

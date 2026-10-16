@@ -53,6 +53,10 @@ type Config struct {
 	// Publishing lets members publish analyses. Off, nothing new is
 	// published; what is published stays, and can be withdrawn.
 	Publishing bool
+	// LLMKeys offers the page for members' language-model keys. Off
+	// (the default), the page and its menu entry are gone; keys saved
+	// before stay sealed in the catalogue (in the backlog, 2026-10-16).
+	LLMKeys bool
 }
 
 // Server is the Workbench's web side.
@@ -205,10 +209,19 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /account/tokens", s.member(s.tokensPage))
 	m.HandleFunc("POST /account/tokens", s.member(s.tokenCreate))
 	m.HandleFunc("POST /account/tokens/{token}/revoke", s.member(s.tokenRevoke))
-	m.HandleFunc("GET /account/keys", s.member(s.keysPage))
-	m.HandleFunc("POST /account/keys/{provider}", s.member(s.keySave))
-	m.HandleFunc("POST /account/keys/{provider}/check", s.member(s.keyCheck))
-	m.HandleFunc("POST /account/keys/{provider}/delete", s.member(s.keyDelete))
+	keys := func(h http.HandlerFunc) http.HandlerFunc {
+		return s.member(func(w http.ResponseWriter, r *http.Request) {
+			if !s.cfg.LLMKeys {
+				s.notFound(w, r)
+				return
+			}
+			h(w, r)
+		})
+	}
+	m.HandleFunc("GET /account/keys", keys(s.keysPage))
+	m.HandleFunc("POST /account/keys/{provider}", keys(s.keySave))
+	m.HandleFunc("POST /account/keys/{provider}/check", keys(s.keyCheck))
+	m.HandleFunc("POST /account/keys/{provider}/delete", keys(s.keyDelete))
 
 	stream := func(h http.HandlerFunc) http.HandlerFunc { return s.bearer(catalogue.ScopeStream, h) }
 	m.HandleFunc("GET /api/v1/analyses", stream(s.apiAnalyses))
@@ -374,11 +387,12 @@ type page struct {
 	Error         string
 	EngineProblem string
 	Research      bool // something is published, so the menu offers it
+	Keys          bool // the language-model keys page is offered
 	Data          any
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name, title string, data any) {
-	p := page{Site: s.cfg.SiteName, Title: title, Data: data}
+	p := page{Site: s.cfg.SiteName, Title: title, Data: data, Keys: s.cfg.LLMKeys}
 	if pub, err := s.db.AnyPublished(r.Context()); err == nil {
 		p.Research = pub
 	}

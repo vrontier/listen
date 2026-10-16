@@ -40,7 +40,19 @@ func TestLanguageModelKeys(t *testing.T) {
 	r.srv.cfg.LLM = &llm.Checker{Base: map[string]string{"anthropic": prov.URL, "openai": prov.URL}}
 
 	member := r.loginAs("m@example.org")
-	_, page, _ := r.get(member, "/account/keys")
+	// Off by default: no page, no menu entry.
+	if code, _, _ := r.get(member, "/account/keys"); code != 404 {
+		t.Fatalf("keys page while off: %d", code)
+	}
+	if _, page, _ := r.get(member, "/analyses"); strings.Contains(page, `href="/account/keys"`) {
+		t.Fatal("menu offers keys while off")
+	}
+	r.srv.cfg.LLMKeys = true
+	_, page, _ := r.get(member, "/analyses")
+	if !strings.Contains(page, `href="/account/keys"`) {
+		t.Fatal("menu does not offer keys while on")
+	}
+	_, page, _ = r.get(member, "/account/keys")
 	csrf := csrfOf(t, page)
 	if !strings.Contains(page, "no sealing key set") {
 		t.Fatal("the page does not say that keys cannot be kept")
