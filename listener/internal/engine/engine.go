@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/vrontier/listen/listener/internal/fetch"
+	"github.com/vrontier/listen/listener/internal/ingest"
 )
 
 // Options configure the engine process.
@@ -36,6 +37,10 @@ type Options struct {
 	Limits       Limits
 	Version      string
 	TestHooks    []string // callers that get the test routes (development, loopback only)
+	// Ingest is the socket of listen-ingest on this machine: streams are
+	// read through it, and the engine connects to no station itself.
+	// Empty: the engine connects itself (development).
+	Ingest string
 }
 
 // DefaultCaller is the caller's name when none is given.
@@ -47,7 +52,8 @@ type Engine struct {
 	instance string
 	started  time.Time
 	policy   *fetch.Policy
-	client   *http.Client // opens streams; every dial is checked
+	client   *http.Client   // opens streams itself; every dial is checked
+	ingest   *ingest.Client // or reads them through the ingest
 	ctx      context.Context
 	cancel   context.CancelFunc
 	probes   *probeGate
@@ -103,6 +109,9 @@ func New(opts Options) (*Engine, error) {
 	}
 	e.meter = newMeter(e)
 	e.client = e.policy.Client(opts.Version)
+	if opts.Ingest != "" {
+		e.ingest = ingest.NewClient(opts.Ingest)
+	}
 	for i, n := range opts.Callers {
 		c := newCaller(e, n, stateFileFor(opts.StateFile, n, i == 0))
 		for _, h := range opts.TestHooks {
@@ -338,8 +347,11 @@ func (e *Engine) usageLoop() {
 	}
 }
 
-// openFeed opens a stream address: the engine connects itself, checking
-// every address it dials.
+// openFeed opens a stream address: through the ingest when there is one,
+// otherwise the engine connects itself, checking every address it dials.
 func (e *Engine) openFeed(ctx context.Context, input string, n *atomic.Int64) (io.ReadCloser, string, string, error) {
+	if e.ingest != nil {
+		return e.ingest.Open(ctx, input, n)
+	}
 	return fetch.Open(ctx, e.client, "listen-engine/"+e.opts.Version, input, n)
 }

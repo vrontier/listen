@@ -203,8 +203,11 @@ func (s *stream) viewOf(withInput bool) StreamView {
 		DelayMs: int(s.src.delay.Load()), Analyses: ids, Usage: s.lastUsage,
 		Shared: shared, Source: "network",
 	}
-	if !isURL(s.input) {
+	switch {
+	case !isURL(s.input):
 		v.Source = "file"
+	case s.c.e.ingest != nil:
+		v.Source = "ingest"
 	}
 	if state != StateConnected && state != StateBuffering {
 		v.DelayMs = 0

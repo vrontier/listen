@@ -39,6 +39,7 @@ func main() {
 		allowPrivate = flag.Bool("allow-private", false, "accept stream addresses on private networks (an intranet installation, tests)")
 		allowFiles   = flag.Bool("allow-files", false, "accept file paths as stream inputs, looped in real time (development, tests)")
 		testHooks    = flag.Bool("test-hooks", false, "give callers served on a loopback port the test routes (POST …/analyses/{a}/fail); never on a socket")
+		ingestSock   = flag.String("ingest", "", "read stations through listen-ingest on this socket (e.g. /run/listen-ingest/feeds.sock); empty: connect itself")
 	)
 	var allowHosts list
 	var callers list
@@ -82,6 +83,7 @@ func main() {
 	e, err := engine.New(engine.Options{
 		MemoryDir: *memDir, StateFile: *stateFile, Callers: names, FFmpeg: *ffmpeg,
 		AllowPrivate: *allowPrivate, AllowFiles: *allowFiles, AllowHosts: allowHosts, Limits: lim, TestHooks: hooks,
+		Ingest: *ingestSock,
 	})
 	if err != nil {
 		log.Fatal(err)

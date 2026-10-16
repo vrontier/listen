@@ -7,8 +7,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"io"
 	"math"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -16,10 +18,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/vrontier/listen/listener/internal/fetch"
+	"github.com/vrontier/listen/listener/internal/ingest"
 )
 
 var _ = http.StatusOK
@@ -866,4 +870,108 @@ func TestFirstUsageWindowIsReported(t *testing.T) {
 	if sv.Usage.InKbps <= 0 || sv.Usage.InMeasured == nil || !*sv.Usage.InMeasured {
 		t.Errorf("first window: %+v", sv.Usage)
 	}
+}
+
+func TestThroughTheIngest(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	mp3 := filepath.Join(dir, "a.mp3")
+	if out, err := exec.Command("ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=22050:duration=60",
+		"-c:a", "libmp3lame", "-b:a", "64k", mp3).CombinedOutput(); err != nil {
+		t.Skipf("no mp3 encoder: %v %s", err, out)
+	}
+	// The station: real time, counting its connections.
+	var conns atomic.Int64
+	station := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conns.Add(1)
+		b, _ := os.ReadFile(mp3)
+		w.Header().Set("Content-Type", "audio/mpeg")
+		for i := 0; i < len(b); i += 400 {
+			if _, err := w.Write(b[i:min(i+400, len(b))]); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+	}))
+	defer station.Close()
+	host := strings.TrimPrefix(station.URL, "http://")
+
+	sockDir, _ := os.MkdirTemp("/tmp", "ing")
+	defer os.RemoveAll(sockDir)
+	sock := filepath.Join(sockDir, "s")
+	startIng := func() func() {
+		ln, err := net.Listen("unix", sock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in := ingest.New(ingest.Options{Policy: fetch.NewPolicy(false, false, host), IdleAfter: time.Second})
+		srv := &http.Server{Handler: in.Handler()}
+		go srv.Serve(ln)
+		return func() { srv.Close(); in.Close(); os.Remove(sock) }
+	}
+	stopIng := startIng()
+
+	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), AllowHosts: []string{host}, Ingest: sock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(e.Caller(DefaultCaller).Handler())
+	defer func() { e.Close(); srv.Close() }()
+	c := client{t, srv.URL}
+	url := station.URL + "/a.mp3"
+
+	// Another consumer of the ingest (the Observatory, on ionos) holds the
+	// station; the engine's probe is answered from that connection and does
+	// not tell that anyone else reads it.
+	hold, _, _, err := ingest.NewClient(sock).Open(context.Background(), url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go io.Copy(io.Discard, hold)
+	var pr ProbeResult
+	c.do("POST", "/v1/probes", ProbeRequest{Input: url, ListenS: 2}, &pr)
+	if !pr.OK || pr.Codec != "mp3" || pr.Shared || pr.ContentType == nil || *pr.ContentType != "audio/mpeg" {
+		t.Errorf("probe through the ingest: %+v", pr)
+	}
+	if n := conns.Load(); n != 1 {
+		t.Errorf("%d connections to the station after the probe", n)
+	}
+
+	// The engine's stream joins the same connection.
+	var sv StreamView
+	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: url, SampleRate: 22050, Mode: Continuous}, &sv)
+	if sv.Source != "ingest" {
+		t.Errorf("source %q", sv.Source)
+	}
+	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if got := c.sse(ctx, "/v1/streams/s-1/analyses/a-1/events?types=signal.spectrum", "signal.spectrum", 5); len(got) < 5 {
+		t.Fatalf("spectra through the ingest: %d", len(got))
+	}
+	hold.Close()
+
+	if n := conns.Load(); n != 1 {
+		t.Errorf("%d connections to the station", n)
+	}
+
+	// The ingest goes away: reconnecting, ingest_unavailable; and back.
+	stopIng()
+	waitFor(t, "ingest_unavailable", func() bool {
+		var now StreamView
+		c.do("GET", "/v1/streams/s-1", nil, &now)
+		return now.State == StateReconnecting && now.LastError != nil && now.LastError.Code == "ingest_unavailable"
+	})
+	stopIng = startIng()
+	defer stopIng()
+	waitFor(t, "the stream to come back", func() bool {
+		var now StreamView
+		c.do("GET", "/v1/streams/s-1", nil, &now)
+		return now.State == StateConnected
+	})
 }
