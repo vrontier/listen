@@ -188,13 +188,12 @@ func checkTexts(tf *textsForm, errs map[string]string) {
 	}
 }
 
-// ratesOf are the decode rates a member may choose for a probed stream:
-// only the rate in use when the address is read already on this server
-// (the engine shares that connection and decodes it at one rate).
+// ratesOf are the decode rates a member may choose for a probed stream.
+// Through listen-ingest the engine decodes one connection at as many rates
+// as its streams ask for, so an address read already does not fix the
+// rate (engine 0.2.0+3f16005; an engine connecting itself, in development,
+// answers 409 rate_conflict instead, which the registration explains).
 func ratesOf(res engine.ProbeResult) []int {
-	if res.Shared && res.SampleRate > 0 {
-		return []int{res.SampleRate}
-	}
 	return ratesFor(res.SampleRate)
 }
 

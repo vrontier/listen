@@ -28,7 +28,7 @@
   {{else}}
     <div class="note ok-note">
       <p><strong>The stream answers.</strong> {{.Probe.Codec}}, {{.Probe.SampleRate}} Hz, {{.Probe.Channels}} channel{{if ne .Probe.Channels 1}}s{{end}}, {{.Probe.BitrateKbps}} kbit/s, level {{.Probe.LevelDB}} dB{{with .Probe.ContentType}}; its server sends it as {{.}}{{end}}.</p>
-      {{if .Probe.Shared}}<p class="meta">This stream is read on this server already, at {{.Probe.SampleRate}} Hz. The engine shares that one connection, so the station sees no second one, and the rate is fixed to it.</p>{{end}}
+      {{if .Probe.Shared}}<p class="meta">This stream is read on this server already. The Workbench shares that one connection, so the station sees no second one; any rate below can be chosen.</p>{{end}}
     </div>
 
     <fieldset>

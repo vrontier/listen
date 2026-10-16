@@ -32,7 +32,7 @@ Not part of version 1.0: audio (relay and captures), the language-model interpre
 **Decided (engine)** (2026-10-16, with the maintainer's go; the Workbench's answers accepted): one engine per host serves several callers, one socket each, set when the engine starts (`-caller name=/path.sock[:mode]`; on the intranet host `workbench` on `/run/listen-engine/control.sock`, 0660, group `listen-engine`, and `internal` on `internal.sock`, 0600). The socket a request arrives on is the caller; nothing in a request can claim another.
 
 - **Each caller has its own namespace:** its streams, analyses and groups, its `GET /v1/streams` and `GET /v1/events`, its saved configuration and its memories (`<memory-dir>/<caller>/…`). The Workbench sees only its own, so "delete what it does not know" stays safe.
-- **Sources are shared across callers:** inside the engine a source is one address at one decode rate, with one connection, one decode and one spectrum. Every caller's stream of that address attaches to it; the source is connected while any stream on it wants it. Each stream keeps its own analyses and its own view.
+- **Sources are shared across callers:** inside the engine a source is one address at one decode rate, with one decode and one spectrum. Every caller's stream of that address and rate attaches to it; the source runs while any stream on it wants it. Each stream keeps its own analyses and its own view. **Several rates on one connection** (engine `0.2.0+3f16005`, 2026-10-16): through `listen-ingest`, streams of one address at different rates are decodes of their own on the ingest's one connection; `shared` counts the streams on the same decode (address and rate), and a stream at another rate pays for its own decode.
 - **Limits hold for the whole engine** (`"limits_scope": "engine"` in `GET /v1/engine`); its `counts` are the caller's.
 - A caller learns nothing about the others beyond `shared`, the number of streams on a source.
 
@@ -415,7 +415,7 @@ The engine connects, listens for `listen_s` seconds (default 10, at most 30) and
 
 - `ok` is false if the address is not allowed, nothing answers, the content is not audio, it cannot be decoded, the bit rate is above `limits.max_bitrate_kbps`, or only silence arrived. `problems` then lists `code` and `message` for each reason; among the codes `address_not_allowed`, `bitrate`, `playlist` and `not_audio`.
 - **The bit rate** is the header's when it gives one; otherwise (lossless streams such as FLAC) the engine measures it from the bytes received against the audio decoded, and refuses above the limit with `bitrate`. Checked on the intranet host: a lossless reference stream measured 1691 kbit/s and was refused.
-- **An address read already** (by another caller's stream): **decided** (2026-10-16), the engine opens no connection and answers `ok: true`, `shared: true` and the rate the source is decoded at as `sample_rate`; codec and bit rate only if known. The Workbench then offers only that rate.
+- **An address read already** (by another caller's stream): **decided** (2026-10-16), the engine opens no connection and answers `ok: true`, `shared: true` and the rate the source is decoded at as `sample_rate`; codec and bit rate only if known. Through the ingest any rate can still be chosen (see the next point).
 - A probe is a connection to the operator's server. If a stream with this `input` already exists, the engine opens no connection and answers `"ok": false` with `exists` set to that stream's identifier; the Workbench then offers to join the shared stream. A running decode could not answer anyway: it delivers samples at the stream's chosen rate and knows nothing of the codec or the stream's own rate.
 - `codec`, `sample_rate`, `channels` and `bitrate_kbps` describe the stream as sent, as ffprobe reports them. `content_type` is what the stream's server says it sends (`audio/ogg`, `audio/mpeg`, `audio/flac`, …), since the engine opens the connection itself (engine `0.2.0`).
 - `station_time` is true when the stream carries timestamps of the receiving station (in 1.0 always false; from 1.1, once the engine reads them).
@@ -583,7 +583,7 @@ Every error has this body:
 |---|---|---|
 | 400 | `bad_request`, `unknown_field`, `bad_id` | the request cannot be read |
 | 404 | `not_found` | no such stream, analysis, motif or memory |
-| 409 | `immutable`, `duplicate_input`, `in_use`, `limit_reached`, `rate_conflict` | the request conflicts with what exists; `rate_conflict` (**decided** 2026-10-16): another caller already decodes the address at another rate, which the message names |
+| 409 | `immutable`, `duplicate_input`, `in_use`, `limit_reached`, `rate_conflict` | the request conflicts with what exists; `rate_conflict` (**decided** 2026-10-16): another caller already decodes the address at another rate, which the message names. Only from an engine that connects itself (development): through `listen-ingest` the engine decodes an address at as many rates as its streams ask for (engine `0.2.0+3f16005`, 2026-10-16) |
 | 422 | `invalid` | the settings were refused; `errors` lists why, as in validation |
 | 429 | `busy` | too many probes at once |
 | 503 | `starting`, `stopping` | the engine is not ready |
