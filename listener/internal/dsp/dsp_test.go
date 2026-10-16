@@ -101,3 +101,24 @@ func TestLinearBandsKeepNarrowLine(t *testing.T) {
 		t.Fatalf("max %.1f dB should keep the line's level, mean %.1f dB", max[5], mean[5])
 	}
 }
+
+func TestMedianInPlaceMatchesMedian(t *testing.T) {
+	rng := rand.New(rand.NewSource(56))
+	for trial := 0; trial < 20000; trial++ {
+		n := rng.Intn(140)
+		v := make([]float64, n)
+		for i := range v {
+			switch rng.Intn(3) {
+			case 0:
+				v[i] = float64(rng.Intn(5)) // many ties
+			default:
+				v[i] = -120 + 100*rng.Float64()
+			}
+		}
+		want := median(v)
+		got := medianInPlace(append([]float64(nil), v...))
+		if got != want {
+			t.Fatalf("n=%d: medianInPlace %v, median %v (%v)", n, got, want, v)
+		}
+	}
+}

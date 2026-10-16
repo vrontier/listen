@@ -210,12 +210,15 @@ func FindPeaks(magDB []float64, binHz, minHz, maxHz, minProm float64, limit int)
 		for j := max(k-span, 0); j < k-2; j++ {
 			window = append(window, magDB[j])
 		}
-		left := median(window)
+		left := medianInPlace(window)
+		if v-left < minProm {
+			continue // the other side cannot raise the prominence
+		}
 		window = window[:0]
 		for j := k + 3; j <= k+span && j < len(magDB); j++ {
 			window = append(window, magDB[j])
 		}
-		prom := v - math.Max(left, median(window))
+		prom := v - math.Max(left, medianInPlace(window))
 		if prom < minProm {
 			continue
 		}
@@ -306,6 +309,73 @@ func PeakEnergyFraction(mag []float64, binHz float64, lo, hi int, peaks []Spectr
 		}
 	}
 	return inPeaks / total
+}
+
+// medianInPlace is median without the copy: it reorders v. It selects the
+// middle element(s) instead of sorting, and returns exactly what median
+// returns.
+func medianInPlace(v []float64) float64 {
+	n := len(v)
+	if n == 0 {
+		return floorDB
+	}
+	m := n / 2
+	hi := selectNth(v, m)
+	if n%2 == 1 {
+		return hi
+	}
+	// After the selection everything before m is at most v[m]; the other
+	// middle element is the largest of them.
+	lo := v[0]
+	for _, x := range v[1:m] {
+		if x > lo {
+			lo = x
+		}
+	}
+	return (lo + hi) / 2
+}
+
+// selectNth reorders v so that v[k] is the element a sort would put there,
+// with nothing larger before it and nothing smaller after it, and returns
+// it (Hoare's quickselect, median-of-three pivot).
+func selectNth(v []float64, k int) float64 {
+	lo, hi := 0, len(v)-1
+	for lo < hi {
+		mid := lo + (hi-lo)/2
+		if v[mid] < v[lo] {
+			v[mid], v[lo] = v[lo], v[mid]
+		}
+		if v[hi] < v[lo] {
+			v[hi], v[lo] = v[lo], v[hi]
+		}
+		if v[hi] < v[mid] {
+			v[hi], v[mid] = v[mid], v[hi]
+		}
+		pivot := v[mid]
+		i, j := lo, hi
+		for i <= j {
+			for v[i] < pivot {
+				i++
+			}
+			for v[j] > pivot {
+				j--
+			}
+			if i <= j {
+				v[i], v[j] = v[j], v[i]
+				i++
+				j--
+			}
+		}
+		switch {
+		case k <= j:
+			hi = j
+		case k >= i:
+			lo = i
+		default:
+			return v[k]
+		}
+	}
+	return v[k]
 }
 
 func median(v []float64) float64 {

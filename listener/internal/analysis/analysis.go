@@ -35,7 +35,6 @@ const (
 // Analyzer is not safe for concurrent use; feed it from one goroutine.
 type Analyzer struct {
 	sampleRate int
-	hopSize    int     // 20 analysis frames per second
 	minHz      float64 // bottom of bands and shape (default 20 Hz)
 	maxHz      float64 // top of bands and shape: just below Nyquist
 	peakMinHz  float64
@@ -47,18 +46,13 @@ type Analyzer struct {
 	stamper *events.Stamper
 	onFrame func(latency time.Duration)
 
-	fft      *dsp.FFT
-	window   []float64
-	ring     []float64
-	scratch  []float64
-	mag      []float64
+	fe       *FrontEnd // for Feed; an engine hands frames to Analyse instead
+	mag      []float64 // of the frame being analysed
 	magDB    []float64
 	bands    *dsp.Bands
 	bandDB   []float64
 	prevBand []float64
 	bandNorm []float64
-	view     *viewBands // display bands, when the source configures them
-	pending  []float64
 	binHz    float64
 	lo, hi   int
 
@@ -86,6 +80,7 @@ type signalAcc struct {
 	n                                           int
 	rms, level, peak, zcr, cent, flux, ent, har float64
 	bands, view                                 []float64
+	viewSpec                                    *View // the view the view sums follow
 }
 
 // viewBands are the spectrogram's own bands (Options.View).
@@ -164,17 +159,11 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 	}
 	a := &Analyzer{
 		sampleRate: sampleRate,
-		hopSize:    (sampleRate + 19) / 20, // 1103 at 22.05 kHz: 20 frames/s
 		ignore:     ignore,
 		ignoreBase: make([]float64, len(ignore)),
 		emit:       emit,
 		stamper:    stamper,
-		fft:        dsp.NewFFT(fftSize),
-		window:     dsp.Hann(fftSize),
-		ring:       make([]float64, 0, fftSize),
-		scratch:    make([]float64, fftSize),
-		mag:        make([]float64, fftSize/2+1),
-		magDB:      make([]float64, fftSize/2+1),
+		fe:         NewFrontEnd(sampleRate, opt.View, false),
 		bandDB:     make([]float64, bandCount),
 		prevBand:   make([]float64, bandCount),
 		bandNorm:   make([]float64, bandCount),
@@ -189,15 +178,11 @@ func New(sampleRate int, stamper *events.Stamper, emit func(events.Message), opt
 	}
 	r := EffectiveRange(sampleRate, opt.MinHz, opt.MaxHz)
 	a.minHz, a.maxHz, a.peakMinHz, a.peakMaxHz = r.MinHz, r.MaxHz, r.PeakMinHz, r.PeakMaxHz
-	a.bands = dsp.NewBands(bandCount, a.minHz, a.maxHz, a.binHz, len(a.mag))
+	a.bands = dsp.NewBands(bandCount, a.minHz, a.maxHz, a.binHz, fftSize/2+1)
 	a.resonances = detect.NewResonanceTracker(detect.DefaultResonanceConfig(a.binHz))
 	a.lo = int(math.Ceil(a.minHz / a.binHz))
 	a.hi = int(a.maxHz / a.binHz)
 	a.sig.bands = make([]float64, bandCount)
-	if opt.View != nil {
-		a.view = newViewBands(*opt.View, float64(sampleRate)/2, a.binHz, len(a.mag))
-		a.sig.view = make([]float64, a.view.Bands)
-	}
 	a.Anchor(time.Now())
 	return a
 }
@@ -247,46 +232,24 @@ func (a *Analyzer) now() time.Time {
 func (a *Analyzer) SampleRate() int { return a.sampleRate }
 
 // Feed consumes mono float samples at the analyzer's sample rate.
-func (a *Analyzer) Feed(x []float32) {
-	for _, v := range x {
-		a.pending = append(a.pending, float64(v))
-	}
-	for len(a.pending) >= a.hopSize {
-		a.hop(a.pending[:a.hopSize])
-		a.pending = a.pending[a.hopSize:]
-	}
-	// Keep the backing array from growing without bound.
-	if cap(a.pending) > 16*a.hopSize {
-		a.pending = append([]float64(nil), a.pending...)
-	}
-}
+func (a *Analyzer) Feed(x []float32) { a.fe.Feed(x, a.Analyse) }
 
-func (a *Analyzer) hop(x []float64) {
-	a.samples += int64(len(x))
-	if len(a.ring) < fftSize {
-		a.ring = append(a.ring, x...)
-		if len(a.ring) < fftSize {
-			return
-		}
-		a.ring = a.ring[len(a.ring)-fftSize:]
-	} else {
-		copy(a.ring, a.ring[len(x):])
-		copy(a.ring[fftSize-len(x):], x)
-	}
+// Analyse runs the analysis on one frame of a front end: this analyzer's
+// own (Feed) or one shared by every analysis of an input. Frames must come
+// in order; frames that were lost leave a gap in time, nothing else.
+func (a *Analyzer) Analyse(fr *Frame) {
+	a.samples = fr.End
+	a.mag, a.magDB = fr.Mag, fr.MagDB
 	ts := a.now()
 	// The window is centred half an FFT before its newest sample.
 	pos := float64(a.samples-fftSize/2) / float64(a.sampleRate)
 	a.frame++
 
-	td := dsp.TimeDomain(x)
+	td := dsp.TimeDomain(fr.Hop)
 	levelDB := dsp.DB(td.RMS)
 	a.levelRange.Update(levelDB, levelDB)
 	energy := a.levelRange.Norm(levelDB)
 
-	a.fft.Magnitudes(a.ring, a.window, a.scratch, a.mag)
-	for k, m := range a.mag {
-		a.magDB[k] = dsp.DB(m)
-	}
 	shape := dsp.SpectralShape(a.mag, a.binHz, a.lo, a.hi)
 
 	// Bands, normalised against a range spanning the quieter bands (20th
@@ -375,11 +338,15 @@ func (a *Analyzer) hop(x []float64) {
 	for i, b := range a.bandNorm {
 		s.bands[i] += b
 	}
-	if v := a.view; v != nil {
-		v.update(a.mag)
-		for i, b := range v.db {
-			s.view[i] += v.rng.Norm(b)
+	if fr.ViewNorm != nil {
+		if s.viewSpec == nil || *s.viewSpec != *fr.View {
+			s.viewSpec, s.view = fr.View, make([]float64, len(fr.ViewNorm))
 		}
+		for i, b := range fr.ViewNorm {
+			s.view[i] += b
+		}
+	} else {
+		s.viewSpec, s.view = nil, nil
 	}
 	if a.frame%framesPerSignal == 0 {
 		a.emitSignal(ts, pos, energy)
@@ -430,7 +397,7 @@ func (a *Analyzer) emitSignal(ts time.Time, pos, energy float64) {
 		Harmonicity:      round(s.har/n, 3),
 	}))
 	var view *events.SpectrumView
-	if v := a.view; v != nil {
+	if v := s.viewSpec; v != nil {
 		vb := make([]float64, len(s.view))
 		for i := range vb {
 			vb[i] = round(s.view[i]/n, 2)
@@ -441,8 +408,8 @@ func (a *Analyzer) emitSignal(ts time.Time, pos, energy float64) {
 	a.emit(a.stamper.Stamp(events.TypeSpectrum, ts, pos, events.Spectrum{
 		MinHz: a.minHz, MaxHz: a.maxHz, Scale: "log", Bands: bands, Peaks: peaks, View: view,
 	}))
-	bandsBuf, viewBuf := s.bands, s.view
-	*s = signalAcc{bands: bandsBuf, view: viewBuf}
+	bandsBuf, viewBuf, spec := s.bands, s.view, s.viewSpec
+	*s = signalAcc{bands: bandsBuf, view: viewBuf, viewSpec: spec}
 }
 
 func (a *Analyzer) emitFeature(ts time.Time, pos, novelty float64) {
@@ -588,34 +555,17 @@ func (a *Analyzer) Tune(transientK float64, transientGap time.Duration) {
 	a.transients.Tune(transientK, transientGap)
 }
 
-// Samples is the number of samples fed so far, on the analyzer's timeline.
-func (a *Analyzer) Samples() int64 { return a.samples + int64(len(a.pending)) }
-
-// SeekTo moves the analyzer to sample n of its input's timeline, as after a
-// gap: what is pending is dropped and the window refills from the next
-// samples. Positions and the observation clock count on from n.
-func (a *Analyzer) SeekTo(n int64) {
-	a.pending = a.pending[:0]
-	a.ring = a.ring[:0]
-	a.samples = n
+// AnchorAt pins the observation clock: sample n of the input's timeline
+// was heard at t. For an analysis fed frames by a shared front end.
+func (a *Analyzer) AnchorAt(t time.Time, n int64) {
+	a.anchorTime = t
+	a.anchorSample = n
 }
 
-// SetView replaces the spectrogram's own bands (nil: the spectrogram shows
-// the analysis bands again). The analysis itself carries on.
-func (a *Analyzer) SetView(v *View) {
-	if v == nil {
-		a.view, a.sig.view = nil, nil
-		return
-	}
-	a.view = newViewBands(*v, float64(a.sampleRate)/2, a.binHz, len(a.mag))
-	a.sig.view = make([]float64, a.view.Bands)
-}
+// SetView replaces the spectrogram's own bands of the analyzer's front end
+// (nil: the spectrogram shows the analysis bands again). The analysis itself
+// carries on.
+func (a *Analyzer) SetView(v *View) { a.fe.SetView(v) }
 
 // ViewInEffect is the spectrogram view after defaults, or nil.
-func (a *Analyzer) ViewInEffect() *View {
-	if a.view == nil {
-		return nil
-	}
-	v := a.view.View
-	return &v
-}
+func (a *Analyzer) ViewInEffect() *View { return a.fe.View() }
