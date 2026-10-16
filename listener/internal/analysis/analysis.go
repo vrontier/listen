@@ -508,7 +508,7 @@ func newViewBands(o View, nyquist, binHz float64, nbins int) *viewBands {
 			o.MinHz = defaultMinHz
 		}
 	}
-	if o.MinHz < 0 || o.MinHz >= o.MaxHz/2 {
+	if o.MinHz < 0 || o.MinHz >= o.MaxHz {
 		o.MinHz = 0
 	}
 	v := &viewBands{View: o, db: make([]float64, o.Bands), rng: detect.NewAutoRange(40, 20*300)}
@@ -598,4 +598,24 @@ func (a *Analyzer) SeekTo(n int64) {
 	a.pending = a.pending[:0]
 	a.ring = a.ring[:0]
 	a.samples = n
+}
+
+// SetView replaces the spectrogram's own bands (nil: the spectrogram shows
+// the analysis bands again). The analysis itself carries on.
+func (a *Analyzer) SetView(v *View) {
+	if v == nil {
+		a.view, a.sig.view = nil, nil
+		return
+	}
+	a.view = newViewBands(*v, float64(a.sampleRate)/2, a.binHz, len(a.mag))
+	a.sig.view = make([]float64, a.view.Bands)
+}
+
+// ViewInEffect is the spectrogram view after defaults, or nil.
+func (a *Analyzer) ViewInEffect() *View {
+	if a.view == nil {
+		return nil
+	}
+	v := a.view.View
+	return &v
 }

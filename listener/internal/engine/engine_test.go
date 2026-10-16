@@ -1,0 +1,420 @@
+package engine
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
+	"math"
+	"math/rand/v2"
+	"net/http"
+	"net/http/httptest"
+	"net/netip"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestAddressPolicy(t *testing.T) {
+	p := newAddressPolicy(false, false)
+	p.own = func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("203.0.113.7")} }
+	p.resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
+		switch host {
+		case "public.example":
+			return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+		case "sneaky.example": // a public name for a private address
+			return []netip.Addr{netip.MustParseAddr("93.184.216.34"), netip.MustParseAddr("10.0.0.5")}, nil
+		case "self.example":
+			return []netip.Addr{netip.MustParseAddr("203.0.113.7")}, nil
+		}
+		return nil, errors.New("no such host")
+	}
+	cases := []struct{ in, want string }{
+		{"https://public.example/live.ogg", ""},
+		{"http://public.example:8000/stream", ""},
+		{"http://sneaky.example/s", "address_not_allowed"},
+		{"http://self.example/s", "address_not_allowed"},
+		{"http://127.0.0.1:8104/ws/audio", "address_not_allowed"},
+		{"http://[::1]/s", "address_not_allowed"},
+		{"http://169.254.169.254/latest/meta-data", "address_not_allowed"},
+		{"http://100.64.0.1/s", "address_not_allowed"},
+		{"http://[::ffff:10.0.0.1]/s", "address_not_allowed"},
+		{"http://localhost/s", "address_not_allowed"},
+		{"http://printer.local/s", "address_not_allowed"},
+		{"http://unknown.example/s", "no_answer"},
+		{"ftp://public.example/a", "protocol_not_allowed"},
+		{"file:///etc/passwd", "protocol_not_allowed"},
+		{"/etc/passwd", "protocol_not_allowed"},
+		{"concat:a|b", "protocol_not_allowed"},
+		{"http://user:pw@public.example/", "bad_address"},
+		{"http:///nohost", "bad_address"},
+	}
+	for _, c := range cases {
+		got, _ := p.check(context.Background(), c.in)
+		code := ""
+		if got != nil {
+			code = got.Code
+		}
+		if code != c.want {
+			t.Errorf("%s: got %q, want %q", c.in, code, c.want)
+		}
+	}
+	// Without a lookup (resuming), a name passes; addresses are still checked.
+	if pr := p.checkStatic("http://unknown.example/s"); pr != nil {
+		t.Errorf("static check of a name: %v", pr)
+	}
+	if pr := p.checkStatic("http://10.1.2.3/s"); pr == nil || pr.Code != "address_not_allowed" {
+		t.Errorf("static check of a private address: %v", pr)
+	}
+}
+
+func TestCheckAnalysis(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	c, errs, warns := checkAnalysis(32000, AnalysisSpec{}, DefaultLimits)
+	if len(errs) > 0 || len(warns) > 0 {
+		t.Fatalf("empty spec: %v %v", errs, warns)
+	}
+	if e := c.effective(); e.MinHz != 20 || e.MaxHz != 15964 || e.PeakMinHz != 40 || e.PeakMaxHz != 8707 || e.BinHz != 7.81 {
+		t.Errorf("defaults at 32 kHz: %+v", e)
+	}
+	spec := AnalysisSpec{
+		Settings: Settings{MinHz: f(800), MaxHz: f(12000)},
+		Rules:    []Rule{{Kind: RuleComb, Hz: 16.7, Odd: true, TolHz: f(4), DriftPercent: f(0.4)}},
+	}
+	c, errs, _ = checkAnalysis(32000, spec, DefaultLimits)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if got := c.spec.Rules[0].Text; got != "comb=16.7,odd,tol=4,drift=0.4" {
+		t.Errorf("rule text %q", got)
+	}
+	k1 := c.memoryKey()
+	spec.Rules[0].DriftPercent = f(0.5)
+	c2, _, _ := checkAnalysis(32000, spec, DefaultLimits)
+	if c2.memoryKey() == k1 || !validKey(k1) || !validKey(c2.memoryKey()) {
+		t.Errorf("memory keys %q %q", k1, c2.memoryKey())
+	}
+	bad := AnalysisSpec{
+		Settings: Settings{MinHz: f(9000), MaxHz: f(12000), TransientK: f(0)},
+		Rules:    []Rule{{Kind: "notch", Hz: 50}, {Kind: RuleLine, Hz: 1000, Odd: true}, {Kind: RuleLine, Hz: -1}},
+		Memory:   MemorySpec{Mode: "tape"},
+	}
+	_, errs, _ = checkAnalysis(32000, bad, DefaultLimits)
+	paths := map[string]bool{}
+	for _, e := range errs {
+		paths[e.Path] = true
+	}
+	for _, p := range []string{"settings.min_hz", "settings.transient_k", "rules[0].kind", "rules[1].odd", "rules[2].hz", "memory.mode"} {
+		if !paths[p] {
+			t.Errorf("no error at %s: %v", p, errs)
+		}
+	}
+	if _, errs, _ := checkAnalysis(32000, AnalysisSpec{Settings: Settings{MaxHz: f(16000)}}, DefaultLimits); len(errs) != 1 {
+		t.Errorf("max_hz above the top: %v", errs)
+	}
+}
+
+func TestCheckView(t *testing.T) {
+	v, fe := checkView(&ViewSpec{Scale: "linear"}, 32000)
+	if len(fe) > 0 || *v != (View{"linear", 0, 16000, 240}) {
+		t.Errorf("linear defaults: %+v %v", v, fe)
+	}
+	v, fe = checkView(&ViewSpec{Scale: "log"}, 22050)
+	if len(fe) > 0 || v.MinHz != 20 || v.MaxHz != 11025 {
+		t.Errorf("log defaults: %+v %v", v, fe)
+	}
+	zero, big := 0.0, 20000.0
+	if _, fe := checkView(&ViewSpec{Scale: "log", MinHz: &zero, MaxHz: &big}, 32000); len(fe) != 2 {
+		t.Errorf("bad log view: %v", fe)
+	}
+}
+
+// --- a running engine on a file ---
+
+func needFFmpeg(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+}
+
+// writeWAV writes seconds of a test signal: noise, a steady 1 kHz line and a
+// click every second, mono 16-bit at rate.
+func writeWAV(t *testing.T, path string, rate, seconds int) {
+	n := rate * seconds
+	var b bytes.Buffer
+	w := func(v any) { binary.Write(&b, binary.LittleEndian, v) }
+	b.WriteString("RIFF")
+	w(uint32(36 + 2*n))
+	b.WriteString("WAVEfmt ")
+	w(uint32(16))
+	w(uint16(1))
+	w(uint16(1))
+	w(uint32(rate))
+	w(uint32(2 * rate))
+	w(uint16(2))
+	w(uint16(16))
+	b.WriteString("data")
+	w(uint32(2 * n))
+	rng := rand.New(rand.NewPCG(1, 2))
+	for i := 0; i < n; i++ {
+		v := 0.05*rng.NormFloat64() + 0.2*math.Sin(2*math.Pi*1000*float64(i)/float64(rate))
+		if i%rate < rate/200 {
+			v += 0.8 * rng.NormFloat64()
+		}
+		w(int16(math.Max(-1, math.Min(1, v)) * 32000))
+	}
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type client struct {
+	t    *testing.T
+	base string
+}
+
+func (c client) do(method, path string, body any, out any) int {
+	c.t.Helper()
+	var rd *bytes.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		rd = bytes.NewReader(b)
+	} else {
+		rd = bytes.NewReader(nil)
+	}
+	req, _ := http.NewRequest(method, c.base+path, rd)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if out != nil {
+		json.NewDecoder(resp.Body).Decode(out)
+	}
+	return resp.StatusCode
+}
+
+// sse reads events from path until n of type typ arrived or the time is up.
+func (c client) sse(ctx context.Context, path, typ string, n int) []map[string]any {
+	c.t.Helper()
+	req, _ := http.NewRequestWithContext(ctx, "GET", c.base+path, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out []map[string]any
+	sc := bufio.NewScanner(resp.Body)
+	sc.Buffer(make([]byte, 1<<16), 1<<22)
+	for sc.Scan() {
+		line := sc.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		var env map[string]any
+		json.Unmarshal([]byte(line[6:]), &env)
+		if env["type"] == typ {
+			out = append(out, env)
+			if len(out) >= n {
+				break
+			}
+		}
+	}
+	return out
+}
+
+func startEngine(t *testing.T, dir string) (*Engine, client) {
+	t.Helper()
+	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), StateFile: filepath.Join(dir, "state.json"), AllowFiles: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(e.Handler())
+	t.Cleanup(func() { e.Close(); srv.Close() })
+	return e, client{t, srv.URL}
+}
+
+func waitFor(t *testing.T, what string, f func() bool) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		if f() {
+			return
+		}
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
+
+func TestStreamAndAnalyses(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	wav := filepath.Join(dir, "test.wav")
+	writeWAV(t, wav, 22050, 20)
+	e, c := startEngine(t, dir)
+
+	idle := 1
+	var sv StreamView
+	if st := c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: wav, SampleRate: 22050, IdleAfterS: &idle, View: &ViewSpec{Scale: "linear"}}, &sv); st != 200 || sv.State != StateIdle {
+		t.Fatalf("PUT stream: %d %+v", st, sv)
+	}
+	var av AnalysisView
+	if st := c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{"label": "rev-1"}, &av); st != 200 || av.Memory.Key == "" {
+		t.Fatalf("PUT analysis: %d %+v", st, av)
+	}
+
+	// A subscription connects the on-demand stream.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	spectra := c.sse(ctx, "/v1/streams/s-1/analyses/a-1/events?types=signal.spectrum", "signal.spectrum", 20)
+	if len(spectra) < 20 {
+		t.Fatalf("got %d spectra", len(spectra))
+	}
+	last := spectra[len(spectra)-1]
+	payload := last["payload"].(map[string]any)
+	view, _ := payload["view"].(map[string]any)
+	if last["source"] != "s-1/a-1" || view == nil || len(view["bands"].([]any)) != 240 {
+		t.Fatalf("spectrum: source %v, view %v", last["source"], view != nil)
+	}
+
+	// A second analysis, added while the stream runs (continuous now), lies
+	// on the same timeline.
+	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: wav, SampleRate: 22050, Mode: Continuous}, nil)
+	c.do("PUT", "/v1/streams/s-1/analyses/a-2", map[string]any{"settings": map[string]any{"min_hz": 500}}, nil)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	s1 := c.sse(ctx2, "/v1/streams/s-1/analyses/a-1/events?types=signal.spectrum", "signal.spectrum", 3)
+	s2 := c.sse(ctx2, "/v1/streams/s-1/analyses/a-2/events?types=signal.spectrum", "signal.spectrum", 3)
+	if len(s1) < 3 || len(s2) < 3 {
+		t.Fatalf("spectra %d %d", len(s1), len(s2))
+	}
+	p1, p2 := s1[2]["position_s"].(float64), s2[2]["position_s"].(float64)
+	if math.Abs(p1-p2) > 2 || p2 < 1 {
+		t.Errorf("positions not on one timeline: a-1 %.2f, a-2 %.2f", p1, p2)
+	}
+
+	// A change of range switches the memory; the old one is listed.
+	var av2 AnalysisView
+	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{"settings": map[string]any{"min_hz": 300}}, &av2)
+	if av2.Memory.Key == av.Memory.Key {
+		t.Errorf("memory key unchanged: %s", av2.Memory.Key)
+	}
+	var mems struct{ Memories []MemoryInfo }
+	c.do("GET", "/v1/streams/s-1/analyses/a-1/memories", nil, &mems)
+	if len(mems.Memories) != 2 {
+		t.Errorf("memories: %+v", mems.Memories)
+	}
+	var er map[string]map[string]any
+	if st := c.do("DELETE", "/v1/streams/s-1/analyses/a-1/memories/"+av2.Memory.Key, nil, &er); st != 409 || er["error"]["code"] != "in_use" {
+		t.Errorf("deleting the memory in use: %d %v", st, er)
+	}
+	if st := c.do("DELETE", "/v1/streams/s-1/analyses/a-1/memories/"+av.Memory.Key, nil, nil); st != 204 {
+		t.Errorf("deleting an old memory: %d", st)
+	}
+
+	// The snapshot carries the analysis's latest spectrum (it starts empty
+	// after the change of range).
+	waitFor(t, "a spectrum in the snapshot", func() bool {
+		var snap map[string]json.RawMessage
+		c.do("GET", "/v1/streams/s-1/analyses/a-1/state", nil, &snap)
+		return len(snap["spectrum"]) > 0 && string(snap["spectrum"]) != "null"
+	})
+	_ = e
+}
+
+func TestFailedAnalysisStaysAlone(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	wav := filepath.Join(dir, "test.wav")
+	writeWAV(t, wav, 22050, 20)
+	e, c := startEngine(t, dir)
+	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: wav, SampleRate: 22050, Mode: Continuous}, nil)
+	c.do("PUT", "/v1/streams/s-1/analyses/good", map[string]any{}, nil)
+	c.do("PUT", "/v1/streams/s-1/analyses/bad", map[string]any{}, nil)
+	beforeFeed = func(r *run) {
+		if r.id == "bad" {
+			panic("injected")
+		}
+	}
+	defer func() { beforeFeed = nil }()
+
+	var av AnalysisView
+	waitFor(t, "the bad analysis to fail", func() bool {
+		c.do("GET", "/v1/streams/s-1/analyses/bad", nil, &av)
+		return av.State == AnalysisFailed
+	})
+	if av.LastError == nil || av.LastError.Code != "analysis_failed" {
+		t.Errorf("last_error: %+v", av.LastError)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if got := c.sse(ctx, "/v1/streams/s-1/analyses/good/events", "signal.spectrum", 5); len(got) < 5 {
+		t.Fatalf("the good analysis stopped too: %d spectra", len(got))
+	}
+	var sv StreamView
+	c.do("GET", "/v1/streams/s-1", nil, &sv)
+	if sv.State != StateConnected {
+		t.Errorf("stream %s", sv.State)
+	}
+
+	// A PUT starts it again.
+	beforeFeed = nil
+	c.do("PUT", "/v1/streams/s-1/analyses/bad", map[string]any{}, &av)
+	waitFor(t, "the analysis to run again", func() bool {
+		var now AnalysisView // fresh: last_error is left out once cleared
+		c.do("GET", "/v1/streams/s-1/analyses/bad", nil, &now)
+		return now.State == AnalysisRunning && now.LastError == nil
+	})
+	_ = e
+}
+
+func TestResume(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	wav := filepath.Join(dir, "test.wav")
+	writeWAV(t, wav, 22050, 5)
+	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), StateFile: filepath.Join(dir, "state.json"), AllowFiles: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(e.Handler())
+	c := client{t, srv.URL}
+	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: wav, SampleRate: 22050, Mode: Continuous}, nil)
+	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{"label": "rev-9", "settings": map[string]any{"min_hz": 200}}, nil)
+	e.Close()
+	srv.Close()
+
+	e2, c2 := startEngine(t, dir)
+	if !e2.resumed {
+		t.Fatal("not resumed")
+	}
+	var av AnalysisView
+	if st := c2.do("GET", "/v1/streams/s-1/analyses/a-1", nil, &av); st != 200 || av.Label != "rev-9" || av.Effective.MinHz != 200 {
+		t.Fatalf("resumed analysis: %d %+v", st, av)
+	}
+	var info map[string]any
+	c2.do("GET", "/v1/engine", nil, &info)
+	if info["resumed"] != true {
+		t.Errorf("engine info: resumed %v", info["resumed"])
+	}
+}
+
+func TestProbeFile(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	wav := filepath.Join(dir, "test.wav")
+	writeWAV(t, wav, 22050, 3)
+	_, c := startEngine(t, dir)
+	var res ProbeResult
+	c.do("POST", "/v1/probes", ProbeRequest{Input: wav, ListenS: 2}, &res)
+	if !res.OK || res.Codec != "pcm_s16le" || res.SampleRate != 22050 || res.Channels != 1 || res.Silent {
+		t.Errorf("probe: %+v", res)
+	}
+	c.do("POST", "/v1/probes", ProbeRequest{Input: "http://127.0.0.1:9/x"}, &res)
+	if res.OK || len(res.Problems) == 0 || res.Problems[0].Code != "address_not_allowed" {
+		t.Errorf("probe of a loopback address: %+v", res)
+	}
+}
