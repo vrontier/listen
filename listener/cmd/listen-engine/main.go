@@ -38,6 +38,7 @@ func main() {
 		ffmpeg       = flag.String("ffmpeg", "ffmpeg", "ffmpeg binary")
 		allowPrivate = flag.Bool("allow-private", false, "accept stream addresses on private networks (an intranet installation, tests)")
 		allowFiles   = flag.Bool("allow-files", false, "accept file paths as stream inputs, looped in real time (development, tests)")
+		testHooks    = flag.Bool("test-hooks", false, "give callers served on a loopback port the test routes (POST …/analyses/{a}/fail); never on a socket")
 	)
 	var allowHosts list
 	var callers list
@@ -70,13 +71,17 @@ func main() {
 		specs = append(specs, cs)
 	}
 	names := make([]string, len(specs))
+	var hooks []string
 	for i, cs := range specs {
 		names[i] = cs.name
+		if *testHooks && cs.tcp {
+			hooks = append(hooks, cs.name)
+		}
 	}
 
 	e, err := engine.New(engine.Options{
 		MemoryDir: *memDir, StateFile: *stateFile, Callers: names, FFmpeg: *ffmpeg,
-		AllowPrivate: *allowPrivate, AllowFiles: *allowFiles, AllowHosts: allowHosts, Limits: lim,
+		AllowPrivate: *allowPrivate, AllowFiles: *allowFiles, AllowHosts: allowHosts, Limits: lim, TestHooks: hooks,
 	})
 	if err != nil {
 		log.Fatal(err)

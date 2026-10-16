@@ -277,6 +277,17 @@ func (r *run) fail(p any) {
 	r.emitStatus()
 }
 
+// failNow stops the analysis as a crash in it would (test hook).
+func (r *run) failNow(why string) {
+	r.pause()
+	now := time.Now().UTC()
+	r.mu.Lock()
+	r.failed = &Problem{Code: "analysis_failed", Message: why, At: &now}
+	r.mu.Unlock()
+	r.s.c.notifyAnalysis(r)
+	r.emitStatus()
+}
+
 // push queues a frame for the analysis, or drops it if the queue is full or
 // the analysis has stopped.
 func (r *run) push(fr *analysis.Frame) {

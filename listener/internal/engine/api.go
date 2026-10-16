@@ -49,6 +49,19 @@ func (c *caller) Handler() http.Handler {
 	m.HandleFunc("DELETE /v1/streams/{s}/analyses/{a}/memories/{key}", c.deleteMemory)
 	m.HandleFunc("POST /v1/validate/analysis", c.validate)
 	m.HandleFunc("POST /v1/probes", c.handleProbe)
+	if c.testHooks {
+		// Development and tests only (-test-hooks, loopback callers):
+		// make an analysis fail as a crash in it would.
+		m.HandleFunc("POST /v1/streams/{s}/analyses/{a}/fail", func(w http.ResponseWriter, r *http.Request) {
+			_, run, err := c.find(r.PathValue("s"), r.PathValue("a"))
+			if err != nil {
+				writeErr(w, err)
+				return
+			}
+			run.failNow("made to fail by a test hook")
+			writeJSON(w, 200, run.view())
+		})
+	}
 	c.groupRoutes(m)
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { writeErr(w, errNotFound("resource")) })
 	return m
@@ -120,7 +133,7 @@ func (c *caller) getEngine(w http.ResponseWriter, r *http.Request) {
 			counts["connected"]++
 		}
 	}
-	check := "initial"
+	check := "every_connection" // the engine dials itself and checks each address it dials
 	writeJSON(w, 200, map[string]any{
 		"api":            map[string]int{"major": APIMajor, "minor": APIMinor},
 		"engine_version": c.e.opts.Version,

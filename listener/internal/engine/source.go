@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"sort"
 	"sync"
@@ -30,7 +32,9 @@ type sourceConn struct {
 	cancel     context.CancelFunc // set while ffmpeg runs
 	srcDone    chan struct{}
 	lastWanted time.Time
-	retryAt    time.Time // after a refusal
+	retryAt    time.Time     // after a refusal
+	retryMax   time.Duration // of the connection running
+	contentTyp string        // as the server last sent it
 
 	feMu     sync.Mutex
 	fe       *analysis.FrontEnd        // one window and FFT for every stream on it
@@ -40,6 +44,12 @@ type sourceConn struct {
 	lastData atomic.Int64              // UnixNano of the latest samples
 	delay    atomic.Int64              // ms between observation and now
 	pid      atomic.Int64              // ffmpeg, 0 when not running
+	bytes    atomic.Int64              // bytes received, all connections
+	connBase atomic.Int64              // bytes before the running connection
+	connAt   atomic.Int64              // timeline when it started
+	rateDone atomic.Bool               // its bit rate was checked
+	rateB1   atomic.Int64              // bytes at the first point of the check, 0 before
+	rateD1   atomic.Int64              // samples decoded at that point
 	quit     chan struct{}
 	supDone  chan struct{}
 }
@@ -177,7 +187,7 @@ func (s *sourceConn) startSource(retryMax time.Duration) {
 	ctx, cancel := context.WithCancel(s.e.ctx)
 	done := make(chan struct{})
 	s.mu.Lock()
-	s.cancel, s.srcDone = cancel, done
+	s.cancel, s.srcDone, s.retryMax = cancel, done, retryMax
 	s.mu.Unlock()
 	s.setState(StateConnecting, nil)
 	cfg := source.Config{
@@ -193,7 +203,30 @@ func (s *sourceConn) startSource(retryMax time.Duration) {
 		OnProcess: func(pid int) { s.pid.Store(int64(pid)) },
 	}
 	if isURL(s.input) {
-		cfg.ProtocolWhitelist = protocolWhitelist
+		// The engine connects, every time, and counts what arrives.
+		cfg.Open = func(ctx context.Context) (io.ReadCloser, string, error) {
+			s.connBase.Store(s.bytes.Load())
+			s.connAt.Store(s.timeline.Load())
+			s.rateDone.Store(false)
+			s.rateB1.Store(0)
+			body, format, ct, err := s.e.open(ctx, s.input, &s.bytes)
+			s.mu.Lock()
+			s.contentTyp = ct
+			s.mu.Unlock()
+			var oe *openError
+			if errors.As(err, &oe) {
+				now := time.Now().UTC()
+				p := *oe.p
+				p.At = &now
+				if oe.refused {
+					return nil, "", &source.RefusedError{Err: refusal{&p}}
+				}
+				s.mu.Lock()
+				s.lastErr = &p
+				s.mu.Unlock()
+			}
+			return body, format, err
+		}
 	} else {
 		cfg.Realtime, cfg.Loop = true, true // development and tests
 	}
@@ -306,8 +339,9 @@ func (s *sourceConn) status() (state string, since time.Time, lastErr *Problem, 
 // on the source, each with its own view, and through them to their
 // analyses, each through its own queue.
 func (s *sourceConn) onSamples(x []float32) {
-	s.timeline.Add(int64(len(x)))
+	tl := s.timeline.Add(int64(len(x)))
 	s.lastData.Store(time.Now().UnixNano())
+	s.checkRate(tl)
 	s.feMu.Lock()
 	t0 := time.Now()
 	s.fe.Feed(x, func(fr *analysis.Frame) {
@@ -317,6 +351,50 @@ func (s *sourceConn) onSamples(x []float32) {
 	})
 	s.feBusyNs.Add(int64(time.Since(t0)))
 	s.feMu.Unlock()
+}
+
+// rateFrom and rateTo are the points of a connection's bit-rate check, in
+// seconds of decoded audio.
+const rateFrom, rateTo = 3, 8
+
+// checkRate refuses a connection whose bit rate is above the limit, once
+// per connection: the bytes received between 3 and 8 seconds of decoded
+// audio. Data read ahead into buffers, by a server's initial burst too, is
+// about the same at both points and cancels out.
+func (s *sourceConn) checkRate(timeline int64) {
+	if !isURL(s.input) || s.rateDone.Load() {
+		return
+	}
+	decoded := timeline - s.connAt.Load()
+	if decoded < rateFrom*int64(s.rate) {
+		return
+	}
+	if s.rateB1.Load() == 0 {
+		s.rateD1.Store(decoded)
+		s.rateB1.Store(s.bytes.Load() + 1) // +1: a byte count of 0 is "not yet"
+		return
+	}
+	if decoded < rateTo*int64(s.rate) {
+		return
+	}
+	s.rateDone.Store(true)
+	secs := float64(decoded-s.rateD1.Load()) / float64(s.rate)
+	kbps := float64(s.bytes.Load()-(s.rateB1.Load()-1)) * 8 / secs / 1000
+	limit := s.e.opts.Limits.MaxBitrateKbps
+	if kbps <= float64(limit) {
+		return
+	}
+	now := time.Now().UTC()
+	p := Problem{Code: "bitrate", Message: fmt.Sprintf("%.0f kbit/s is above the limit of %d kbit/s", kbps, limit), At: &now}
+	s.mu.Lock()
+	s.retryAt = time.Now().Add(s.retryMax)
+	cancel := s.cancel
+	s.mu.Unlock()
+	log.Printf("source %s: refused: %s", s.input, p.Message)
+	s.setState(StateRefused, &p)
+	if cancel != nil {
+		cancel() // ends the connection; the supervisor tries again after retry_max_s
+	}
 }
 
 // close stops the source for good.

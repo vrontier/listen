@@ -61,6 +61,14 @@ type Config struct {
 	// OnProcess is called with ffmpeg's process ID after every start, and
 	// with 0 when it has ended.
 	OnProcess func(pid int)
+
+	// Open, if set, opens a URL input for every start of ffmpeg instead of
+	// letting ffmpeg connect: ffmpeg decodes what Open returns from a pipe,
+	// with format as a hint ("" lets ffmpeg detect it). This lets the
+	// caller check every connection and count what arrives. An error that
+	// is a *RefusedError ends Run like a refusal by BeforeStart; any other
+	// error counts as a failed attempt and is retried.
+	Open func(ctx context.Context) (body io.ReadCloser, format string, err error)
 }
 
 // RefusedError is returned by Run when BeforeStart refused the input.
@@ -95,16 +103,27 @@ func Duration(ffprobe, path string) (time.Duration, error) {
 // IsURL reports whether the input should be treated as a network stream.
 func IsURL(in string) bool { return strings.Contains(in, "://") }
 
-func (c Config) args() []string {
+func (c Config) args(format string) []string {
 	a := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
-	if IsURL(c.Input) {
+	input := c.Input
+	switch {
+	case c.Open != nil:
+		// The caller holds the connection; ffmpeg reads a pipe only, and
+		// looks at no more than a second of it before decoding, so that
+		// what the caller counts is close to what ffmpeg decodes.
+		a = append(a, "-protocol_whitelist", "pipe", "-probesize", "65536", "-analyzeduration", "1000000")
+		if format != "" {
+			a = append(a, "-f", format)
+		}
+		input = "pipe:0"
+	case IsURL(c.Input):
 		if c.ProtocolWhitelist != "" {
 			a = append(a, "-protocol_whitelist", c.ProtocolWhitelist)
 		}
 		a = append(a,
 			"-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_on_network_error", "1",
 			"-reconnect_delay_max", "10", "-rw_timeout", "15000000")
-	} else {
+	default:
 		if c.Realtime {
 			a = append(a, "-re")
 		}
@@ -114,7 +133,7 @@ func (c Config) args() []string {
 	}
 	// No explicit -map: ffmpeg picks the best audio stream for each output.
 	// Some Ogg streams carry an undecodable first stream that 0:a:0 would pick.
-	a = append(a, "-i", c.Input,
+	a = append(a, "-i", input,
 		"-vn", "-sn", "-dn", "-ac", "1", "-ar", strconv.Itoa(c.SampleRate), "-f", "f32le", "pipe:1")
 	for i, o := range c.Outputs {
 		a = append(a, "-vn", "-sn", "-dn")
@@ -152,6 +171,11 @@ func Run(ctx context.Context, c Config) error {
 			state(Offline)
 			return nil
 		}
+		var refused *RefusedError
+		if errors.As(err, &refused) {
+			state(Refused)
+			return refused
+		}
 		if !url {
 			state(Offline)
 			if err != nil {
@@ -178,7 +202,26 @@ func Run(ctx context.Context, c Config) error {
 func (c Config) once(ctx context.Context, state func(string), base int64) (int64, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, c.FFmpeg, c.args()...)
+	var body io.ReadCloser
+	var format string
+	if c.Open != nil {
+		var err error
+		if body, format, err = c.Open(ctx); err != nil {
+			return 0, err
+		}
+		defer body.Close()
+	}
+	cmd := exec.CommandContext(ctx, c.FFmpeg, c.args(format)...)
+	if body != nil {
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return 0, err
+		}
+		go func() {
+			io.Copy(stdin, body) // ends when ffmpeg exits or the connection does
+			stdin.Close()
+		}()
+	}
 	var readers []*os.File
 	var drained sync.WaitGroup
 	defer func() {

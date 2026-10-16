@@ -39,6 +39,7 @@ type caller struct {
 	memDir    string // <memory-dir>/<caller>
 	stateFile string // "" keeps none
 	resumed   bool
+	testHooks bool // development: POST …/fail
 
 	mu      sync.Mutex // registry; lock order: c.mu, e.smu, source, stream, run
 	streams map[string]*stream

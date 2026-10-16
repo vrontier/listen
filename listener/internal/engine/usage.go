@@ -18,6 +18,7 @@ type meter struct {
 	selfCPU time.Duration
 	procCPU map[int64]time.Duration // ffmpeg by pid
 	feBusy  map[*sourceConn]int64
+	inBytes map[*sourceConn]int64
 	runBusy map[*run]int64
 	sources map[*sourceConn]Usage // full cost, last measurement
 	engine  Usage
@@ -26,7 +27,7 @@ type meter struct {
 func newMeter(e *Engine) *meter {
 	return &meter{
 		e: e, at: time.Now(), selfCPU: selfCPU(), procCPU: map[int64]time.Duration{},
-		feBusy: map[*sourceConn]int64{}, runBusy: map[*run]int64{}, sources: map[*sourceConn]Usage{},
+		feBusy: map[*sourceConn]int64{}, inBytes: map[*sourceConn]int64{}, runBusy: map[*run]int64{}, sources: map[*sourceConn]Usage{},
 	}
 }
 
@@ -52,10 +53,18 @@ func (m *meter) measure() {
 	total := Usage{CPUPercent: pct(self - m.selfCPU), MemoryMB: round(selfMemMB(), 1)}
 	m.selfCPU = self
 
-	procs, feBusy, sources := map[int64]time.Duration{}, map[*sourceConn]int64{}, map[*sourceConn]Usage{}
+	procs, feBusy, inBytes, sources := map[int64]time.Duration{}, map[*sourceConn]int64{}, map[*sourceConn]int64{}, map[*sourceConn]Usage{}
 	for _, src := range m.e.sourceList() {
-		measured := false
+		// The engine opens a stream's connection itself, so what arrives
+		// is counted.
+		measured := isURL(src.input)
 		u := Usage{InMeasured: &measured}
+		ib := src.bytes.Load()
+		if prev, ok := m.inBytes[src]; ok && measured {
+			u.InKbps = round(float64(ib-prev)*8/wall.Seconds()/1000, 1)
+			total.InKbps += u.InKbps
+		}
+		inBytes[src] = ib
 		// The source's cost: its front end (inside the engine) and its
 		// ffmpeg (a process of its own).
 		fb := src.feBusyNs.Load()
@@ -86,7 +95,8 @@ func (m *meter) measure() {
 			}
 			cpu, mem := full.CPUPercent, full.MemoryMB
 			share := Usage{
-				CPUPercent: round(cpu/float64(n), 1), MemoryMB: round(mem/float64(n), 1), InMeasured: full.InMeasured,
+				CPUPercent: round(cpu/float64(n), 1), MemoryMB: round(mem/float64(n), 1),
+				InKbps: round(full.InKbps/float64(n), 1), InMeasured: full.InMeasured,
 				SourceCPUPercent: &cpu, SourceMemoryMB: &mem, Shared: n,
 			}
 			s.mu.Lock()
@@ -107,7 +117,7 @@ func (m *meter) measure() {
 			}
 		}
 	}
-	m.procCPU, m.feBusy, m.runBusy, m.sources, m.at = procs, feBusy, busy, sources, now
+	m.procCPU, m.feBusy, m.inBytes, m.runBusy, m.sources, m.at = procs, feBusy, inBytes, busy, sources, now
 	total.CPUPercent = round(total.CPUPercent, 1)
 	total.MemoryMB = round(total.MemoryMB, 1)
 	m.engine = total

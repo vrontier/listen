@@ -20,6 +20,8 @@ import (
 	"time"
 )
 
+var _ = http.StatusOK
+
 func TestAddressPolicy(t *testing.T) {
 	p := newAddressPolicy(false, false)
 	p.own = func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("203.0.113.7")} }
@@ -694,5 +696,146 @@ func TestMemoryMigratesUnderFirstCaller(t *testing.T) {
 	}
 	if got := stateFileFor("/x/state.json", "internal", false); got != "/x/state-internal.json" {
 		t.Errorf("state file %s", got)
+	}
+}
+
+// writeWAVStereo44 writes a CD-quality WAV: 1411 kbit/s, like a lossless
+// stream above the limit.
+func writeWAVStereo44(t *testing.T, path string, seconds int) {
+	const rate = 44100
+	n := rate * seconds
+	var b bytes.Buffer
+	w := func(v any) { binary.Write(&b, binary.LittleEndian, v) }
+	b.WriteString("RIFF")
+	w(uint32(36 + 4*n))
+	b.WriteString("WAVEfmt ")
+	w(uint32(16))
+	w(uint16(1))
+	w(uint16(2))
+	w(uint32(rate))
+	w(uint32(4 * rate))
+	w(uint16(4))
+	w(uint16(16))
+	b.WriteString("data")
+	w(uint32(4 * n))
+	rng := rand.New(rand.NewPCG(9, 10))
+	for i := 0; i < n; i++ {
+		v := int16(0.2 * rng.NormFloat64() * 32000)
+		w(v)
+		w(v)
+	}
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// serveFiles serves dir over HTTP on loopback, and allows that host:port.
+func serveFiles(t *testing.T, dir string, contentType string) (*httptest.Server, string) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/redirect-to/") {
+			http.Redirect(w, r, "http://"+strings.TrimPrefix(r.URL.Path, "/redirect-to/"), http.StatusFound)
+			return
+		}
+		w.Header().Set("Content-Type", contentType)
+		http.ServeFile(w, r, filepath.Join(dir, filepath.Base(r.URL.Path)))
+	}))
+	t.Cleanup(srv.Close)
+	return srv, strings.TrimPrefix(srv.URL, "http://")
+}
+
+func TestLosslessAboveLimitIsRefused(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	writeWAVStereo44(t, filepath.Join(dir, "cd.wav"), 12)
+	_, host := serveFiles(t, dir, "audio/wav")
+	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), AllowHosts: []string{host}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(e.Caller(DefaultCaller).Handler())
+	defer func() { e.Close(); srv.Close() }()
+	c := client{t, srv.URL}
+	url := "http://" + host + "/cd.wav"
+
+	// The probe measures what arrives: about 1411 kbit/s.
+	var pr ProbeResult
+	c.do("POST", "/v1/probes", ProbeRequest{Input: url, ListenS: 3}, &pr)
+	if pr.OK || pr.BitrateKbps < 1300 || len(pr.Problems) == 0 || pr.Problems[0].Code != "bitrate" {
+		t.Errorf("probe: %+v", pr)
+	}
+	if pr.ContentType == nil || *pr.ContentType != "audio/wav" {
+		t.Errorf("content type %v", pr.ContentType)
+	}
+
+	// A stream of it is refused once 5 seconds of audio have shown the rate.
+	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: url, SampleRate: 22050, Mode: Continuous}, nil)
+	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{}, nil)
+	waitFor(t, "the stream to be refused for its bit rate", func() bool {
+		var sv StreamView
+		c.do("GET", "/v1/streams/s-1", nil, &sv)
+		return sv.State == StateRefused && sv.LastError != nil && sv.LastError.Code == "bitrate"
+	})
+}
+
+func TestRedirectToPrivateIsRefused(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	writeWAV(t, filepath.Join(dir, "ok.wav"), 22050, 5)
+	_, allowed := serveFiles(t, dir, "audio/wav")
+	_, other := serveFiles(t, dir, "audio/wav") // private, not allowed
+	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), AllowHosts: []string{allowed}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(e.Caller(DefaultCaller).Handler())
+	defer func() { e.Close(); srv.Close() }()
+	c := client{t, srv.URL}
+
+	var pr ProbeResult
+	c.do("POST", "/v1/probes", ProbeRequest{Input: "http://" + allowed + "/ok.wav", ListenS: 2}, &pr)
+	if !pr.OK || pr.Codec != "pcm_s16le" || pr.BitrateKbps < 300 || pr.BitrateKbps > 400 {
+		t.Errorf("probe of an allowed host: %+v", pr)
+	}
+	c.do("POST", "/v1/probes", ProbeRequest{Input: "http://" + allowed + "/redirect-to/" + other + "/ok.wav", ListenS: 2}, &pr)
+	if pr.OK || len(pr.Problems) == 0 || pr.Problems[0].Code != "address_not_allowed" {
+		t.Errorf("probe redirected to a private address: %+v", pr)
+	}
+	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: "http://" + allowed + "/redirect-to/" + other + "/ok.wav", SampleRate: 22050, Mode: Continuous}, nil)
+	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{}, nil)
+	waitFor(t, "the redirected stream to be refused", func() bool {
+		var sv StreamView
+		c.do("GET", "/v1/streams/s-1", nil, &sv)
+		return sv.State == StateRefused && sv.LastError != nil && sv.LastError.Code == "address_not_allowed"
+	})
+}
+
+func TestTestHookFailsAnAnalysis(t *testing.T) {
+	needFFmpeg(t)
+	dir := t.TempDir()
+	wav := filepath.Join(dir, "test.wav")
+	writeWAV(t, wav, 22050, 10)
+	e, err := New(Options{MemoryDir: filepath.Join(dir, "memory"), AllowFiles: true, TestHooks: []string{DefaultCaller}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(e.Caller(DefaultCaller).Handler())
+	defer func() { e.Close(); srv.Close() }()
+	c := client{t, srv.URL}
+	c.do("PUT", "/v1/streams/s-1", StreamSpec{Input: wav, SampleRate: 22050, Mode: Continuous}, nil)
+	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{}, nil)
+	var av AnalysisView
+	if st := c.do("POST", "/v1/streams/s-1/analyses/a-1/fail", nil, &av); st != 200 || av.State != AnalysisFailed {
+		t.Fatalf("fail hook: %d %s", st, av.State)
+	}
+	c.do("PUT", "/v1/streams/s-1/analyses/a-1", map[string]any{}, nil)
+	waitFor(t, "the analysis to run again", func() bool {
+		var now AnalysisView
+		c.do("GET", "/v1/streams/s-1/analyses/a-1", nil, &now)
+		return now.State == AnalysisRunning && now.LastError == nil
+	})
+	// Without the hook the route does not exist.
+	_, plain := startEngine(t, t.TempDir())
+	if st := plain.do("POST", "/v1/streams/x/analyses/y/fail", nil, nil); st != 404 && st != 405 {
+		t.Errorf("fail route without hooks: %d", st)
 	}
 }

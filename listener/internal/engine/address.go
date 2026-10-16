@@ -10,11 +10,6 @@ import (
 	"time"
 )
 
-// protocolWhitelist is what ffmpeg may open for a stream: HTTP and HTTPS and
-// what they are built on. A redirect cannot lead to a file or another
-// protocol.
-const protocolWhitelist = "http,https,tcp,tls,crypto"
-
 // addressPolicy decides which stream addresses the engine connects to.
 type addressPolicy struct {
 	allowPrivate bool            // intranet installations and tests

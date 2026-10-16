@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -97,12 +99,45 @@ func (c *caller) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *api
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(listen+15)*time.Second)
 	defer cancel()
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "info"}
+	input := req.Input
+	var body io.ReadCloser
+	var received atomic.Int64
 	if isURL(req.Input) {
-		args = append(args, "-protocol_whitelist", protocolWhitelist, "-rw_timeout", "10000000")
+		// The engine connects; ffmpeg decodes what arrives, and the bytes
+		// are counted for the bit rate.
+		b, format, ct, err := c.e.open(ctx, req.Input, &received)
+		if ct != "" {
+			res.ContentType = &ct
+		}
+		if err != nil {
+			var oe *openError
+			if errors.As(err, &oe) {
+				res.Problems = append(res.Problems, *oe.p)
+				return res, nil
+			}
+			return res, &apiError{status: 500, code: "internal", message: err.Error()}
+		}
+		body = b
+		defer body.Close()
+		args = append(args, "-protocol_whitelist", "pipe", "-probesize", "65536", "-analyzeduration", "1000000")
+		if format != "" {
+			args = append(args, "-f", format)
+		}
+		input = "pipe:0"
 	}
-	args = append(args, "-t", strconv.Itoa(listen), "-i", req.Input,
+	args = append(args, "-t", strconv.Itoa(listen), "-i", input,
 		"-vn", "-sn", "-dn", "-ac", "1", "-ar", strconv.Itoa(probeRate), "-f", "f32le", "pipe:1")
 	cmd := exec.CommandContext(ctx, c.e.opts.FFmpeg, args...)
+	if body != nil {
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return res, &apiError{status: 500, code: "internal", message: err.Error()}
+		}
+		go func() {
+			io.Copy(stdin, body)
+			stdin.Close()
+		}()
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return res, &apiError{status: 500, code: "internal", message: err.Error()}
@@ -127,6 +162,11 @@ func (c *caller) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *api
 	}()
 	var sum float64
 	var n int64
+	// For the bit rate: bytes received against audio decoded, from a first
+	// point (a quarter of the listening time) to the end. Data read ahead
+	// into buffers is about the same at both points, so it cancels out.
+	var n1, b1, n2, b2 int64
+	mark := int64(listen) * probeRate / 4
 	buf := make([]byte, 4*1024)
 	r := bufio.NewReader(stdout)
 	for {
@@ -138,6 +178,12 @@ func (c *caller) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *api
 				n++
 			}
 		}
+		if n1 == 0 && n >= mark {
+			n1, b1 = n, received.Load()
+		}
+		if k > 0 {
+			n2, b2 = n, received.Load()
+		}
 		if err != nil {
 			break
 		}
@@ -146,6 +192,12 @@ func (c *caller) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *api
 	werr := cmd.Wait()
 
 	describeInput(&res, log)
+	// A lossless stream (FLAC) has no bit rate in its header, and some
+	// headers give none: then it is measured from what arrived.
+	if body != nil && res.BitrateKbps == 0 && n2 > n1 && n1 > 0 {
+		secs := float64(n2-n1) / probeRate
+		res.BitrateKbps = int(math.Round(float64(b2-b1) * 8 / secs / 1000))
+	}
 	switch {
 	case n > 0:
 		rms := math.Sqrt(sum / float64(n))

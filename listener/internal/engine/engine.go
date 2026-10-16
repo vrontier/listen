@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -31,6 +32,7 @@ type Options struct {
 	AllowHosts   []string // hosts (or host:port) accepted although private, e.g. a test server
 	Limits       Limits
 	Version      string
+	TestHooks    []string // callers that get the test routes (development, loopback only)
 }
 
 // DefaultCaller is the caller's name when none is given.
@@ -42,6 +44,7 @@ type Engine struct {
 	instance string
 	started  time.Time
 	policy   *addressPolicy
+	client   *http.Client // opens streams; every dial is checked
 	ctx      context.Context
 	cancel   context.CancelFunc
 	probes   *probeGate
@@ -96,8 +99,12 @@ func New(opts Options) (*Engine, error) {
 		byName: map[string]*caller{}, sources: map[string]*sourceConn{},
 	}
 	e.meter = newMeter(e)
+	e.client = e.policy.client(opts.Version)
 	for i, n := range opts.Callers {
 		c := newCaller(e, n, stateFileFor(opts.StateFile, n, i == 0))
+		for _, h := range opts.TestHooks {
+			c.testHooks = c.testHooks || h == n
+		}
 		e.callers = append(e.callers, c)
 		e.byName[n] = c
 	}
