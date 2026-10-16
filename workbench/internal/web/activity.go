@@ -12,13 +12,14 @@ import (
 // through MCP and the data stream, over the last 30 days; the MCP tools
 // with examples; the guide for assistants; and how to connect.
 
-const activityPage = 100
+// activityPage is how many notes the page loads at once; the browser
+// filters and sorts them.
+const activityPage = 500
 
 type activityData struct {
 	Summary []catalogue.TokenActivity
 	Tokens  []catalogue.APIToken
 	Rows    []catalogue.Access
-	Filter  catalogue.AccessFilter
 	Older   string // the address of the next older page, or ""
 	Newest  string // the address of the newest page, when not on it
 	Tools   []toolDoc
@@ -31,11 +32,6 @@ func (s *Server) mcpPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := r.URL.Query()
 	f := catalogue.AccessFilter{Limit: activityPage + 1}
-	f.TokenID, _ = strconv.ParseInt(q.Get("token"), 10, 64)
-	if v := q.Get("via"); v == "mcp" || v == "stream" {
-		f.Via = v
-	}
-	f.Failed = q.Get("failed") == "on"
 	f.Before, _ = strconv.ParseInt(q.Get("before"), 10, 64)
 	var d activityData
 	var err error
@@ -51,24 +47,22 @@ func (s *Server) mcpPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// The filters live in the address too, so that a link can choose a
+	// token; the page keeps them when it goes back in time.
 	page := func(before int64) string {
 		v := url.Values{}
-		if f.TokenID > 0 {
-			v.Set("token", strconv.FormatInt(f.TokenID, 10))
-		}
-		if f.Via != "" {
-			v.Set("via", f.Via)
-		}
-		if f.Failed {
-			v.Set("failed", "on")
+		for _, k := range []string{"token", "via", "status", "what", "q", "sort"} {
+			if x := q.Get(k); x != "" {
+				v.Set(k, x)
+			}
 		}
 		if before > 0 {
 			v.Set("before", strconv.FormatInt(before, 10))
 		}
 		if len(v) == 0 {
-			return "/account/mcp"
+			return "/account/mcp#activity"
 		}
-		return "/account/mcp?" + v.Encode()
+		return "/account/mcp?" + v.Encode() + "#activity"
 	}
 	if len(d.Rows) > activityPage {
 		d.Rows = d.Rows[:activityPage]
@@ -77,8 +71,6 @@ func (s *Server) mcpPage(w http.ResponseWriter, r *http.Request) {
 	if f.Before > 0 {
 		d.Newest = page(0)
 	}
-	f.Limit = activityPage
-	d.Filter = f
 	ids := s.guideIDsOf(ctx, sess.User.ID)
 	d.Tools = toolDocs(ids)
 	d.Guide = mcpGuide(&ids)

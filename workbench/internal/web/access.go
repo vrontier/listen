@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/vrontier/listen-workbench/internal/catalogue"
@@ -127,6 +128,18 @@ func (s *Server) noteRPC(r *http.Request, q rpcRequest, resp rpcResponse, answer
 		json.Unmarshal(q.Params, &p)
 		a.What = p.Name
 		a.Detail = compactJSON(p.Arguments)
+	case "resources/read", "prompts/get":
+		var p struct {
+			URI       string          `json:"uri"`
+			Name      string          `json:"name"`
+			Arguments json.RawMessage `json:"arguments"`
+		}
+		json.Unmarshal(q.Params, &p)
+		if p.URI != "" {
+			a.Detail = p.URI
+		} else {
+			a.Detail = strings.TrimSpace(p.Name + " " + compactJSON(p.Arguments))
+		}
 	case "initialize":
 		var p struct {
 			ProtocolVersion string `json:"protocolVersion"`

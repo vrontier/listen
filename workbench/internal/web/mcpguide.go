@@ -113,18 +113,22 @@ What it is: the Workbench analyses live audio streams for a member. An analysis 
 
 How to go about it:
 1. Always start with list_analyses. It gives each analysis's id, its state ("run", "preview" or "idle"), and its sources with their ids. Never guess an id; take it from an earlier answer.
-2. Live data, only while the analysis's state is "run" or "preview":
-   - get_state (analysis_id, source_id): what one source hears now.
+2. Then summarize_analysis (analysis_id): a short answer saying where the analysis stands, whatever its state, and which call to make next.
+3. What happened since, during a run: get_events_since (analysis_id). It returns counts per source and type, the events in a compact form, and a "cursor". Keep the cursor and pass it unchanged on the next call: you get only what is new. With limit 0 you get counts only and a cursor at the end, to follow from now on. When "more" is true, call again with the new cursor.
+4. More live detail, only while the state is "run" or "preview":
+   - get_state (analysis_id, source_id): what one source hears now; a large answer.
    - get_motifs (analysis_id, source_id): the motifs it has learned.
-   - get_history_events (analysis_id, source_id): stored events, only during a run; narrow with from, to (RFC 3339, UTC), type, limit.
+   - get_history_events (analysis_id, source_id): the engine's stored events in full form, only during a run; narrow with from, to (RFC 3339, UTC), type, limit.
    - get_comparison (analysis_id): how the sources relate, from two sources on, during a run.
-3. Finished runs, at any time:
+5. Finished runs, at any time:
    - list_runs: every run with its id, analysis, times and data set state.
-   - get_dataset (run_id): a summary of what the run recorded. Read this before any file.
-   - read_dataset_file (run_id, file): the raw lines, 500 at a time. When the answer ends with "more lines follow", call again with the offset it names.
-4. If a tool answers with an error, read its text: it says why (not running, no such id, file not ready) and what to do instead. Do not repeat the same call unchanged.
+   - get_dataset (run_id): a summary of what the run recorded, with each file's size and number of lines. Read this before any file.
+   - read_dataset_file (run_id, file): the raw lines, up to 500 at a time. The last line of the answer, in [brackets], says which lines you got of how many and the offset for the next call.
+6. If a tool answers with an error, read its text: it names the id that was wrong or why the data is not there (not running, a preview, no data set yet) and which call to make instead. Do not repeat the same call unchanged.
 
-Rules: times are UTC. Ids are integers. Prefer summaries (get_dataset, get_state) over reading whole files. Tell the member what you read.
+Rules: times are UTC. Ids are integers. Prefer summaries (summarize_analysis, get_events_since with limit 0, get_dataset) over reading whole files or large answers. Tell the member what you read. Nothing you do starts, stops or changes a run.
+
+The server also offers resources (the guide; each finished run's summary and files, as low://runs/<run_id>/summary and low://runs/<run_id>/<file>) and prompts (summarize_run, watch_analysis, compare_sources), for clients that show them.
 
 Tools (a ? marks an optional argument):
 `)

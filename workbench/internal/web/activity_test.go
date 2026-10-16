@@ -74,7 +74,7 @@ func TestActivity(t *testing.T) {
 	if rows[7].Client != "test-client 0.1" || rows[4].Detail != `{"analysis_id":999}` || rows[2].Client != "test-program/1" || rows[2].Bytes == 0 {
 		t.Fatalf("details: %+v %+v %+v", rows[7], rows[4], rows[2])
 	}
-	if !strings.Contains(rows[4].Note, "no such analysis") || !strings.HasPrefix(rows[1].Note, "404") {
+	if !strings.Contains(rows[4].Note, "no analysis 999") || !strings.HasPrefix(rows[1].Note, "404") {
 		t.Fatalf("notes: %q %q", rows[4].Note, rows[1].Note)
 	}
 
@@ -90,15 +90,24 @@ func TestActivity(t *testing.T) {
 	if strings.Contains(page, both) || strings.Contains(page, mcpOnly) {
 		t.Fatal("a secret is on the page")
 	}
-	_, page, _ = r.get(member, "/account/mcp?failed=on&via=mcp")
-	page = page[strings.Index(page, "<h3>Accesses</h3>"):strings.Index(page, `id="tools"`)] // the tools are listed below
-	if !strings.Contains(page, "get_analysis") || strings.Contains(page, "list_runs") || strings.Contains(page, "events.csv") {
-		t.Fatal("filter: only failed MCP accesses")
+	// Each access over two lines, with what the browser filters and sorts by.
+	log := page[strings.Index(page, `id="accesses"`):strings.Index(page, `id="tools"`)] // the tools are listed below
+	for _, s := range []string{`class="log-scroll"`, `data-what="get_analysis" data-status="error"`, `data-via="stream"`, `class="l2"`,
+		`data-key="ms"`, "mcplog.js", "There is no analysis 999 of yours"} {
+		if !strings.Contains(log, s) && !strings.Contains(page, s) {
+			t.Fatalf("log lacks %q", s)
+		}
+	}
+	if n := strings.Count(log, `<tbody class="entry"`); n != len(want) {
+		t.Fatalf("%d entries, want %d", n, len(want))
 	}
 
-	// The old address leads here.
+	// The old address leads here, with a chosen token.
 	if code, _, hdr := r.get(member, "/account/activity"); code != http.StatusMovedPermanently || hdr.Get("Location") != "/account/mcp" {
 		t.Fatalf("old address: %d", code)
+	}
+	if _, _, hdr := r.get(member, "/account/activity?token=1"); hdr.Get("Location") != "/account/mcp?token=1" {
+		t.Fatalf("old address with a token: %s", hdr.Get("Location"))
 	}
 
 	// Another member sees none of it.

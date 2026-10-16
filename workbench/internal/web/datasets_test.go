@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"io"
 	"os"
@@ -175,5 +176,16 @@ func TestAbsenceRecorded(t *testing.T) {
 	b, _ := io.ReadAll(zr)
 	if !strings.Contains(string(b), "source.absent,,removed") {
 		t.Fatalf("events.csv without the absence:\n%s", b)
+	}
+	// The absences stand among the events in time order.
+	rows, err := csv.NewReader(bytes.NewReader(b)).ReadAll()
+	if err != nil || len(rows) < 3 {
+		t.Fatalf("events.csv: %v", err)
+	}
+	at := func(i int) time.Time { t, _ := time.Parse(time.RFC3339Nano, rows[i][1]); return t }
+	for i := 2; i < len(rows); i++ {
+		if at(i).Before(at(i - 1)) {
+			t.Fatalf("row %d (%s) before row %d (%s)", i, rows[i][1], i-1, rows[i-1][1])
+		}
 	}
 }

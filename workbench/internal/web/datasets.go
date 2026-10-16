@@ -579,6 +579,7 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 			for _, g := range gaps {
 				ss.AbsentS += g.Seconds
 			}
+			ss.AbsentS = round3(ss.AbsentS)
 			motifs := json.RawMessage(`null`)
 			if m, err := d.s.eng.Data(ctx, st.EngineID(), a.EngineID(), "motifs", nil); err == nil {
 				motifs = m
@@ -665,18 +666,29 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 		cw := csv.NewWriter(w)
 		cw.Write(eventColumns)
 		for _, src := range a.Sources {
+			// An absence goes in at its beginning, so that the rows of a
+			// source stay in time order.
+			gaps := absent[src.Stream.EngineID()]
+			gap := func(g absence) {
+				row := make([]string, len(eventColumns))
+				row[0], row[1], row[3], row[5] = src.Stream.Slug, g.From.Format("2006-01-02T15:04:05.000Z07:00"), "source.absent", strings.Join(g.States, " ")
+				row[8] = strconv.FormatFloat(g.Seconds, 'f', 3, 64)
+				cw.Write(row)
+			}
 			err := eachLine(filepath.Join(dir, src.Stream.EngineID()+".jsonl"), func(b []byte) error {
+				t := eventTime(b)
+				for len(gaps) > 0 && !gaps[0].From.After(t) {
+					gap(gaps[0])
+					gaps = gaps[1:]
+				}
 				cw.Write(eventRow(src.Stream.Slug, b))
 				return cw.Error()
 			})
 			if err != nil {
 				return err
 			}
-			for _, g := range absent[src.Stream.EngineID()] {
-				row := make([]string, len(eventColumns))
-				row[0], row[1], row[3], row[5] = src.Stream.Slug, g.From.Format("2006-01-02T15:04:05.000Z07:00"), "source.absent", strings.Join(g.States, " ")
-				row[8] = strconv.FormatFloat(g.Seconds, 'f', 3, 64)
-				cw.Write(row)
+			for _, g := range gaps {
+				gap(g)
 			}
 		}
 		cw.Flush()

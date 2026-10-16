@@ -215,7 +215,11 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /account/tokens", s.member(s.tokensPage))
 	m.HandleFunc("GET /account/mcp", s.member(s.mcpPage))
 	m.HandleFunc("GET /account/activity", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/account/mcp", http.StatusMovedPermanently)
+		to := "/account/mcp"
+		if r.URL.RawQuery != "" { // a token chosen on the old page
+			to += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, to, http.StatusMovedPermanently)
 	})
 	m.HandleFunc("POST /account/tokens", s.member(s.tokenCreate))
 	m.HandleFunc("POST /account/tokens/{token}/revoke", s.member(s.tokenRevoke))
