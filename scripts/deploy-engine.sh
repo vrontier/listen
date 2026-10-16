@@ -29,6 +29,7 @@ install -m 0755 -o root -g root $stage/listen-engine-linux-amd64 /usr/local/bin/
 mv -f /usr/local/bin/listen-engine.new /usr/local/bin/listen-engine
 install -m 0644 -o root -g root $stage/listen-engine.service /etc/systemd/system/listen-engine.service
 install -d -m 0750 -o root -g listen-engine /etc/listen-engine
+[ -f /etc/listen-engine/engine.env ] || install -m 0640 -o root -g listen-engine /dev/stdin /etc/listen-engine/engine.env <<<'ENGINE_ARGS=""'
 systemctl daemon-reload
 systemctl enable --quiet listen-engine
 systemctl restart listen-engine
