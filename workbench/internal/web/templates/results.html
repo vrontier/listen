@@ -25,19 +25,20 @@
   {{if .Datasets}}
   <form method="post" action="/results/delete" id="delete-datasets"><input type="hidden" name="csrf" value="{{$csrf}}"></form>
   <table>
-    <thead><tr><th></th><th>Analysis</th><th>Run</th><th>Started</th><th>Length</th><th>Size, compressed</th><th>Download</th></tr></thead>
+    <thead><tr><th></th><th>#</th><th class="wide">Analysis</th><th class="nowrap">Started (UTC)</th><th>Length</th><th>Revision</th><th>Storage</th><th>Download</th></tr></thead>
     <tbody>{{range .Datasets}}<tr>
       <td>{{if or (eq .Dataset "ready") (eq .Dataset "failed")}}<input type="checkbox" form="delete-datasets" name="run" value="{{.ID}}" aria-label="select run {{.Number}} of {{.AnalysisName}}">{{end}}</td>
-      <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
       <td><a href="/runs/{{.ID}}">{{.Number}}</a></td>
-      <td>{{when .Started}}</td>
+      <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
+      <td class="nowrap">{{day .Started}}</td>
       <td>{{.Duration}}{{if .Active}} so far{{end}}</td>
-      <td>{{if eq .Dataset "ready"}}{{bytes .DatasetBytes}}{{else}}—{{end}}</td>
+      <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
+      <td class="nowrap">{{if eq .Dataset "ready"}}{{bytes .DatasetBytes}}{{else}}—{{end}}</td>
       <td>{{if eq .Dataset "ready"}}<a href="/runs/{{.ID}}/all.zip">all, zip</a> · <a href="/runs/{{.ID}}/dataset.json">json</a> · <a href="/runs/{{.ID}}/events.csv">events csv</a>{{else if eq .Dataset "recording"}}<span class="meta">recording while the run lasts</span>{{else if eq .Dataset "freezing"}}<span class="meta">being put together</span>{{else}}<span class="meta">failed: {{.DatasetNote}}</span>{{end}}</td>
     </tr>{{end}}</tbody>
   </table>
   <p><button form="delete-datasets" class="danger">Delete the selected data sets</button></p>
-  <p class="meta">A data set holds a run's events of each source and of the comparison, with the times a source was not heard. "all, zip" holds dataset.json, events.csv and, with a comparison, comparison.csv; the run's page says what each holds. Deleting removes the files for good and frees their space; the run stays in the list under <a href="/runs">Runs</a>. A data set is finished, and can be deleted, once its run has ended.</p>
+  <p class="meta">Storage is what a data set takes of your space: its files together, kept compressed. A data set holds a run's events of each source and of the comparison, with the times a source was not heard. "all, zip" holds dataset.json, events.csv and, with a comparison, comparison.csv; the run's page says what each holds. Deleting removes the files for good and frees their space; the run stays in the list under <a href="/runs">Runs</a>. A data set is finished, and can be deleted, once its run has ended.</p>
   {{else}}<p class="meta">No data sets yet. A <a href="/runs">run</a> records one; previews and trials record nothing.</p>{{end}}
 </section>
 
