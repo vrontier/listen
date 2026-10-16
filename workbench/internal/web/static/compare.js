@@ -17,6 +17,9 @@
   const names = Object.fromEntries(lanes.map((l) => [l.stream, l.name]));
   const seconds = new Map(); // ms → {stream: values or null}
   let latest = 0, metric = "impulse_rate";
+  let frozen = null; // {seconds, latest} while the display is paused
+  let cursor = null; // {lane, t}
+  const readout = root.querySelector(".lanes-wrap .readout");
 
   const laneH = 56, axisH = 22;
   canvas.height = lanes.length * laneH + axisH;
@@ -39,17 +42,19 @@
 
   function draw() {
     const w = canvas.width, h = canvas.height;
-    const text = css("--text"), muted = css("--muted"), line = css("--line"), accent = css("--accent");
+    const text = css("--instrument-text"), muted = css("--instrument-muted"), accent = css("--instrument-accent") || "#5fb5aa";
+    const line = "rgba(166, 190, 195, 0.22)";
+    const src = frozen || { seconds: seconds, latest: latest };
     ctx.clearRect(0, 0, w, h);
     ctx.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
-    const end = latest || Date.now();
+    const end = src.latest || Date.now();
     const start = end - WINDOW * 1000;
     const x = (t) => ((t - start) / (WINDOW * 1000)) * w;
     const bw = Math.max(1, w / WINDOW);
     lanes.forEach((lane, i) => {
       const top = i * laneH;
       let lo = Infinity, hi = -Infinity;
-      for (const row of seconds.values()) {
+      for (const row of src.seconds.values()) {
         const v = row[lane.stream];
         if (v && v[metric] != null) { lo = Math.min(lo, v[metric]); hi = Math.max(hi, v[metric]); }
       }
@@ -58,7 +63,7 @@
       if (hi > -Infinity) {
         const span = hi - lo || 1;
         ctx.fillStyle = accent;
-        for (const [t, row] of seconds) {
+        for (const [t, row] of src.seconds) {
           const v = row[lane.stream];
           if (!v || v[metric] == null) continue;
           const bh = 4 + ((v[metric] - lo) / span) * (laneH - 22);
@@ -78,7 +83,64 @@
       if (px > 20 && px < w - 20) ctx.fillText(utc(t), px - 16, h - 6);
     }
     ctx.fillText("UTC", w - 26, h - 6);
+    if (cursor) {
+      const i = cursor.lane, lane = lanes[i], px = Math.round(x(cursor.t)) + 0.5;
+      ctx.strokeStyle = text;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(px, i * laneH); ctx.lineTo(px, (i + 1) * laneH); ctx.stroke();
+      ctx.setLineDash([]);
+      const v = (src.seconds.get(cursor.t) || {})[lane.stream];
+      readout.textContent = lane.name + " · " + new Date(cursor.t).toISOString().slice(11, 19) + " UTC · " + (v && v[metric] != null ? fmt(v[metric]) : "not heard");
+      const scale = canvas.clientWidth / w;
+      readout.style.left = Math.min(canvas.clientWidth - 260, Math.max(0, px * scale + 10)) + "px";
+      readout.style.top = Math.max(0, i * laneH * (canvas.clientHeight / h) - 4) + "px";
+      readout.hidden = false;
+    } else {
+      readout.hidden = true;
+    }
   }
+
+  // Reading values: the pointer, or the arrow keys once the lanes have focus.
+  function cursorAt(ev) {
+    const r = canvas.getBoundingClientRect();
+    const px = ((ev.clientX - r.left) / r.width) * canvas.width, py = ((ev.clientY - r.top) / r.height) * canvas.height;
+    const lane = Math.floor(py / laneH);
+    if (lane < 0 || lane >= lanes.length) { cursor = null; draw(); return; }
+    const end = (frozen ? frozen.latest : latest) || Date.now();
+    const t = Math.round((end - WINDOW * 1000 + (px / canvas.width) * WINDOW * 1000) / 1000) * 1000;
+    cursor = { lane: lane, t: Math.min(end, t) };
+    draw();
+  }
+  canvas.addEventListener("pointermove", cursorAt);
+  canvas.addEventListener("pointerdown", cursorAt);
+  canvas.addEventListener("pointerleave", () => { cursor = null; draw(); });
+  canvas.addEventListener("focus", () => { if (!cursor) { cursor = { lane: 0, t: (frozen ? frozen.latest : latest) || Date.now() }; draw(); } });
+  canvas.addEventListener("blur", () => { cursor = null; draw(); });
+  canvas.addEventListener("keydown", (ev) => {
+    if (!cursor) return;
+    const step = (ev.shiftKey ? 10 : 1) * 1000;
+    if (ev.key === "ArrowLeft") cursor.t -= step;
+    else if (ev.key === "ArrowRight") cursor.t += step;
+    else if (ev.key === "ArrowUp") cursor.lane = Math.max(0, cursor.lane - 1);
+    else if (ev.key === "ArrowDown") cursor.lane = Math.min(lanes.length - 1, cursor.lane + 1);
+    else if (ev.key === "Escape") cursor = null;
+    else return;
+    ev.preventDefault();
+    draw();
+  });
+
+  // Pause freezes the lanes; the comparison, and what the page collects, go on.
+  const pauseBtn = root.querySelector(".lanes-bar .pause"), pausedNote = root.querySelector(".lanes-bar .paused-note");
+  if (pauseBtn) {
+    pauseBtn.addEventListener("click", () => {
+      frozen = frozen ? null : { seconds: new Map(seconds), latest: latest };
+      pauseBtn.setAttribute("aria-pressed", String(!!frozen));
+      pauseBtn.textContent = frozen ? "Resume" : "Pause";
+      pausedNote.hidden = !frozen;
+      draw();
+    });
+  }
+  document.addEventListener("low-theme", draw);
 
   function fmt(v) {
     if (metric === "level_db") return v.toFixed(1) + " dB";
@@ -133,7 +195,7 @@
   function connect() {
     const es = new EventSource(root.dataset.live);
     es.onopen = () => { statusEl.textContent = "Live"; statusEl.className = "status conn conn-ok"; };
-    es.addEventListener("group.activity", (m) => { addActivity(JSON.parse(m.data)); draw(); });
+    es.addEventListener("group.activity", (m) => { addActivity(JSON.parse(m.data)); if (!frozen) draw(); });
     es.addEventListener("group.status", (m) => showStatus(JSON.parse(m.data).payload));
     es.addEventListener("group.correlation", (m) => showCorrelation(JSON.parse(m.data).payload));
     es.onerror = () => { statusEl.textContent = "Reconnecting…"; statusEl.className = "status conn conn-warn"; };

@@ -285,7 +285,8 @@ func TestMemberFlow(t *testing.T) {
 	if _, err := cl.Analysis(ctx, garden.EngineID(), a.EngineID()); !engine.IsCode(err, "not_found") {
 		t.Fatalf("the analysis itself during a preview: %v", err)
 	}
-	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "Nothing is recorded") || !strings.Contains(page, `class="spectrogram"`) {
+	if _, page, _ = r.get(member, aURL); !strings.Contains(page, "Nothing is recorded") || !strings.Contains(page, `class="spectrogram"`) ||
+		!strings.Contains(page, `class="landscape"`) || !strings.Contains(page, `data-show="spectrogram"`) || !strings.Contains(page, `class="seg pause"`) || !strings.Contains(page, "landscape.js") {
 		t.Fatal("analysis page during a preview")
 	}
 	// A run ends the preview and puts the analysis into the engine.

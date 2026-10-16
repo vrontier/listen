@@ -48,6 +48,7 @@
   --instrument: #101c23;
   --instrument-text: #d6e3e5;
   --instrument-muted: #a6bec3;
+  --instrument-accent: #5fb5aa;
   --shadow: 0 8px 28px rgba(32, 45, 49, 0.18);
   --font-ui: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Source Serif 4", Georgia, serif;
@@ -86,6 +87,7 @@
     --instrument: #0b1317;
     --instrument-text: #d6e3e5;
     --instrument-muted: #a6bec3;
+    --instrument-accent: #5fb5aa;
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   }
 }
@@ -277,13 +279,13 @@ table.audit td:last-child { max-width: 28rem; }
 
 .live, .compare { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.6rem 1rem 1rem; margin: 0.6rem 0 1rem; }
 .compare-controls { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; margin-bottom: 0.4rem; font-size: 0.9rem; }
-canvas.lanes { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; display: block; }
+canvas.lanes { width: 100%; background: var(--instrument); border-radius: var(--radius); display: block; }
 table.correlations td:nth-child(n+2) { font-variant-numeric: tabular-nums; }
 .above { color: var(--ok); }
 .live-head { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; align-items: baseline; margin-bottom: 0.5rem; }
-.spectro { display: flex; gap: 0.4rem; }
-.axis { display: flex; flex-direction: column; justify-content: space-between; font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
-canvas.spectrogram { width: 100%; height: 200px; background: var(--instrument); border-radius: var(--radius); image-rendering: pixelated; min-width: 0; }
+.spectro { display: flex; gap: 0.4rem; background: var(--instrument); border-radius: var(--radius); padding: 8px 8px 4px; }
+.axis { display: flex; flex-direction: column; justify-content: space-between; font: 0.72rem var(--font-data); color: var(--instrument-muted); white-space: nowrap; }
+canvas.spectrogram { width: 100%; height: 200px; background: var(--instrument); border-radius: 2px; image-rendering: pixelated; min-width: 0; }
 .events { list-style: none; padding: 0; margin: 0; max-height: 22rem; overflow-y: auto; font-size: 0.88rem; }
 .events li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); display: flex; gap: 0.6rem; }
 .events time { color: var(--muted); font-family: var(--font-data); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
@@ -374,3 +376,31 @@ fieldset.limits label { display: flex; flex-direction: column; font-size: 0.85re
 fieldset.limits input { width: 6rem; }
 label.check input[type=checkbox] { flex-shrink: 0; }
 .states { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* Instruments: the dark surface for what a source hears, with its own bar
+   of controls (view, pause) and a readout of the value under the cursor. */
+.instrument { margin: 0.4rem 0 1rem; }
+.instrument-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+.instrument-bar .pause { margin-left: auto; }
+.segmented { display: inline-flex; border: 1px solid var(--control-line); border-radius: var(--radius); overflow: hidden; }
+button.seg, button.seg:hover { background: var(--surface); color: var(--text); border: 0; border-radius: 0; padding: 0.3rem 0.8rem; font-size: 0.875rem; font-weight: 600; }
+.segmented button.seg + button.seg { border-left: 1px solid var(--control-line); }
+button.seg[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+button.seg.pause { border: 1px solid var(--control-line); border-radius: var(--radius); }
+button.seg.pause[aria-pressed="true"] { border-color: var(--copper); color: var(--copper); background: var(--surface); }
+.paused-note { color: var(--copper); font-size: 0.875rem; font-weight: 600; }
+.plot { position: relative; }
+canvas.landscape { display: block; width: 100%; height: 340px; background: var(--instrument); border-radius: var(--radius); cursor: crosshair; touch-action: pan-y; }
+.instrument.small canvas.landscape { height: 190px; }
+@media (max-width: 767px) { canvas.landscape { height: 260px; } .instrument.small canvas.landscape { height: 170px; } }
+canvas.landscape:focus-visible, canvas.lanes:focus-visible { outline: 3px solid var(--instrument-text); outline-offset: 2px; }
+.readout { position: absolute; pointer-events: none; background: var(--surface); color: var(--text); border: 1px solid var(--control-line); border-radius: 4px; padding: 2px 8px; font: 0.8rem/1.5 var(--font-data); white-space: nowrap; box-shadow: var(--shadow); }
+.spectro-foot { display: flex; justify-content: space-between; gap: 8px; font: 0.72rem var(--font-data); color: var(--muted); padding: 4px 8px 0 3.4rem; }
+.spectro-foot .legend { display: inline-flex; align-items: center; gap: 6px; }
+.spectro-foot .ramp { display: inline-block; width: 90px; height: 8px; border-radius: 2px; }
+.instrument .summary { margin-top: 6px; }
+.lanes-wrap { position: relative; }
+.lanes-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 8px; }
+.lanes-bar .compare-controls { margin: 0; }
+.lanes-bar .pause { margin-left: auto; }
+@media (prefers-reduced-motion: reduce) { canvas.landscape { cursor: default; } }

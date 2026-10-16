@@ -71,6 +71,25 @@
 </body>
 </html>
 
+{{define "instrument"}}<figure class="instrument{{if .Small}} small{{end}}">
+  <div class="instrument-bar">
+    <div class="segmented" role="group" aria-label="View of {{.Name}}"><button type="button" class="seg" data-show="landscape" aria-pressed="true">Landscape</button><button type="button" class="seg" data-show="spectrogram" aria-pressed="false">Spectrogram</button></div>
+    <span class="paused-note" hidden>Display paused; the analysis goes on.</span>
+    <button type="button" class="seg pause" aria-pressed="false">Pause</button>
+  </div>
+  <div class="plot" data-view="landscape">
+    <canvas class="landscape" tabindex="0" role="img" aria-label="Spectral landscape of {{.Name}}: the last 60 seconds of spectra, one line a second, newest in front; frequency to the right on a log scale; height is the relative level. Arrow keys read values."></canvas>
+    <div class="readout" hidden></div>
+  </div>
+  <div class="plot" data-view="spectrogram" hidden>
+    <div class="spectro">
+      <div class="axis"><span class="axis-max"></span><span class="axis-min"></span></div>
+      <canvas class="spectrogram" width="960" height="{{if .Small}}120{{else}}200{{end}}" aria-label="Spectrogram of {{.Name}}: time runs to the left, frequency upwards on a log scale"></canvas>
+    </div>
+    <div class="spectro-foot"><span class="t-span"></span><span class="legend">quiet <span class="ramp"></span> loud · relative level · peaks in copper</span><span>now</span></div>
+  </div>
+  <figcaption class="summary meta small"></figcaption>
+</figure>{{end}}
 {{define "status"}}<span class="state tone-{{.Tone}}">{{.Word}}</span>{{end}}
 {{define "nav-item"}}<li><a href="{{.Href}}"{{if .Current}} aria-current="page"{{else if .Within}} aria-current="true"{{end}}>{{template "icon" .Icon}}<span>{{.Label}}</span></a></li>{{end}}
 {{define "emblem"}}<svg class="emblem" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" focusable="false"><g fill="none" stroke-width="1.6" stroke-linecap="round"><path d="M3 23c4 0 5-3 8-3s4 3 7 3 5-9 7-9 3 9 4 9" stroke="var(--copper)"/><path d="M3 18c4 0 5-3 8-3s4 2 7 2 4-8 6-8 3 7 5 7" stroke="var(--accent)"/><path d="M3 13c4 0 5-2 8-2s4 1 7 1 4-6 6-6 3 5 5 5" stroke="var(--accent)" opacity="0.55"/></g></svg>{{end}}

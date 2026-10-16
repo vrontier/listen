@@ -1,5 +1,6 @@
-// The live part of an analysis page, once per source: a scrolling
-// spectrogram, the list of events and the motifs, read from the Workbench's
+// The live part of an analysis page, once per source: the instrument (the
+// spectral landscape of landscape.js, or a scrolling spectrogram), the list
+// of events and the motifs, read from the Workbench's
 // event stream for that source of the analysis. And two helpers of the
 // settings form: adding a rule row, and copying one source's settings to the
 // other sources.
@@ -55,6 +56,40 @@
     const livePath = root.dataset.live, dataPath = root.dataset.data;
     const canvas = root.querySelector("canvas.spectrogram");
     const ctx = canvas.getContext("2d");
+    const fig = root.querySelector(".instrument");
+    const scape = window.LowLandscape ? new window.LowLandscape(fig.querySelector("canvas.landscape"), fig.querySelector(".readout"), fig.querySelector(".summary")) : null;
+    const spanEl = fig.querySelector(".t-span");
+    let paused = false, lastSpec = 0, frameMs = 0;
+
+    // The view: landscape or spectrogram, remembered in this browser.
+    function show(view) {
+      for (const b of fig.querySelectorAll("[data-show]")) b.setAttribute("aria-pressed", String(b.dataset.show === view));
+      for (const p of fig.querySelectorAll(".plot")) p.hidden = p.dataset.view !== view;
+      if (scape) scape.show(view === "landscape");
+    }
+    let view = "landscape";
+    try { view = localStorage.getItem("low-view") || view; } catch (e) {}
+    if (!scape) view = "spectrogram";
+    show(view);
+    for (const b of fig.querySelectorAll("[data-show]")) {
+      b.addEventListener("click", () => {
+        show(b.dataset.show);
+        try { localStorage.setItem("low-view", b.dataset.show); } catch (e) {}
+      });
+    }
+    // Pause freezes the drawing; the analysis, and what the page collects, go on.
+    const pauseBtn = fig.querySelector(".pause"), pausedNote = fig.querySelector(".paused-note");
+    pauseBtn.addEventListener("click", () => {
+      paused = !paused;
+      pauseBtn.setAttribute("aria-pressed", String(paused));
+      pauseBtn.textContent = paused ? "Resume" : "Pause";
+      pausedNote.hidden = !paused;
+      if (scape) scape.pause(paused);
+    });
+    // The colour scale of the spectrogram, as its legend.
+    const stops = [];
+    for (let i = 0; i <= 10; i++) stops.push(colour(i / 10));
+    fig.querySelector(".ramp").style.background = "linear-gradient(to right, " + stops.join(", ") + ")";
     const statusEl = root.querySelector(".status");
     const levelEl = root.querySelector(".level");
     const clockEl = root.querySelector(".clock");
@@ -78,7 +113,7 @@
         ctx.fillRect(w - col, y0, col, y1 - y0);
       }
       const lmin = Math.log(p.min_hz), lmax = Math.log(p.max_hz);
-      ctx.fillStyle = "#ff5a5a";
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--copper").trim() || "#ab693d";
       for (const pk of p.peaks || []) {
         const y = h - ((Math.log(pk.hz) - lmin) / (lmax - lmin)) * h;
         ctx.fillRect(w - col, Math.round(y) - 1, col, 2);
@@ -147,7 +182,16 @@
 
     function connect() {
       const es = new EventSource(livePath);
-      es.addEventListener("signal.spectrum", (m) => drawSpectrum(JSON.parse(m.data).payload));
+      es.addEventListener("signal.spectrum", (m) => {
+        const e = JSON.parse(m.data);
+        if (scape) scape.push(e.payload, e.timestamp);
+        // How much time the spectrogram's width holds, from the spectra's pace.
+        const now = Date.now();
+        if (lastSpec) frameMs = frameMs ? frameMs * 0.95 + (now - lastSpec) * 0.05 : now - lastSpec;
+        lastSpec = now;
+        if (frameMs) spanEl.textContent = "−" + Math.round((canvas.width / 3) * frameMs / 1000) + " s";
+        if (!paused) drawSpectrum(e.payload);
+      });
       es.addEventListener("signal.frame", (m) => {
         const e = JSON.parse(m.data);
         clockEl.textContent = time(e.timestamp) + " UTC" + (e.time_source ? " (" + e.time_source + " time)" : "");

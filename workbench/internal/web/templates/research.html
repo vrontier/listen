@@ -13,12 +13,19 @@
   <ol class="lane-names" hidden>{{range .Sources}}{{if .Live}}<li data-stream="{{.Stream.EngineID}}"{{if and .Stream.Texts.Lat .Stream.Texts.Lon}} data-lat="{{publicCoord .Stream.Texts.Lat}}" data-lon="{{publicCoord .Stream.Texts.Lon}}"{{end}}>{{.Stream.Texts.Name}}</li>{{end}}{{end}}</ol>
   <div class="compare-map" hidden></div>
   <p class="compare-map-note meta small" hidden>Stations, placed to about 10 km, the distance between each pair with the time a radio wave needs for it, and the night side of the earth (shaded). Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, loaded by your browser from openstreetmap.org.</p>
-  <div class="compare-controls" role="radiogroup" aria-label="What the lanes show">
-    <label class="check"><input type="radio" name="lane-metric" value="impulse_rate" checked> impulse rate</label>
-    <label class="check"><input type="radio" name="lane-metric" value="level_db"> level</label>
-    <label class="check"><input type="radio" name="lane-metric" value="flux"> flux</label>
+  <div class="lanes-bar">
+    <div class="compare-controls" role="radiogroup" aria-label="What the lanes show">
+      <label class="check"><input type="radio" name="lane-metric" value="impulse_rate" checked> impulse rate</label>
+      <label class="check"><input type="radio" name="lane-metric" value="level_db"> level</label>
+      <label class="check"><input type="radio" name="lane-metric" value="flux"> flux</label>
+    </div>
+    <span class="paused-note" hidden>Display paused; the comparison goes on.</span>
+    <button type="button" class="seg pause" aria-pressed="false">Pause</button>
   </div>
-  <canvas class="lanes" width="960" height="240" aria-label="Activity of each source per second over the last ten minutes, one lane per source, on one time axis in UTC"></canvas>
+  <div class="lanes-wrap">
+    <canvas class="lanes" width="960" height="240" tabindex="0" role="img" aria-label="Activity of each source per second over the last ten minutes, one lane per source, on one time axis in UTC. Arrow keys read values."></canvas>
+    <div class="readout" hidden></div>
+  </div>
   <h3>Correlation</h3>
   <table class="correlations"><thead><tr><th>Pair</th><th>r</th><th title="Positive: the second source hears the same later">Lag</th><th title="The same pair shifted 150 s apart: what chance alone gives">Baseline r</th><th>Above baseline</th></tr></thead><tbody><tr><td colspan="5" class="meta">The first correlation comes after five minutes of activity.</td></tr></tbody></table>
   <p class="meta">Lanes show each source's activity per second over the last ten minutes, on one time axis in UTC. The times are wall time at the engine, so the sources are aligned to a few seconds, not to their stations' clocks. A correlation is worth something only well above its baseline, the same pair shifted 150 s apart.</p>
@@ -33,17 +40,15 @@
     <h2 class="live-title">{{.Stream.Texts.Name}}</h2>
     <span class="status conn conn-info">Connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>
   </div>
-  <div class="spectro">
-    <div class="axis"><span class="axis-max"></span><span class="axis-min"></span></div>
-    <canvas class="spectrogram" width="960" height="200" aria-label="Spectrogram of {{.Stream.Texts.Name}}: time runs to the left, frequency upwards on a log scale"></canvas>
-  </div>
+  {{template "instrument" (instrument .Stream.Texts.Name false)}}
   <div class="grid">
     <div><h3>Events</h3><ol class="events"></ol></div>
     <div><h3>Motifs</h3><table class="motifs"><thead><tr><th>Motif</th><th>Kind</th><th>Seen</th><th>Presence</th><th>Last</th></tr></thead><tbody></tbody></table></div>
   </div>
 </section>
 {{end}}{{end}}
-<p class="meta">Live while the analysis is in a run. Times are UTC. Spectrograms show the analysed range, newest on the right; dots mark the spectral peaks left after the filter rules. Motifs are what a source's memory has found to recur.</p>
+<p class="meta">Live while the analysis is in a run. Times are UTC. The landscape shows the last 60 seconds of spectra, newest in front; the spectrogram shows the analysed range, newest on the right. Copper marks the spectral peaks left after the filter rules. Motifs are what a source's memory has found to recur.</p>
+<script src="{{asset "landscape.js"}}" defer></script>
 <script src="{{asset "analysis.js"}}" defer></script>
 {{else}}
 <p class="note">Not running now. The live view is here while the analysis is in a run.</p>

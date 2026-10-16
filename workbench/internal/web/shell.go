@@ -10,6 +10,15 @@ type navEntry struct {
 	Current, Within   bool
 }
 
+// instrumentOf is what the instrument template needs: the source's name
+// for its labels, and whether it is the smaller one of a trial.
+type instrumentOf struct {
+	Name  string
+	Small bool
+}
+
+func instrument(name string, small bool) instrumentOf { return instrumentOf{name, small} }
+
 func navItem(path, href, label, icon string) navEntry {
 	e := navEntry{Href: href, Label: label, Icon: icon, Current: path == href}
 	if !e.Current && href != "/" {

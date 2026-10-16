@@ -404,6 +404,7 @@ func (s *Server) parseTemplates() error {
 	funcs["hasPrefix"] = strings.HasPrefix
 	funcs["aiPages"] = func() []aiLink { return aiPages }
 	funcs["navItem"] = navItem
+	funcs["instrument"] = instrument
 	funcs["status"] = statusOf
 	funcs["connWords"] = connWords
 	funcs["brandName"] = func(site string) string { name, _ := strings.CutSuffix(site, " Workbench"); return name }
