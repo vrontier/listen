@@ -116,11 +116,10 @@ func (r *run) input(n int) string {
 	if r.opt.Input == "" {
 		return ""
 	}
-	if n == 0 {
-		return r.opt.Input
-	}
-	// A second stream needs an address of its own (an address exists
-	// once); a query keeps it the same source for the engine to reach.
+	// Every stream of the checks has an address of its own: an address
+	// exists once per caller, and the caller may hold the plain address
+	// as a real stream already (the Workbench's own sources). A query
+	// keeps it the same server for the engine to reach.
 	sep := "?"
 	if strings.Contains(r.opt.Input, "?") {
 		sep = "&"

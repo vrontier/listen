@@ -218,7 +218,10 @@ The engine, not the Workbench, enforces what may be connected to, because only t
 - A refusal sets the state `refused` with `last_error.code` `address_not_allowed` or `protocol_not_allowed`.
 - **Decided (engine)** (2026-10-16): a host that does not resolve is accepted at the `PUT`; only an address that resolves to loopback, private, link-local, multicast, unspecified or the server's own is refused there. Every connection attempt checks again, so a name that later resolves to such an address is refused when it is reached.
 
-**The rest needs an engine change** (the engine's phase 4). ffmpeg follows redirects and reconnects inside a connection by itself. Until the engine opens the HTTP connection itself, those are not checked, and `GET /v1/engine` reports `"address_check": "initial"` instead of `"every_connection"` under `capabilities`.
+**Built** (engine `0.2.0`, 2026-10-16): the engine opens a stream's connection itself and hands the bytes to ffmpeg, which only reads a pipe. Every dial is checked on the address actually reached, after every redirect and every new lookup, and `GET /v1/engine` reports `"address_check": "every_connection"` under `capabilities` (`"initial"` from an engine that checks only before ffmpeg starts). A redirect to a private address is refused with `address_not_allowed`.
+
+- **The bit rate at connection:** the engine measures a stream's incoming bit rate between 3 and 8 seconds of audio; above `limits.max_bitrate_kbps` the stream goes to `refused` with `last_error.code` `bitrate`. This catches what a header does not tell, such as a lossless stream.
+- **No playlists:** the engine reads a stream itself and does not follow a playlist to the stream it names. A playlist (`m3u`, `m3u8`, `pls`) is refused with the code `playlist`, a web page or other content with `not_audio`. HLS is therefore not supported.
 
 ## Analyses
 
@@ -338,7 +341,7 @@ The engine measures; the Workbench records, adds up, counts each member's share 
 | engine | `usage.cpu_percent`, `usage.memory_mb` | the engine process and all its ffmpeg children together; 100 is one core |
 | engine, stream | `usage.in_kbps` | incoming bandwidth |
 | stream | `usage.cpu_percent`, `usage.memory_mb` | the stream's ffmpeg process: connection and decode |
-| stream | `usage.in_measured` | `false` while `in_kbps` is the bit rate the probe found, not a measurement |
+| stream | `usage.in_measured` | `false` while `in_kbps` is the bit rate the probe found, not a measurement; `true` since the engine opens the connection itself and counts the bytes (engine `0.2.0`) |
 | stream | `usage.shared`, `usage.source_cpu_percent`, `usage.source_memory_mb` | **decided** (2026-10-16): when several streams, of any caller, share a source, the stream's `cpu_percent` and `memory_mb` are its equal share of the source's cost; `shared` says among how many, and the source's full cost is given once beside it. The `usage` event carries each source once under `sources`, keyed by the caller's stream on it, so that totals add up |
 | analysis | `usage.cpu_percent` | time spent in this analysis's work |
 | analysis | `usage.memory_mb`, `usage.memory_estimated` | memory held by the analysis; `true` while this is an estimate |
@@ -392,7 +395,7 @@ The engine connects, listens for `listen_s` seconds (default 10, at most 30) and
 {
   "ok": true,
   "exists": null,
-  "content_type": null,
+  "content_type": "audio/ogg",
   "codec": "vorbis",
   "sample_rate": 32000,
   "channels": 1,
@@ -404,10 +407,11 @@ The engine connects, listens for `listen_s` seconds (default 10, at most 30) and
 }
 ```
 
-- `ok` is false if the address is not allowed, nothing answers, the content is not audio, it cannot be decoded, the bit rate is above `limits.max_bitrate_kbps`, or only silence arrived. `problems` then lists `code` and `message` for each reason.
+- `ok` is false if the address is not allowed, nothing answers, the content is not audio, it cannot be decoded, the bit rate is above `limits.max_bitrate_kbps`, or only silence arrived. `problems` then lists `code` and `message` for each reason; among the codes `address_not_allowed`, `bitrate`, `playlist` and `not_audio`.
+- **The bit rate** is the header's when it gives one; otherwise (lossless streams such as FLAC) the engine measures it from the bytes received against the audio decoded, and refuses above the limit with `bitrate`. Checked on the intranet host: a lossless reference stream measured 1691 kbit/s and was refused.
 - **An address read already** (by another caller's stream): **decided** (2026-10-16), the engine opens no connection and answers `ok: true`, `shared: true` and the rate the source is decoded at as `sample_rate`; codec and bit rate only if known. The Workbench then offers only that rate.
 - A probe is a connection to the operator's server. If a stream with this `input` already exists, the engine opens no connection and answers `"ok": false` with `exists` set to that stream's identifier; the Workbench then offers to join the shared stream. A running decode could not answer anyway: it delivers samples at the stream's chosen rate and knows nothing of the codec or the stream's own rate.
-- `codec`, `sample_rate`, `channels` and `bitrate_kbps` describe the stream as sent, as ffprobe reports them. `content_type` stays `null` until the engine opens the HTTP connection itself, since ffmpeg does not pass it on.
+- `codec`, `sample_rate`, `channels` and `bitrate_kbps` describe the stream as sent, as ffprobe reports them. `content_type` is what the stream's server says it sends (`audio/ogg`, `audio/mpeg`, `audio/flac`, …), since the engine opens the connection itself (engine `0.2.0`).
 - `station_time` is true when the stream carries timestamps of the receiving station (in 1.0 always false; from 1.1, once the engine reads them).
 - The engine runs one probe at a time per address and a few at a time overall; more are answered with `429`.
 

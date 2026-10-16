@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/vrontier/listen-workbench/internal/engine"
 )
@@ -28,7 +29,7 @@ func (r *run) putSecond(id string, spec engine.StreamSpec) (engine.Stream, error
 // engine accepts without connecting while nothing asks for it.
 func (r *run) sharedInput() string {
 	if r.opt.Input != "" {
-		return r.input(7)
+		return r.input(70) // a number no other check uses
 	}
 	return "https://" + r.opt.Prefix + "-callers.invalid/stream"
 }
@@ -80,29 +81,24 @@ func (r *run) callers() {
 		return "", nil
 	})
 
-	r.check(2, "callers: one address in two callers is one source", func() (string, error) {
-		in := r.sharedInput()
-		s1, err := r.putStream(r.id("sh", 1), engine.StreamSpec{Input: in, SampleRate: r.opt.SampleRate})
-		if err != nil {
-			return "", err
+	// The first caller holds the address; the second does not yet. What
+	// the second may learn and is refused comes first, while it has no
+	// stream of its own on the address (within a caller an address exists
+	// once, and duplicate_input or exists would answer instead).
+	s1, s2 := r.id("sh", 1), r.id("sh", 2)
+	held := func() error {
+		live := engine.StreamSpec{Input: r.sharedInput(), SampleRate: r.opt.SampleRate}
+		if r.opt.Input != "" {
+			live.Mode = engine.Continuous
 		}
-		s2, err := r.putSecond(r.id("sh", 2), engine.StreamSpec{Input: in, SampleRate: r.opt.SampleRate})
-		if err != nil {
-			return "", fmt.Errorf("the same address in the second caller: %v (duplicate_input holds within a caller only)", err)
-		}
-		if s1, err = r.c.Stream(r.ctx, s1.ID); err != nil {
-			return "", err
-		}
-		if s1.Shared != 2 || s2.Shared != 2 {
-			return "", fmt.Errorf("shared %d and %d, want 2", s1.Shared, s2.Shared)
-		}
-		if s1.Source == "" {
-			return "", fmt.Errorf("no source in the stream's response")
-		}
-		return fmt.Sprintf("shared 2, source %s", s1.Source), nil
-	})
+		_, err := r.putStream(s1, live)
+		return err
+	}
 
 	r.check(2, "callers: another rate on a shared source is refused (409 rate_conflict)", func() (string, error) {
+		if err := held(); err != nil {
+			return "", err
+		}
 		_, err := r.putSecond(r.id("sh", 3), engine.StreamSpec{Input: r.sharedInput(), SampleRate: other})
 		if err := wantErr(err, 409, "rate_conflict"); err != nil {
 			return "", err
@@ -110,20 +106,57 @@ func (r *run) callers() {
 		return "", nil
 	})
 
-	r.check(2, "callers: one connection feeds both callers' analyses", func() (string, error) {
+	r.check(2, "callers: the probe of an address read already opens no connection", func() (string, error) {
 		if r.opt.Input == "" {
 			return "", skipped("needs -input, a stream the engine may connect to")
 		}
-		s1, s2 := r.id("sh", 1), r.id("sh", 2)
-		live := engine.StreamSpec{Input: r.sharedInput(), SampleRate: r.opt.SampleRate, Mode: engine.Continuous}
-		if _, err := r.putStream(s1, live); err != nil {
-			return "", err
-		}
-		if _, err := r.putSecond(s2, live); err != nil {
+		if err := held(); err != nil {
 			return "", err
 		}
 		if _, err := r.c.PutAnalysis(r.ctx, s1, a1, spec(map[string]any{})); err != nil {
 			return "", err
+		}
+		if err := r.spectrum(s1, a1, nil); err != nil {
+			return "", fmt.Errorf("the first caller's stream does not run: %v", err)
+		}
+		res, err := r.opt.Second.Probe(r.ctx, engine.ProbeRequest{Input: r.sharedInput()})
+		if err != nil {
+			return "", err
+		}
+		if !res.OK || !res.Shared || res.SampleRate != r.opt.SampleRate {
+			return "", fmt.Errorf("ok %v, shared %v, sample_rate %d; want ok, shared, %d", res.OK, res.Shared, res.SampleRate, r.opt.SampleRate)
+		}
+		return "", nil
+	})
+
+	r.check(2, "callers: one address in two callers is one source", func() (string, error) {
+		if err := held(); err != nil {
+			return "", err
+		}
+		spec2 := engine.StreamSpec{Input: r.sharedInput(), SampleRate: r.opt.SampleRate}
+		if r.opt.Input != "" {
+			spec2.Mode = engine.Continuous
+		}
+		st2, err := r.putSecond(s2, spec2)
+		if err != nil {
+			return "", fmt.Errorf("the same address in the second caller: %v (duplicate_input holds within a caller only)", err)
+		}
+		st1, err := r.c.Stream(r.ctx, s1)
+		if err != nil {
+			return "", err
+		}
+		if st1.Shared != 2 || st2.Shared != 2 {
+			return "", fmt.Errorf("shared %d and %d, want 2", st1.Shared, st2.Shared)
+		}
+		if st1.Source == "" {
+			return "", fmt.Errorf("no source in the stream's response")
+		}
+		return fmt.Sprintf("shared 2, source %s", st1.Source), nil
+	})
+
+	r.check(2, "callers: one connection feeds both callers' analyses", func() (string, error) {
+		if r.opt.Input == "" {
+			return "", skipped("needs -input, a stream the engine may connect to")
 		}
 		if _, err := r.opt.Second.PutAnalysis(r.ctx, s2, a2, spec(map[string]any{})); err != nil {
 			return "", err
@@ -136,31 +169,24 @@ func (r *run) callers() {
 		}, func(ev engine.SSE) bool { return ev.Event == "signal.spectrum" }); err != nil {
 			return "", fmt.Errorf("second caller: %v", err)
 		}
-		st, err := r.c.Stream(r.ctx, s1)
-		if err != nil {
-			return "", err
+		// Usage is averaged over 10 seconds: wait for the first values.
+		var st engine.Stream
+		for deadline := time.Now().Add(r.opt.Timeout); ; time.Sleep(time.Second) {
+			var err error
+			if st, err = r.c.Stream(r.ctx, s1); err != nil {
+				return "", err
+			}
+			if st.Usage.Shared == 2 || time.Now().After(deadline) {
+				break
+			}
 		}
 		if st.Usage.Shared != 2 {
-			return "", fmt.Errorf("usage.shared %d, want 2", st.Usage.Shared)
+			return "", fmt.Errorf("usage.shared %d after %s, want 2", st.Usage.Shared, r.opt.Timeout)
 		}
 		if st.Usage.SourceCPUPercent < st.Usage.CPUPercent {
 			return "", fmt.Errorf("the source's full cost %.2f %% is below the stream's share %.2f %%", st.Usage.SourceCPUPercent, st.Usage.CPUPercent)
 		}
-		return fmt.Sprintf("share %.2f %% of %.2f %% CPU", st.Usage.CPUPercent, st.Usage.SourceCPUPercent), nil
-	})
-
-	r.check(2, "callers: the probe of an address read already opens no connection", func() (string, error) {
-		if r.opt.Input == "" {
-			return "", skipped("needs -input, a stream the engine may connect to")
-		}
-		res, err := r.opt.Second.Probe(r.ctx, engine.ProbeRequest{Input: r.sharedInput()})
-		if err != nil {
-			return "", err
-		}
-		if !res.OK || !res.Shared || res.SampleRate != r.opt.SampleRate {
-			return "", fmt.Errorf("ok %v, shared %v, sample_rate %d; want ok, shared, %d", res.OK, res.Shared, res.SampleRate, r.opt.SampleRate)
-		}
-		return "", nil
+		return fmt.Sprintf("share %.1f of %.1f MB, %.2f of %.2f %% CPU", st.Usage.MemoryMB, st.Usage.SourceMemoryMB, st.Usage.CPUPercent, st.Usage.SourceCPUPercent), nil
 	})
 
 	r.check(2, "callers: deleting in one caller leaves the other's stream", func() (string, error) {
