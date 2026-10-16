@@ -261,7 +261,7 @@ A member creates tokens for programs and AI assistants. A token:
 | Rule | Proposal |
 |---|---|
 | URL | `http` and `https` only; the decoder is restricted to those protocols |
-| Addresses the Observatory listens to | **decided** (2026-10-16): refused at registration, from a list set on the server (`LOW_RESERVED_INPUTS`, a file of hosts or addresses, not in the repository), until such a stream can reach the engine through the Observatory's own connection with its operator's consent ([control-api.md](control-api.md#reserved)) |
+| Addresses the Observatory listens to | **decided** (2026-10-16): refused at registration and kept out of the engine, from a list set on the server (`LOW_RESERVED_INPUTS`, a file of hosts or addresses, not in the repository), until the stream's operator has agreed to the Workbench. Since `listen-ingest` holds the one connection to each station, the list is about consent only: an agreed station attaches to the existing connection ([control-api.md](control-api.md#which-addresses-the-engine-connects-to)) |
 | Requests to internal addresses | the stream's address must not be loopback, private, link-local or the server's own; checked again on every redirect and reconnect. **Needs an engine change:** today ffmpeg opens the connection, follows redirects and reconnects by itself, so only the address as registered can be checked. The engine has to open the HTTP connection itself and hand the bytes to ffmpeg. Until then sign-up is by invitation only, which is **decided**. |
 | Content | an audio content type, decodable, at most 512 kbit/s |
 | Per member | **decided:** no limit on the number of streams; a cap on CPU and RAM, and a disk quota of 0.5 GB, see [Resources and caps](#resources-and-caps) |

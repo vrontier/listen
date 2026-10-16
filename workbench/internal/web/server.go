@@ -480,7 +480,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 	if sess, ok := sessionFrom(r); ok {
 		u := sess.User
 		p.User, p.CSRF = &u, sess.CSRF
-		if ready, problem, _ := s.sync.status(); !ready {
+		if _, problem, _ := s.sync.status(); problem != "" {
 			p.EngineProblem = problem
 		}
 	}

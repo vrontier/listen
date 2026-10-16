@@ -159,6 +159,11 @@ type Stream struct {
 	Usage  Usage  `json:"usage"`
 }
 
+// CodeIngestUnavailable is a stream's last_error while the engine cannot
+// reach listen-ingest, the platform's only service that connects to
+// stations; the stream is then reconnecting, not refused.
+const CodeIngestUnavailable = "ingest_unavailable"
+
 // Problem is an error or a probe problem with a code for programs and a
 // message for people.
 type Problem struct {

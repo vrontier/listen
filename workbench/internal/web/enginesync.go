@@ -62,6 +62,16 @@ func newEngineSync(eng *engine.Client, db *catalogue.DB) *engineSync {
 func (s *engineSync) status() (ready bool, problem string, info engine.Info) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.ready {
+		// The engine answers, but the service that holds the stations'
+		// connections (listen-ingest) does not: no station is heard, and
+		// none of them is at fault.
+		for _, st := range s.streams {
+			if st.LastError != nil && st.LastError.Code == engine.CodeIngestUnavailable {
+				return true, "the platform's connection service (listen-ingest) does not answer; sources reconnect as soon as it is back, and the gap is recorded as an absence", s.info
+			}
+		}
+	}
 	return s.ready, s.problem, s.info
 }
 

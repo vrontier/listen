@@ -156,7 +156,7 @@ engine
 
 - `input` and `sample_rate` cannot be changed on an existing stream (`409`, code `immutable`). A different address or rate is a different stream with a new identifier, because memories made from one do not compare with the other.
 - `mode`, `idle_after_s`, `retry_max_s` and `view` can be changed at any time without interrupting the connection. With `view` set, every `signal.spectrum` of every analysis of the stream carries `payload.view` (`min_hz`, `max_hz`, `scale`, `bands`) next to the analysis's own bands, which do not change; the stream's response reports `view` with its effective values.
-- A stream's response has `shared`, the number of streams of all callers on its source (this one included), and `source`: `network`, `file` (development) or `local` (an Observatory listener's tap, later). **Decided** (2026-10-16).
+- A stream's response has `shared`, the number of streams of all callers on its source (this one included), and `source`: `ingest` (read through `listen-ingest`, see [Which addresses the engine connects to](#which-addresses-the-engine-connects-to)), `network` (an engine that connects itself, in development), or `file` (development). **Decided** (2026-10-16); `ingest` since the cut-over on the intranet host the same day, which replaced the planned `local` tap.
 - A stream without analyses holds no connection, whatever its mode.
 - The engine connects to an address once, however many analyses and subscribers there are. Within one caller it refuses a second stream with the same `input` (`409`, code `duplicate_input`, with the existing stream's identifier). Addresses are compared as written; recognising two spellings of one stream is the Workbench's task.
 
@@ -210,7 +210,13 @@ Response to `PUT` and `GET`:
 
 ### Which addresses the engine connects to
 
-The engine, not the Workbench, enforces what may be connected to, because only the engine sees redirects and reconnects.
+**Decided** (2026-10-16, the maintainer; the engine owner's proposal): **`listen-ingest` is the platform's only component that connects to stations.** It is a small service of the listen repository, one per machine, that opens a station's connection, checks it, keeps it up and passes the original bytes, unchanged, to every consumer on the same machine over its socket (`/run/listen-ingest/feeds.sock`): the engine, and the Observatory's listeners. A station is connected to once per machine however many analyses, callers and listeners use it; the first consumer makes the ingest connect, and it closes the connection a while after the last one has gone. It keeps an Ogg or FLAC stream's header pages, so a consumer joining at any moment can decode, and it passes the stations' timestamps through unchanged. Everything about the connection lives in it: the address policy below at every dial and redirect, the bit-rate measurement and limit, reconnecting, the byte count, the content type, the refusal of playlists and pages. Running since 2026-10-16 on the intranet host; on the production host later (decided: the intranet is evaluated first).
+
+- **For the Workbench nothing changes in the API:** a stream reports `source: "ingest"`, its states and `last_error` codes are the feed's, passed through per stream.
+- **`ingest_unavailable`** (**decided** 2026-10-16): while the engine cannot reach the ingest, its streams are `reconnecting` (not `refused`) with `last_error.code` `ingest_unavailable`. The Workbench then says on its pages that the platform's connection service does not answer, rather than that a station failed; the time counts as an absence in a run's data set.
+- **Consent stays with the Workbench:** an address the Observatory reads is refused by the Workbench's reserved list until its operator has agreed to the Workbench; once agreed, the engine's stream attaches to the ingest's existing feed, with no new connection. `shared` counts the engine's streams only; nothing about the Observatory's consumers reaches the Workbench.
+
+The rules below are enforced where the connection is made, which is now the ingest; the engine reports them unchanged.
 
 - Only `http` and `https`.
 - Not a loopback, private or link-local address, and not one of the server's own. The check is made on the address actually connected to, at the first connection, at every redirect and at every reconnect.
@@ -601,7 +607,7 @@ Not in version 1. Named here so that version 1 does not block them.
 
 | Later feature | Where it attaches |
 |---|---|
-| A local input | **decided** in principle (2026-10-16), not before the engine's phase 2: for a stream the Observatory already decodes, its listener passes its decoded, unfiltered samples to the engine over a local socket, so the station is connected to once. A stream input such as `local:<name>`, accepted only for names the engine's operator configured, never from a member, and only after the stream's operator agreed to the Workbench (no answer is no). The stream then has the Observatory's sample rate and depends on its listener. Until then the Workbench refuses to register addresses the Observatory listens to, from a list set on the server |
+| A local input | superseded (2026-10-16): planned as a tap from the Observatory's listener to the engine; `listen-ingest` replaced it, see [Which addresses the engine connects to](#which-addresses-the-engine-connects-to) |
 | Defined motifs and profiles | a `definitions` list in an analysis; `capabilities.detectors` with each detector's parameters and ranges; a new event type |
 | Trial runs on a capture | a resource for captures under a stream, and a way to run an analysis over one without touching its live memory. A trial on the live stream needs nothing new: see [Open](#answers-to-the-open-points), point 3 |
 | Audio in the browser | allowed (decided 2026-10-14). A field `audio` on a stream and a data path for the encoded audio; the stream's `position_s` already allows lining events up with it. The engine's existing relay is the starting point. Its encoder's CPU and the outgoing bandwidth belong in [Usage](#usage) |

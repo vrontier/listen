@@ -29,7 +29,7 @@ Tests: `go test ./...`. The engine's control API version this Workbench needs: *
 
 ## Deploying
 
-`make deploy intranet` runs the tests, builds the Workbench for Linux and installs it on the intranet host as `low.home.arpa`. The engine, `listen-engine`, is installed there beforehand from the listen repository (`scripts/deploy-engine.sh`), with its own user and group `listen-engine`, its unit `listen-engine.service` and its socket `/run/listen-engine/control.sock`; the Workbench's user is put in its group. That host's SSH name goes in `deploy/local.mk` (ignored by git) as `INTRANET_HOST = …`; the account needs sudo without a password. `make deploy production` is reserved for `low.vrontier.org`, which is not set up yet.
+`make deploy intranet` runs the tests, builds the Workbench for Linux and installs it on the intranet host as `low.home.arpa`. The engine, `listen-engine`, is installed there beforehand from the listen repository (`scripts/deploy-engine.sh`), with its own user and group `listen-engine`, its unit `listen-engine.service` and its socket `/run/listen-engine/control.sock`; the Workbench's user is put in its group. The engine reads every station through `listen-ingest`, installed by the same script, the platform's only component that connects to stations. That host's SSH name goes in `deploy/local.mk` (ignored by git) as `INTRANET_HOST = …`; the account needs sudo without a password. `make deploy production` is reserved for `low.vrontier.org`, which is not set up yet.
 
 What `deploy/install.sh` sets up there:
 

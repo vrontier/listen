@@ -165,3 +165,25 @@ func TestPreviewKeepsStreamConnected(t *testing.T) {
 		t.Fatalf("after the preview: %s", m)
 	}
 }
+
+// When the engine cannot reach listen-ingest, the pages say that the
+// platform's connection service is down, not that a station failed.
+func TestIngestUnavailable(t *testing.T) {
+	r := newRig(t)
+	if _, problem, _ := r.srv.sync.status(); problem != "" {
+		t.Fatalf("problem before: %q", problem)
+	}
+	r.srv.sync.mu.Lock()
+	r.srv.sync.streams["s-0001"] = engine.Stream{ID: "s-0001", State: "reconnecting",
+		LastError: &engine.Problem{Code: engine.CodeIngestUnavailable, Message: "listen-ingest does not answer"}}
+	r.srv.sync.mu.Unlock()
+	ready, problem, _ := r.srv.sync.status()
+	if !ready || !strings.Contains(problem, "listen-ingest") {
+		t.Fatalf("ready %v, problem %q", ready, problem)
+	}
+	ctx := context.Background()
+	r.db.CreateUser(ctx, "m@example.org", "Mira", false)
+	if _, page, _ := r.get(r.loginAs("m@example.org"), "/"); !strings.Contains(page, "connection service (listen-ingest) does not answer") {
+		t.Fatal("no banner")
+	}
+}

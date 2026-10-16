@@ -38,6 +38,7 @@ listener ────────┤
 
 - **The listener** is the engine: it connects to a stream, decodes it, analyses it, remembers motifs and serves the results. It lives in the Observatory's repository (`github.com/vrontier/listen`, directory `listener/`). Profiles and defined motifs, as drafted in the Observatory's `docs/profiles-and-community-spec.md` (Parts A and B), belong to it.
 - **The Observatory** is the showcase on top of it.
+- **`listen-ingest`** (**decided** 2026-10-16, the maintainer, on the engine owner's proposal) is the platform's only component that connects to stations: one small service per machine, in the listen repository, that holds the one connection to each station and passes its original bytes to the engine and to the Observatory's listeners on the same machine. "Read each source once, then distribute" therefore holds for the whole platform, not only inside one process, and rule 2 below is kept by the ingest rather than by people. Running on the intranet host since 2026-10-16; on the production host (ionos, where the Workbench's production will run beside the Observatory, decided 2026-10-16) after the intranet has been evaluated. See [control-api.md](control-api.md#which-addresses-the-engine-connects-to).
 - **The Workbench** is the layer for accounts, tokens and configuration on top of the same listeners. The community section of that spec (Part C) and the Observatory's `docs/user-streams-design.md` move here; see [members-and-streams.md](members-and-streams.md).
 
 A separate, third repository holds offline work on recordings (for example decoding weak digital radio signals). That is not stream observation and does not shape this design. Its results may appear on the Workbench's public research pages.
@@ -108,7 +109,7 @@ Rule 1 makes the Workbench depend on the Observatory's repository; that much is 
 browser, programs, AI assistants
         │
         ▼
-web server ──► Workbench process ──control API, local socket──► engine process ──► streams
+web server ──► Workbench process ──control API, local socket──► engine process ──► listen-ingest ──► stations
                (this repository)                               (listen repository)
                pages, catalogue, login,                        connections, decodes,
                tokens, data stream, MCP                        analyses, memory
