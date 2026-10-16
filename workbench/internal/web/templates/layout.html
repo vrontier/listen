@@ -83,10 +83,15 @@
   </div>
   <div class="plot" data-view="spectrogram" hidden>
     <div class="spectro">
-      <div class="axis"><span class="axis-max"></span><span class="axis-min"></span></div>
-      <canvas class="spectrogram" width="960" height="{{if .Small}}120{{else}}200{{end}}" aria-label="Spectrogram of {{.Name}}: time runs to the left, frequency upwards on a log scale"></canvas>
+      <div class="y-title">f, Hz</div>
+      <div class="y-ticks" aria-hidden="true"></div>
+      <canvas class="spectrogram" width="960" height="{{if .Small}}120{{else}}220{{end}}" aria-label="Spectrogram of {{.Name}}: time runs to the right, newest at the right edge; frequency upwards on a log scale; colour is the relative level from 0 (dark blue) to 1 (dark red)"></canvas>
+      <div class="cbar" aria-hidden="true"><div class="cbar-ramp"></div><div class="cbar-ticks"><span style="bottom:0%">0</span><span style="bottom:25%">0.25</span><span style="bottom:50%">0.5</span><span style="bottom:75%">0.75</span><span style="bottom:100%">1</span></div></div>
+      <div class="cbar-title">relative level</div>
+      <div class="x-ticks" aria-hidden="true"></div>
+      <div class="x-title">time, s before now<span class="x-now"></span></div>
     </div>
-    <div class="spectro-foot"><span class="t-span"></span><span class="legend">quiet <span class="ramp"></span> loud · relative level · peaks in copper</span><span>now</span></div>
+    <p class="meta small">White marks the spectral peaks left after the filter rules.</p>
   </div>
   <figcaption class="summary meta small"></figcaption>
 </figure>{{end}}

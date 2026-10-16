@@ -195,7 +195,6 @@ footer { max-width: 1116px; color: var(--muted); font-size: 0.875rem; border-top
 .narrow { max-width: 560px; }
 .narrow.wide { max-width: 760px; }
 .meta { color: var(--muted); font-size: 0.9375rem; }
-main > p, section > p, h1 + .meta { max-width: 80ch; }
 .crumbs { margin: 0; font-size: 0.9rem; color: var(--muted); }
 .empty { color: var(--muted); }
 
@@ -284,9 +283,26 @@ canvas.lanes { width: 100%; background: var(--instrument); border-radius: var(--
 table.correlations td:nth-child(n+2) { font-variant-numeric: tabular-nums; }
 .above { color: var(--ok); }
 .live-head { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; align-items: baseline; margin-bottom: 0.5rem; }
-.spectro { display: flex; gap: 0.4rem; background: var(--instrument); border-radius: var(--radius); padding: 8px 8px 4px; }
-.axis { display: flex; flex-direction: column; justify-content: space-between; font: 0.72rem var(--font-data); color: var(--instrument-muted); white-space: nowrap; }
-canvas.spectrogram { width: 100%; height: 200px; background: var(--instrument); border-radius: 2px; image-rendering: pixelated; min-width: 0; }
+/* The spectrogram, framed like a figure: frequency axis to the left, the
+   colour bar to the right, seconds before now below. */
+.spectro { display: grid; grid-template-columns: 1.2rem 2.6rem minmax(0, 1fr) 3.4rem 1.2rem; grid-template-rows: auto 1.5rem auto;
+  grid-template-areas: "yt yk plot cbar ct" ". . xk . ." ". . xt . ."; background: var(--instrument); border-radius: var(--radius); padding: 12px 8px 8px; color: var(--instrument-text); font: 0.72rem var(--font-data); }
+.spectro canvas.spectrogram { grid-area: plot; }
+.y-title, .cbar-title { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; align-self: center; color: var(--instrument-muted); }
+.y-title { grid-area: yt; }
+.cbar-title { grid-area: ct; transform: none; }
+.y-ticks, .x-ticks, .cbar-ticks { position: relative; }
+.y-ticks { grid-area: yk; }
+.y-ticks span { position: absolute; right: 6px; transform: translateY(-50%); }
+.y-ticks span::after { content: ""; position: absolute; right: -6px; top: 50%; width: 4px; border-top: 1px solid var(--instrument-muted); }
+.x-ticks { grid-area: xk; }
+.x-ticks span { position: absolute; top: 4px; transform: translateX(-50%); }
+.x-ticks span::before { content: ""; position: absolute; left: 50%; top: -4px; height: 4px; border-left: 1px solid var(--instrument-muted); }
+.x-title { grid-area: xt; text-align: center; color: var(--instrument-muted); }
+.cbar { grid-area: cbar; display: flex; gap: 4px; padding-left: 8px; }
+.cbar-ramp { width: 12px; border: 1px solid var(--instrument-muted); }
+.cbar-ticks span { position: absolute; left: 0; transform: translateY(50%); }
+canvas.spectrogram { width: 100%; height: 220px; background: var(--instrument); image-rendering: pixelated; min-width: 0; display: block; }
 .events { list-style: none; padding: 0; margin: 0; max-height: 22rem; overflow-y: auto; font-size: 0.88rem; }
 .events li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); display: flex; gap: 0.6rem; }
 .events time { color: var(--muted); font-family: var(--font-data); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
@@ -396,9 +412,6 @@ canvas.landscape { display: block; width: 100%; height: 340px; background: var(-
 @media (max-width: 767px) { canvas.landscape { height: 260px; } .instrument.small canvas.landscape { height: 170px; } }
 canvas.landscape:focus-visible, canvas.lanes:focus-visible { outline: 3px solid var(--instrument-text); outline-offset: 2px; }
 .readout { position: absolute; pointer-events: none; background: var(--surface); color: var(--text); border: 1px solid var(--control-line); border-radius: 4px; padding: 2px 8px; font: 0.8rem/1.5 var(--font-data); white-space: nowrap; box-shadow: var(--shadow); }
-.spectro-foot { display: flex; justify-content: space-between; gap: 8px; font: 0.72rem var(--font-data); color: var(--muted); padding: 4px 8px 0 3.4rem; }
-.spectro-foot .legend { display: inline-flex; align-items: center; gap: 6px; }
-.spectro-foot .ramp { display: inline-block; width: 90px; height: 8px; border-radius: 2px; }
 .instrument .summary { margin-top: 6px; }
 .lanes-wrap { position: relative; }
 .lanes-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 8px; }

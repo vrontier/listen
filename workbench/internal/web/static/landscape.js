@@ -256,7 +256,7 @@
     for (let i = 1; i < line.bands.length; i++) if (line.bands[i] > line.bands[best]) best = i;
     const peaks = line.peaks.length;
     this.summary.textContent = "Now: strongest near " + fmtHz(this.hzOfBand(best)) + ", level " + line.bands[best].toFixed(2) + "; " +
-      peaks + " peak" + (peaks === 1 ? "" : "s") + " detected (copper). Levels are relative, 0 to 1, as the engine sends them. " +
+      peaks + " peak" + (peaks === 1 ? "" : "s") + " detected. Levels are relative, 0 to 1, as the engine sends them. " +
       utc(this.latest * STEP_MS) + " UTC.";
   };
 

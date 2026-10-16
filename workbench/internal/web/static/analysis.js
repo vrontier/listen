@@ -7,14 +7,15 @@
 (function () {
   "use strict";
 
-  // Colour map from quiet (dark blue) to loud (pale yellow).
+  // The spectrogram's colour scale, "jet" as in the usual scientific
+  // spectrograms: dark blue (0) through cyan, yellow and red to dark red (1).
   function colour(v) {
     v = Math.max(0, Math.min(1, v));
-    const r = Math.round(255 * Math.min(1, Math.max(0, 1.6 * v - 0.3)));
-    const g = Math.round(255 * Math.min(1, Math.max(0, 1.4 * v - 0.15)) * 0.95);
-    const b = Math.round(255 * (0.25 + 0.5 * Math.sin(Math.PI * Math.min(1, v * 1.1))));
-    return "rgb(" + r + "," + g + "," + b + ")";
+    const c = (x) => Math.round(255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4 * v - x))));
+    return "rgb(" + c(3) + "," + c(2) + "," + c(1) + ")";
   }
+
+  const HZ_TICKS = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
 
   // The words for a connection's state, from the page (statuses.go).
   function connWord(state) {
@@ -58,7 +59,8 @@
     const ctx = canvas.getContext("2d");
     const fig = root.querySelector(".instrument");
     const scape = window.LowLandscape ? new window.LowLandscape(fig.querySelector("canvas.landscape"), fig.querySelector(".readout"), fig.querySelector(".summary")) : null;
-    const spanEl = fig.querySelector(".t-span");
+    const yTicks = fig.querySelector(".y-ticks"), xTicks = fig.querySelector(".x-ticks"), xNow = fig.querySelector(".x-now");
+    let xSpan = 0;
     let paused = false, lastSpec = 0, frameMs = 0;
 
     // The view: landscape or spectrogram, remembered in this browser.
@@ -86,10 +88,31 @@
       pausedNote.hidden = !paused;
       if (scape) scape.pause(paused);
     });
-    // The colour scale of the spectrogram, as its legend.
+    // The colour scale of the spectrogram, as its colour bar.
     const stops = [];
-    for (let i = 0; i <= 10; i++) stops.push(colour(i / 10));
-    fig.querySelector(".ramp").style.background = "linear-gradient(to right, " + stops.join(", ") + ")";
+    for (let i = 0; i <= 16; i++) stops.push(colour(i / 16));
+    fig.querySelector(".cbar-ramp").style.background = "linear-gradient(to top, " + stops.join(", ") + ")";
+
+    // The axes' ticks: frequencies on the log scale, seconds before now.
+    function tick(box, text, prop, pct) {
+      const s = document.createElement("span");
+      s.textContent = text;
+      s.style[prop] = pct + "%";
+      box.append(s);
+    }
+    function frequencyTicks(min, max) {
+      yTicks.textContent = "";
+      const lmin = Math.log(min), lmax = Math.log(max);
+      for (const hz of HZ_TICKS) {
+        if (hz < min || hz > max) continue;
+        tick(yTicks, hz >= 1000 ? hz / 1000 + "k" : String(hz), "top", (1 - (Math.log(hz) - lmin) / (lmax - lmin)) * 100);
+      }
+    }
+    function timeTicks(span) {
+      const step = [2, 5, 10, 15, 30, 60, 120].find((s) => span / s <= 6) || 300;
+      xTicks.textContent = "";
+      for (let t = 0; t <= span; t += step) tick(xTicks, t === 0 ? "0" : "−" + t, "left", (1 - t / span) * 100);
+    }
     const statusEl = root.querySelector(".status");
     const levelEl = root.querySelector(".level");
     const clockEl = root.querySelector(".clock");
@@ -101,8 +124,7 @@
       const w = canvas.width, h = canvas.height;
       if (!range || range.min !== p.min_hz || range.max !== p.max_hz) {
         range = { min: p.min_hz, max: p.max_hz };
-        root.querySelector(".axis-min").textContent = fmtHz(p.min_hz);
-        root.querySelector(".axis-max").textContent = fmtHz(p.max_hz);
+        frequencyTicks(p.min_hz, p.max_hz);
       }
       const col = 3;
       ctx.drawImage(canvas, col, 0, w - col, h, 0, 0, w - col, h);
@@ -113,7 +135,7 @@
         ctx.fillRect(w - col, y0, col, y1 - y0);
       }
       const lmin = Math.log(p.min_hz), lmax = Math.log(p.max_hz);
-      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--copper").trim() || "#ab693d";
+      ctx.fillStyle = "#ffffff";
       for (const pk of p.peaks || []) {
         const y = h - ((Math.log(pk.hz) - lmin) / (lmax - lmin)) * h;
         ctx.fillRect(w - col, Math.round(y) - 1, col, 2);
@@ -189,7 +211,12 @@
         const now = Date.now();
         if (lastSpec) frameMs = frameMs ? frameMs * 0.95 + (now - lastSpec) * 0.05 : now - lastSpec;
         lastSpec = now;
-        if (frameMs) spanEl.textContent = "−" + Math.round((canvas.width / 3) * frameMs / 1000) + " s";
+        if (frameMs) {
+          const span = Math.round((canvas.width / 3) * frameMs / 1000);
+          if (span !== xSpan) { xSpan = span; timeTicks(span); }
+        }
+        const at = new Date(e.timestamp);
+        if (!paused && !isNaN(at)) xNow.textContent = " (0 = " + at.toISOString().slice(11, 19) + " UTC)";
         if (!paused) drawSpectrum(e.payload);
       });
       es.addEventListener("signal.frame", (m) => {
