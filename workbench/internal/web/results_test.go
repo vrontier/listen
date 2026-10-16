@@ -44,7 +44,7 @@ func TestResults(t *testing.T) {
 	member := r.loginAs("m@example.org")
 	_, page, _ := r.get(member, "/results")
 	csrf := csrfOf(t, page)
-	for _, want := range []string{"Your space", "of 512.0 MB used", runURL + "/all.zip", "Hum watch", "Last 30 days", ">now<", ">-23<"} {
+	for _, want := range []string{"Your space", "of 512.0 MB used", runURL + "/all.zip", "Hum watch", "Last 30 days", ">now<", ">-23<", "<br>-<br>" + time.Now().UTC().Format("01") + "</span>"} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("results page lacks %q", want)
 		}

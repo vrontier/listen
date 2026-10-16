@@ -262,6 +262,7 @@ type usageBar struct {
 	X, Y, W, H float64
 	Title      string
 	Axis       string // under the bar: hours back for hours, the day of the month for days
+	Month      string // for days, the month, shown below the day
 }
 
 type usageData struct {
@@ -305,14 +306,14 @@ func bars(samples []catalogue.UsageSample, end time.Time, slot time.Duration, n 
 	for i, v := range sums {
 		h := v * scale
 		t := start.Add(slot * time.Duration(i)).UTC()
-		axis := t.Format("02")
+		axis, month := t.Format("02"), t.Format("01")
 		if slot < 24*time.Hour {
-			axis = "now"
+			axis, month = "now", ""
 			if back := n - 1 - i; back > 0 {
 				axis = fmt.Sprintf("-%d", back)
 			}
 		}
-		out[i] = usageBar{X: float64(i)*w + 1, Y: 100 - h, W: w - 2, H: h, Title: fmt.Sprintf("%s: %s cores on average", t.Format(label), coresOf(v)), Axis: axis}
+		out[i] = usageBar{X: float64(i)*w + 1, Y: 100 - h, W: w - 2, H: h, Title: fmt.Sprintf("%s: %s cores on average", t.Format(label), coresOf(v)), Axis: axis, Month: month}
 	}
 	return out, max
 }
