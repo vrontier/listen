@@ -36,6 +36,16 @@
   {{template "content" .}}
 </main>
 <footer>© 2026 Mike Quest · <a href="https://github.com/vrontier/listen-workbench" rel="noopener">Source code on GitHub</a></footer>
+<dialog id="confirm" class="confirm" aria-labelledby="confirm-text">
+  <form method="dialog">
+    <p id="confirm-text"></p>
+    <div class="actions">
+      <button value="yes" class="danger" id="confirm-yes">Yes</button>
+      <button value="no" class="secondary" autofocus>Cancel</button>
+    </div>
+  </form>
+</dialog>
+<script src="{{asset "confirm.js"}}" defer></script>
 </body>
 </html>
 

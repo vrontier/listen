@@ -207,6 +207,9 @@ func TestMCPControl(t *testing.T) {
 	if _, page, _ := r.get(member, "/"); !strings.Contains(page, "1 with control") || !strings.Contains(page, "1 run started by a token going on") || !strings.Contains(page, "never registers, shares, publishes or deletes") {
 		t.Fatal("Home does not tell of control")
 	}
+	if _, page, _ := r.get(member, "/runs"); !strings.Contains(page, `class="stop-x"`) || !strings.Contains(page, `data-confirm="Stop run`) || !strings.Contains(page, `id="confirm"`) {
+		t.Fatal("Runs page: no stop button that asks first")
+	}
 	if text, isErr := r.toolText(ctl, "stop_run", aid+`}`); isErr {
 		t.Fatalf("stop: %s", text)
 	}

@@ -487,7 +487,7 @@ func TestRunKeepsSourceConnected(t *testing.T) {
 		t.Fatalf("draft source in a run: %s", m)
 	}
 	_, page, _ = r.get(member, aURL)
-	if !strings.Contains(page, "Stop the run") || !strings.Contains(page, "Run 1 since") {
+	if !strings.Contains(page, `class="stop-x" title="Stop run 1"`) || !strings.Contains(page, `data-confirm="Stop run 1 of`) || !strings.Contains(page, "Run 1 since") {
 		t.Fatal("running analysis page does not offer to stop")
 	}
 	if _, list, _ := r.get(member, "/analyses"); !strings.Contains(list, "running · private") {

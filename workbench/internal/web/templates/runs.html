@@ -18,9 +18,9 @@
       <td>{{.Duration}} <span class="meta">so far, {{if .Ends.IsZero}}until stopped{{else}}until {{day .Ends}}{{end}}</span></td>
       <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
       <td>{{.StartedBy}}{{with .Token}} <span class="meta small">token {{.}}</span>{{end}}</td>
-      <td><form method="post" action="/analyses/{{.AnalysisID}}/stop" class="inline-form">
+      <td><form method="post" action="/analyses/{{.AnalysisID}}/stop" class="inline-form" data-confirm="Stop run {{.Number}} of {{.AnalysisName}} now? Its data set is put together from what it has recorded so far." data-confirm-yes="Stop the run">
         <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="back" value="runs">
-        <button class="secondary">Stop</button>
+        <button class="stop-x" title="Stop run {{.Number}}" aria-label="Stop run {{.Number}}">×</button>
       </form></td>
     </tr>{{end}}</tbody>
   </table>
