@@ -1,4 +1,4 @@
-package engine
+package fetch
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// The engine opens a stream's HTTP connection itself and hands the bytes to
+// The engine (and the ingest) open a stream's HTTP connection itself and hands the bytes to
 // ffmpeg. Every connection is then checked on the address actually dialled,
 // after every redirect and every new lookup of the name, and the bytes that
 // arrive can be counted (the bit rate of lossless streams, the incoming
@@ -26,14 +26,14 @@ type dialRefused struct{ p *Problem }
 func (d *dialRefused) Error() string { return d.p.Message }
 
 // trusted: the operator allows this host although it may be private.
-func (p *addressPolicy) trusted(host, port string) bool {
+func (p *Policy) trusted(host, port string) bool {
 	h := strings.ToLower(host)
 	return p.allowPrivate || p.allowHosts[h] || p.allowHosts[net.JoinHostPort(h, port)]
 }
 
 // dial connects to addr only if every address the name resolves to is
 // public and not the server's own.
-func (p *addressPolicy) dial(ctx context.Context, network, addr string) (net.Conn, error) {
+func (p *Policy) dial(ctx context.Context, network, addr string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -50,13 +50,13 @@ func (p *addressPolicy) dial(ctx context.Context, network, addr string) (net.Con
 			return nil, &dialRefused{notAllowed()}
 		}
 		rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		addrs, err = p.resolve(rctx, host)
+		addrs, err = p.Resolve(rctx, host)
 		cancel()
 		if err != nil || len(addrs) == 0 {
 			return nil, fmt.Errorf("%s does not resolve", host)
 		}
 	}
-	own := p.own()
+	own := p.Own()
 	for _, a := range addrs {
 		if !public(a.Unmap()) {
 			return nil, &dialRefused{notAllowed()}
@@ -78,7 +78,7 @@ func (p *addressPolicy) dial(ctx context.Context, network, addr string) (net.Con
 	return nil, last
 }
 
-func (p *addressPolicy) client(version string) *http.Client {
+func (p *Policy) Client(version string) *http.Client {
 	tr := &http.Transport{
 		Proxy:                 nil, // a proxy would hide the address actually reached
 		DialContext:           p.dial,
@@ -105,13 +105,13 @@ func (p *addressPolicy) client(version string) *http.Client {
 	}
 }
 
-// openError tells a failed connection from a refused one.
-type openError struct {
-	p       *Problem
-	refused bool
+// OpenError tells a failed connection from a refused one.
+type OpenError struct {
+	P       *Problem
+	Refused bool
 }
 
-func (o *openError) Error() string { return o.p.Message }
+func (o *OpenError) Error() string { return o.P.Message }
 
 // counter counts the bytes read through it.
 type counter struct {
@@ -125,40 +125,40 @@ func (c counter) Read(b []byte) (int, error) {
 	return k, err
 }
 
-// open connects to a stream address and returns its body, counting into n,
+// Open connects to a stream address and returns its body, counting into n,
 // with ffmpeg's format for its content type ("" to let ffmpeg detect it)
 // and the content type as the server sent it.
-func (e *Engine) open(ctx context.Context, input string, n *atomic.Int64) (io.ReadCloser, string, string, error) {
+func Open(ctx context.Context, client *http.Client, userAgent, input string, n *atomic.Int64) (io.ReadCloser, string, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, input, nil)
 	if err != nil {
-		return nil, "", "", &openError{p: &Problem{Code: "bad_address", Message: "the address cannot be read"}, refused: true}
+		return nil, "", "", &OpenError{P: &Problem{Code: "bad_address", Message: "the address cannot be read"}, Refused: true}
 	}
-	req.Header.Set("User-Agent", "listen-engine/"+e.opts.Version)
+	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "audio/*, application/ogg, */*;q=0.5")
-	resp, err := e.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		var dr *dialRefused
 		if errors.As(err, &dr) {
-			return nil, "", "", &openError{p: dr.p, refused: true}
+			return nil, "", "", &OpenError{P: dr.p, Refused: true}
 		}
-		return nil, "", "", &openError{p: &Problem{Code: "no_answer", Message: "the address could not be opened: " + shortErr(err)}}
+		return nil, "", "", &OpenError{P: &Problem{Code: "no_answer", Message: "the address could not be opened: " + shortErr(err)}}
 	}
 	ct := resp.Header.Get("Content-Type")
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, "", ct, &openError{p: &Problem{Code: "no_answer", Message: fmt.Sprintf("the server answered %s", resp.Status)}}
+		return nil, "", ct, &OpenError{P: &Problem{Code: "no_answer", Message: fmt.Sprintf("the server answered %s", resp.Status)}}
 	}
-	format, p := formatFor(ct)
+	format, p := FormatFor(ct)
 	if p != nil {
 		resp.Body.Close()
-		return nil, "", ct, &openError{p: p}
+		return nil, "", ct, &OpenError{P: p}
 	}
 	return counter{resp.Body, n}, format, ct, nil
 }
 
-// formatFor is ffmpeg's input format for a content type, or a problem for
+// FormatFor is ffmpeg's input format for a content type, or a problem for
 // content that is not a stream of audio.
-func formatFor(ct string) (string, *Problem) {
+func FormatFor(ct string) (string, *Problem) {
 	mt, _, _ := mime.ParseMediaType(ct)
 	switch mt {
 	case "audio/mpeg", "audio/mp3", "audio/mpeg3":

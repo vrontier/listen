@@ -18,14 +18,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vrontier/listen/listener/internal/fetch"
 )
 
 var _ = http.StatusOK
 
 func TestAddressPolicy(t *testing.T) {
-	p := newAddressPolicy(false, false)
-	p.own = func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("203.0.113.7")} }
-	p.resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
+	p := fetch.NewPolicy(false, false)
+	p.Own = func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("203.0.113.7")} }
+	p.Resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
 		switch host {
 		case "public.example":
 			return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
@@ -57,7 +59,7 @@ func TestAddressPolicy(t *testing.T) {
 		{"http:///nohost", "bad_address"},
 	}
 	for _, c := range cases {
-		got, _ := p.check(context.Background(), c.in)
+		got, _ := p.Check(context.Background(), c.in)
 		code := ""
 		if got != nil {
 			code = got.Code
@@ -67,22 +69,22 @@ func TestAddressPolicy(t *testing.T) {
 		}
 	}
 	// A host the operator allows passes, private or not; others stay refused.
-	q := newAddressPolicy(false, false, "127.0.0.1:8013")
-	q.own = p.own
-	if pr, _ := q.check(context.Background(), "http://127.0.0.1:8013/test.ogg"); pr != nil {
+	q := fetch.NewPolicy(false, false, "127.0.0.1:8013")
+	q.Own = p.Own
+	if pr, _ := q.Check(context.Background(), "http://127.0.0.1:8013/test.ogg"); pr != nil {
 		t.Errorf("allowed host refused: %v", pr)
 	}
-	if pr, _ := q.check(context.Background(), "http://127.0.0.1:8080/live"); pr == nil {
+	if pr, _ := q.Check(context.Background(), "http://127.0.0.1:8080/live"); pr == nil {
 		t.Errorf("other port of an allowed host accepted")
 	}
 
 	// Without a lookup (resuming), a name passes; addresses are still checked.
 	// (A stream whose host does not resolve is accepted at the PUT as well;
 	// see TestUnresolvedHostAccepted.)
-	if pr := p.checkStatic("http://unknown.example/s"); pr != nil {
+	if pr := p.CheckStatic("http://unknown.example/s"); pr != nil {
 		t.Errorf("static check of a name: %v", pr)
 	}
-	if pr := p.checkStatic("http://10.1.2.3/s"); pr == nil || pr.Code != "address_not_allowed" {
+	if pr := p.CheckStatic("http://10.1.2.3/s"); pr == nil || pr.Code != "address_not_allowed" {
 		t.Errorf("static check of a private address: %v", pr)
 	}
 }
@@ -573,7 +575,7 @@ func TestCorrelationFindsLag(t *testing.T) {
 func TestUnresolvedHostAccepted(t *testing.T) {
 	dir := t.TempDir()
 	e, c := startEngine(t, dir)
-	e.policy.resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
+	e.policy.Resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
 		if host == "private.example" {
 			return []netip.Addr{netip.MustParseAddr("10.0.0.9")}, nil
 		}

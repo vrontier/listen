@@ -1,4 +1,4 @@
-package engine
+package fetch
 
 import (
 	"context"
@@ -10,46 +10,57 @@ import (
 	"time"
 )
 
-// addressPolicy decides which stream addresses the engine connects to.
-type addressPolicy struct {
+// Problem is a refusal or failure with a code for programs and a message for
+// people.
+type Problem struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// Package fetch opens stream connections for the engine and the ingest: the
+// address policy, an HTTP client that checks every address it dials, and
+// what a server sends.
+
+// Policy decides which stream addresses may be connected to.
+type Policy struct {
 	allowPrivate bool            // intranet installations and tests
 	allowFiles   bool            // development and tests
 	allowHosts   map[string]bool // host or host:port the operator allows, private or not
-	resolve      func(ctx context.Context, host string) ([]netip.Addr, error)
-	own          func() []netip.Addr
+	Resolve      func(ctx context.Context, host string) ([]netip.Addr, error)
+	Own          func() []netip.Addr
 }
 
-func newAddressPolicy(allowPrivate, allowFiles bool, allowHosts ...string) *addressPolicy {
+func NewPolicy(allowPrivate, allowFiles bool, allowHosts ...string) *Policy {
 	hosts := map[string]bool{}
 	for _, h := range allowHosts {
 		hosts[strings.ToLower(h)] = true
 	}
-	return &addressPolicy{
+	return &Policy{
 		allowPrivate: allowPrivate, allowFiles: allowFiles, allowHosts: hosts,
-		resolve: func(ctx context.Context, host string) ([]netip.Addr, error) {
+		Resolve: func(ctx context.Context, host string) ([]netip.Addr, error) {
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 		},
-		own: ownAddrs,
+		Own: ownAddrs,
 	}
 }
 
-// errUnresolved marks a host name that could not be resolved: not a reason
+// ErrUnresolved marks a host name that could not be resolved: not a reason
 // to refuse a running stream, since ffmpeg will fail on it too and retry.
-var errUnresolved = errors.New("unresolved")
+var ErrUnresolved = errors.New("unresolved")
 
-// check reports why input may not be connected to, or nil. The host's
+// Check reports why input may not be connected to, or nil. The host's
 // addresses are looked up and each must be public.
-func (p *addressPolicy) check(ctx context.Context, input string) (*Problem, error) {
+func (p *Policy) Check(ctx context.Context, input string) (*Problem, error) {
 	return p.checkWith(ctx, input, true)
 }
 
-// checkStatic makes the checks that need no name lookup.
-func (p *addressPolicy) checkStatic(input string) *Problem {
+// CheckStatic makes the checks that need no name lookup.
+func (p *Policy) CheckStatic(input string) *Problem {
 	pr, _ := p.checkWith(context.Background(), input, false)
 	return pr
 }
 
-func (p *addressPolicy) checkWith(ctx context.Context, input string, resolve bool) (*Problem, error) {
+func (p *Policy) checkWith(ctx context.Context, input string, resolve bool) (*Problem, error) {
 	if !strings.Contains(input, "://") {
 		if p.allowFiles && input != "" {
 			return nil, nil
@@ -85,12 +96,12 @@ func (p *addressPolicy) checkWith(ctx context.Context, input string, resolve boo
 		}
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		addrs, err = p.resolve(ctx, host)
+		addrs, err = p.Resolve(ctx, host)
 		if err != nil || len(addrs) == 0 {
-			return &Problem{Code: "no_answer", Message: "the host name could not be resolved"}, errUnresolved
+			return &Problem{Code: "no_answer", Message: "the host name could not be resolved"}, ErrUnresolved
 		}
 	}
-	own := p.own()
+	own := p.Own()
 	for _, a := range addrs {
 		if !public(a.Unmap()) {
 			return notAllowed(), nil

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/vrontier/listen/listener/internal/analysis"
+	"github.com/vrontier/listen/listener/internal/fetch"
 	"github.com/vrontier/listen/listener/internal/source"
 )
 
@@ -196,9 +197,9 @@ func (s *sourceConn) startSource(retryMax time.Duration) {
 		Input: s.input, SampleRate: s.rate, FFmpeg: s.e.opts.FFmpeg, MaxBackoff: retryMax,
 		OnSamples: s.onSamples, OnState: s.onState,
 		BeforeStart: func() error {
-			p, err := s.e.policy.check(ctx, s.input)
-			if p != nil && !errors.Is(err, errUnresolved) {
-				return refusal{p}
+			p, err := s.e.policy.Check(ctx, s.input)
+			if p != nil && !errors.Is(err, fetch.ErrUnresolved) {
+				return refusal{fromFetch(p)}
 			}
 			return nil
 		},
@@ -216,16 +217,16 @@ func (s *sourceConn) startSource(retryMax time.Duration) {
 			s.connAt.Store(s.timeline.Load())
 			s.rateDone.Store(false)
 			s.rateB1.Store(0)
-			body, format, ct, err := s.e.open(ctx, s.input, &s.bytes)
+			body, format, ct, err := s.e.openFeed(ctx, s.input, &s.bytes)
 			s.mu.Lock()
 			s.contentTyp = ct
 			s.mu.Unlock()
-			var oe *openError
+			var oe *fetch.OpenError
 			if errors.As(err, &oe) {
 				now := time.Now().UTC()
-				p := *oe.p
+				p := *fromFetch(oe.P)
 				p.At = &now
-				if oe.refused {
+				if oe.Refused {
 					return nil, "", &source.RefusedError{Err: refusal{&p}}
 				}
 				s.mu.Lock()

@@ -7,6 +7,8 @@ package engine
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/vrontier/listen/listener/internal/fetch"
 )
 
 // API version served.
@@ -65,6 +67,14 @@ type View struct {
 	MinHz float64 `json:"min_hz"`
 	MaxHz float64 `json:"max_hz"`
 	Bands int     `json:"bands"`
+}
+
+// fromFetch is a problem of the connection code as the API reports it.
+func fromFetch(p *fetch.Problem) *Problem {
+	if p == nil {
+		return nil
+	}
+	return &Problem{Code: p.Code, Message: p.Message}
 }
 
 // Problem is an error with a code for programs and a message for people.

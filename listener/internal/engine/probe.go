@@ -15,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/vrontier/listen/listener/internal/fetch"
 )
 
 // probeGate allows one probe per address and a few at a time overall.
@@ -87,8 +89,8 @@ func (c *caller) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *api
 		res.OK, res.Shared, res.SampleRate = true, true, src.rate
 		return res, nil
 	}
-	if p, _ := c.e.policy.check(ctx, req.Input); p != nil {
-		res.Problems = append(res.Problems, *p)
+	if p, _ := c.e.policy.Check(ctx, req.Input); p != nil {
+		res.Problems = append(res.Problems, *fromFetch(p))
 		return res, nil
 	}
 	if !c.e.probes.enter(req.Input) {
@@ -105,14 +107,14 @@ func (c *caller) probe(ctx context.Context, req ProbeRequest) (ProbeResult, *api
 	if isURL(req.Input) {
 		// The engine connects; ffmpeg decodes what arrives, and the bytes
 		// are counted for the bit rate.
-		b, format, ct, err := c.e.open(ctx, req.Input, &received)
+		b, format, ct, err := c.e.openFeed(ctx, req.Input, &received)
 		if ct != "" {
 			res.ContentType = &ct
 		}
 		if err != nil {
-			var oe *openError
+			var oe *fetch.OpenError
 			if errors.As(err, &oe) {
-				res.Problems = append(res.Problems, *oe.p)
+				res.Problems = append(res.Problems, *fromFetch(oe.P))
 				return res, nil
 			}
 			return res, &apiError{status: 500, code: "internal", message: err.Error()}

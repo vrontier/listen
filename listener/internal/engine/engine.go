@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/vrontier/listen/listener/internal/fetch"
 )
 
 // Options configure the engine process.
@@ -43,7 +46,7 @@ type Engine struct {
 	opts     Options
 	instance string
 	started  time.Time
-	policy   *addressPolicy
+	policy   *fetch.Policy
 	client   *http.Client // opens streams; every dial is checked
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -94,12 +97,12 @@ func New(opts Options) (*Engine, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	e := &Engine{
 		opts: opts, instance: hex.EncodeToString(b), started: time.Now().UTC(),
-		policy: newAddressPolicy(opts.AllowPrivate, opts.AllowFiles, opts.AllowHosts...),
+		policy: fetch.NewPolicy(opts.AllowPrivate, opts.AllowFiles, opts.AllowHosts...),
 		ctx:    ctx, cancel: cancel, probes: newProbeGate(),
 		byName: map[string]*caller{}, sources: map[string]*sourceConn{},
 	}
 	e.meter = newMeter(e)
-	e.client = e.policy.client(opts.Version)
+	e.client = e.policy.Client(opts.Version)
 	for i, n := range opts.Callers {
 		c := newCaller(e, n, stateFileFor(opts.StateFile, n, i == 0))
 		for _, h := range opts.TestHooks {
@@ -262,12 +265,12 @@ func (e *Engine) checkStream(ctx context.Context, spec *StreamSpec, resolve bool
 	case resolve:
 		// A host that does not resolve now is no reason to refuse: the
 		// connection fails and is retried, and every attempt is checked.
-		var err error
-		if p, err = e.policy.check(ctx, spec.Input); errors.Is(err, errUnresolved) {
-			p = nil
+		fp, err := e.policy.Check(ctx, spec.Input)
+		if !errors.Is(err, fetch.ErrUnresolved) {
+			p = fromFetch(fp)
 		}
 	default:
-		p = e.policy.checkStatic(spec.Input)
+		p = fromFetch(e.policy.CheckStatic(spec.Input))
 	}
 	if p != nil {
 		fe = append(fe, FieldError{"input", p.Code, p.Message})
@@ -333,4 +336,10 @@ func (e *Engine) usageLoop() {
 			c.notify("usage", e.meter.reportFor(c))
 		}
 	}
+}
+
+// openFeed opens a stream address: the engine connects itself, checking
+// every address it dials.
+func (e *Engine) openFeed(ctx context.Context, input string, n *atomic.Int64) (io.ReadCloser, string, string, error) {
+	return fetch.Open(ctx, e.client, "listen-engine/"+e.opts.Version, input, n)
 }
