@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -242,7 +241,7 @@ func (s *Server) capRefusal(ctx context.Context, user int64, a catalogue.Analysi
 			return "", err
 		}
 		if k.Total() >= diskQuota {
-			return fmt.Sprintf("Your data sets (%s) and memories (%s) fill your disk quota of %s: delete data sets under Runs, or memories on an analysis's page during a run, before starting a run.",
+			return fmt.Sprintf("Your data sets (%s) and memories (%s) fill your disk quota of %s: delete data sets under Results, or memories on an analysis's page during a run, before starting a run.",
 				byteSize(k.Datasets), byteSize(k.Memories), byteSize(diskQuota)), nil
 		}
 	}
@@ -262,6 +261,7 @@ func byteSize(n int64) string { return funcs["bytes"].(func(int64) string)(n) }
 type usageBar struct {
 	X, Y, W, H float64
 	Title      string
+	Axis       string // under the bar: hours back for hours, the day of the month for days
 }
 
 type usageData struct {
@@ -305,37 +305,14 @@ func bars(samples []catalogue.UsageSample, end time.Time, slot time.Duration, n 
 	for i, v := range sums {
 		h := v * scale
 		t := start.Add(slot * time.Duration(i)).UTC()
-		out[i] = usageBar{X: float64(i)*w + 1, Y: 100 - h, W: w - 2, H: h, Title: fmt.Sprintf("%s: %s cores on average", t.Format(label), coresOf(v))}
+		axis := t.Format("02")
+		if slot < 24*time.Hour {
+			axis = "now"
+			if back := n - 1 - i; back > 0 {
+				axis = fmt.Sprintf("-%d", back)
+			}
+		}
+		out[i] = usageBar{X: float64(i)*w + 1, Y: 100 - h, W: w - 2, H: h, Title: fmt.Sprintf("%s: %s cores on average", t.Format(label), coresOf(v)), Axis: axis}
 	}
 	return out, max
-}
-
-func (s *Server) usagePage(w http.ResponseWriter, r *http.Request) {
-	sess, _ := sessionFrom(r)
-	ctx := r.Context()
-	var d usageData
-	var err error
-	if d.Cap, d.OwnCap, err = s.db.MemberCap(ctx, sess.User.ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	d.Now = s.acct.now(sess.User.ID)
-	d.Running = s.acct.running(sess.User.ID)
-	if d.Disk, err = s.db.DiskOf(ctx, sess.User.ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	d.Quota = diskQuota
-	d.DiskWarn = d.Disk.Total()*5 >= d.Quota*4
-	now := time.Now().UTC()
-	samples, err := s.db.UsageSince(ctx, sess.User.ID, now.Add(-31*24*time.Hour))
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	hourEnd := now.Truncate(time.Hour).Add(time.Hour)
-	d.Day, d.DayMax = bars(samples, hourEnd, time.Hour, 24, "Jan 2 15:00")
-	dayEnd := now.Truncate(24 * time.Hour).Add(24 * time.Hour)
-	d.Month, d.MonthMax = bars(samples, dayEnd, 24*time.Hour, 30, "Jan 2")
-	s.render(w, r, 200, "usage", "Usage", d)
 }

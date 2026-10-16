@@ -197,7 +197,11 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /analyses/{id}/run", s.member(s.analysisRunStart))
 	m.HandleFunc("POST /analyses/{id}/stop", s.member(s.analysisRunStop))
 	m.HandleFunc("POST /analyses/{id}/memories/{source}/delete", s.member(s.analysisMemoryDelete))
-	m.HandleFunc("GET /account/usage", s.member(s.usagePage))
+	m.HandleFunc("GET /results", s.member(s.resultsPage))
+	m.HandleFunc("POST /results/delete", s.member(s.resultsDelete))
+	m.HandleFunc("GET /account/usage", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/results", http.StatusMovedPermanently)
+	})
 	m.HandleFunc("GET /account/tokens", s.member(s.tokensPage))
 	m.HandleFunc("POST /account/tokens", s.member(s.tokenCreate))
 	m.HandleFunc("POST /account/tokens/{token}/revoke", s.member(s.tokenRevoke))
@@ -220,13 +224,10 @@ func (s *Server) routes() {
 		apiError(w, http.StatusMethodNotAllowed, "method", "This MCP endpoint answers POST requests only; it sends nothing of its own accord.")
 	})
 
-	m.HandleFunc("GET /library", s.member(s.libraryPage))
-	m.HandleFunc("POST /library", s.member(s.libraryAdd))
-	m.HandleFunc("POST /library/{set}/take", s.member(s.libraryTake))
-	m.HandleFunc("POST /library/{set}/delete", s.member(s.libraryDelete))
 	m.HandleFunc("GET /runs", s.member(s.runsPage))
 	m.HandleFunc("POST /runs", s.member(s.runsStart))
 	m.HandleFunc("GET /runs/{run}", s.member(s.runPage))
+	m.HandleFunc("GET /runs/{run}/all.zip", s.member(s.runZip))
 	m.HandleFunc("GET /runs/{run}/{file}", s.member(s.runFile))
 	m.HandleFunc("POST /runs/{run}/delete", s.member(s.runDatasetDelete))
 	m.HandleFunc("GET /analyses/{id}/live/{source}", s.member(s.analysisLive))
@@ -291,6 +292,7 @@ var funcs = template.FuncMap{
 		}
 		return fmt.Sprintf("%d days", int(d.Hours()/24))
 	},
+	"percent": percent,
 	"bytes": func(n int64) string {
 		switch {
 		case n >= 1<<30:

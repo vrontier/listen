@@ -125,6 +125,7 @@ any state ──► suspended (master admin)
   - A member puts a set in from a source of their own analysis ("Put these rules in the library" under its filter rules): the rules of the saved revision, with a name and a note. Their display name is shown with it.
   - Taking a set copies its rules into a source of one's own analysis, added to its rules (without duplicates) or in their place. The engine checks them at that source's rate first; the result is the analysis's next revision, so a new memory begins as with any change of rules. Not during a run, which is fixed. When the set was made at another rate, the member is told that tolerances left empty are a number of bins, whose width differs.
   - The member who put a set in, or the master admin, can take it out of the library. Copies already taken stay. Putting in, taking and taking out are in the audit trail.
+- **Decided** (2026-10-16): the library is taken out of the Workbench for the time being: no menu entry, no pages, nothing on the analysis page. Sets already put in stay in the catalogue, so that it can come back. The code is in the history before this decision. **Open:** when it comes back.
 
 ## Resources and caps
 
@@ -152,8 +153,8 @@ any state ──► suspended (master admin)
 - **History.** The attributed use is averaged per minute and kept for 32 days, per member and for the engine.
 - **Caps.** The master admin sets the server cap, a member cap for every member, and, where needed, a cap of a member's own; each as CPU cores and memory in MB, empty meaning none. The admin page shows each member's use now, their data sets and their cap.
 - **Reservation.** Starting a run, a preview or a trial is refused when the member's use now plus an estimate of what it adds would go over the member's cap, or the engine's use plus the estimate over the server cap; the refusal says by how much. The estimate, until the engine measures per analysis before it starts: one analysis per running source at 1 % of a core and 8 MB, plus the connection of each source not yet connected at 1.5 % and 25 MB, both at 22 050 Hz and scaled with the rate. **Decided** (2026-10-15): these estimates stand until the engine measures. The comparison's cost is not in the engine's report yet and not counted.
-- **Disk.** Data sets and the engine's memories of the member's analyses count against the 0.5 GB quota (memories **decided** 2026-10-15). The engine reports a memory's size only while the analysis is in it, during a run; the Workbench keeps the size last reported, every 30 s, so that it counts between runs too. A run is refused while data sets and memories fill the quota; previews and trials, which write nothing, are not. From 80 % the usage page says so. During a run, the analysis page offers to delete a memory other than the one in use.
-- **The view.** `/account/usage` (menu "Usage"): use now against the cap, what runs and what it costs, the disk, and CPU per hour over the last 24 hours and per day over the last 30. The admin page shows the engine's CPU per hour.
+- **Disk.** Data sets and the engine's memories of the member's analyses count against the 0.5 GB quota (memories **decided** 2026-10-15). The engine reports a memory's size only while the analysis is in it, during a run; the Workbench keeps the size last reported, every 30 s, so that it counts between runs too. A run is refused while data sets and memories fill the quota; previews and trials, which write nothing, are not. From 80 % the Results page says so. During a run, the analysis page offers to delete a memory other than the one in use.
+- **The view.** **Decided** (2026-10-16): the usage page becomes "Results" (`/results`), which shows a member their results, the data sets of their runs, and how their disk space is used, as a bar with the values, with a way to download and delete their files; the usage figures stay on it. **Built** against the stand-in (2026-10-16), **proposed** in its detail: the bar splits data sets and memories, with used, free and the percentage; each data set downloads as one zip (dataset.json, events.csv, comparison.csv when there is one) or file by file; ticked data sets are deleted together, the runs stay listed; memories are listed by analysis and source with their size, cannot be downloaded, and are deleted on the analysis page during a run as before; below, use now against the cap, what runs and what it costs, and CPU per hour over the last 24 hours (labelled in hours back from now) and per day over the last 30 (labelled with the day of the month). `/account/usage` redirects to `/results`. The admin page shows the engine's CPU per hour.
 - **Not stopped.** What runs is never stopped when its measured use rises above a cap.
 
 ### Measurement limits
@@ -263,10 +264,10 @@ No user-written code or expressions run on the server: filters and motif definit
 | `/analyses/new`, `/analyses/<id>` | start and stop a run, or a ten-minute preview; from two sources the comparison (during runs); per source together: spectrogram, events and motifs (during a run or a preview), settings and filter rules (fixed during a run), memories (listed during runs); the choice of sources and comparison; title and description; runs with their data sets, revisions |
 | `/runs` | runs of the member's analyses: running now (stop), start a run, finished runs with their data sets |
 | `/runs/<id>` | one run: when, revisions, its data set (what it holds, the files, delete) |
-| `/account/usage` | own CPU, RAM, bandwidth and disk against the caps |
+| `/results` | own data sets (download, delete), disk space as a bar, memories, CPU, RAM and bandwidth against the caps |
 | `/account/tokens` | create and revoke tokens |
 | `/account/keys` | own API keys for the language-model interpretation |
-| `/library` | shared filter rule sets |
+| `/library` | shared filter rule sets: taken out for the time being (decided 2026-10-16) |
 | `/research` | everything published |
 | `/research/<slug>` | a published research page |
 | `/admin` | invitations, caps, usage of the server, suspensions, audit log |

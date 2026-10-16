@@ -3,6 +3,7 @@ package catalogue
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 // The engine keeps an analysis's memories on disk and reports their sizes
@@ -61,4 +62,38 @@ func (d *DB) DiskOf(ctx context.Context, userID int64) (Disk, error) {
 	}
 	k.Memories, err = d.MemoryBytesOf(ctx, userID)
 	return k, err
+}
+
+// MemoryUse is what the memories of one source of a member's analysis take,
+// as last reported.
+type MemoryUse struct {
+	AnalysisID   int64
+	AnalysisName string
+	SourceName   string
+	Count        int
+	Bytes        int64
+	Updated      time.Time
+}
+
+// MemoriesOf lists the memories of a member's analyses by analysis and
+// source, largest first.
+func (d *DB) MemoriesOf(ctx context.Context, userID int64) ([]MemoryUse, error) {
+	rows, err := d.db.QueryContext(ctx, `SELECT an.id, an.name, s.name, count(*), sum(m.bytes), max(m.updated)
+		FROM memory_sizes m JOIN analyses an ON an.id = m.analysis_id JOIN streams s ON s.id = m.stream_id
+		WHERE an.owner_id = ? GROUP BY m.analysis_id, m.stream_id ORDER BY sum(m.bytes) DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MemoryUse
+	for rows.Next() {
+		var m MemoryUse
+		var updated string
+		if err := rows.Scan(&m.AnalysisID, &m.AnalysisName, &m.SourceName, &m.Count, &m.Bytes, &updated); err != nil {
+			return nil, err
+		}
+		m.Updated = parseStamp(updated)
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }

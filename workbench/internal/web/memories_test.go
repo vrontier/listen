@@ -51,7 +51,7 @@ func TestMemoriesCountOnDisk(t *testing.T) {
 	if _, page, _ = r.get(member, hdr.Get("Location")); !strings.Contains(page, "memories (512.0 MB)") {
 		t.Fatal("refusal does not name the memories")
 	}
-	if _, page, _ = r.get(member, "/account/usage"); !strings.Contains(page, "512.0 MB in memories") {
-		t.Fatal("usage page does not show the memories")
+	if _, page, _ = r.get(member, "/results"); !strings.Contains(page, "memories 512.0 MB") {
+		t.Fatal("results page does not show the memories")
 	}
 }

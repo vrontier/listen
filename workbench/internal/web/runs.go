@@ -384,16 +384,36 @@ func (s *Server) runDatasetDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if run.Dataset != catalogue.DatasetReady && run.Dataset != catalogue.DatasetFailed {
-		s.redirect(w, r, runPath(run.ID), "Only a finished data set can be deleted.")
+	back := runPath(run.ID)
+	if r.PostFormValue("back") == "results" {
+		back = "/results"
+	}
+	if !deletable(run) {
+		s.redirect(w, r, back, "Only a finished data set can be deleted.")
 		return
 	}
-	if err := s.db.DeleteDataset(r.Context(), run.ID, sess.User.ID); err != nil {
+	if err := s.deleteDataset(r.Context(), sess.User.ID, run); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	os.RemoveAll(s.data.runDir(run.ID))
-	s.redirect(w, r, runPath(run.ID), "Data set deleted.")
+	s.redirect(w, r, back, "Data set deleted.")
+}
+
+// deletable reports whether a run's data set is finished, so that its
+// member may delete it.
+func deletable(run catalogue.Run) bool {
+	return run.Dataset == catalogue.DatasetReady || run.Dataset == catalogue.DatasetFailed
+}
+
+// deleteDataset marks a run's data set deleted and removes its files.
+func (s *Server) deleteDataset(ctx context.Context, by int64, run catalogue.Run) error {
+	if err := s.db.DeleteDataset(ctx, run.ID, by); err != nil {
+		return err
+	}
+	if s.data.dir != "" {
+		os.RemoveAll(s.data.runDir(run.ID))
+	}
+	return nil
 }
 
 // syncGroups puts the engine's groups in step; a failure is logged, and the

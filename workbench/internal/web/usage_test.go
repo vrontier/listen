@@ -129,7 +129,7 @@ func TestCaps(t *testing.T) {
 	if _, own, _ := r.db.MemberCap(ctx, u.ID); own {
 		t.Fatal("own cap kept")
 	}
-	if code, page, _ := r.get(member, "/account/usage"); code != 200 || !strings.Contains(page, "over 80 %") || !strings.Contains(page, "Last 30 days") {
+	if code, page, _ := r.get(member, "/results"); code != 200 || !strings.Contains(page, "Over 80 %") || !strings.Contains(page, "Last 30 days") {
 		t.Fatalf("usage page: %d", code)
 	}
 }

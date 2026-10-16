@@ -1,0 +1,83 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+<h1>Results</h1>
+{{with .Data}}
+{{$d := .}}
+<p class="meta">What your runs recorded, and how much of your disk space it takes. Download a data set to keep it, and delete what you no longer need here: a run is refused while your space is full. Times are UTC.</p>
+
+<section{{if .DiskWarn}} class="space-warn"{{end}}>
+  <h2>Your space</h2>
+  <p><strong>{{bytes .Disk.Total}} of {{bytes .Quota}} used ({{.UsedPct}} %)</strong>, {{bytes .Free}} free.</p>
+  <div class="space" role="img" aria-label="{{.UsedPct}} % of your disk space used">
+    <span class="space-data" style="width: {{percent .DatasetPct}}" title="data sets: {{bytes .Disk.Datasets}}"></span>
+    <span class="space-mem" style="width: {{percent .MemoryPct}}" title="memories: {{bytes .Disk.Memories}}"></span>
+  </div>
+  <ul class="space-key meta">
+    <li><span class="swatch space-data"></span>data sets {{bytes .Disk.Datasets}}</li>
+    <li><span class="swatch space-mem"></span>memories {{bytes .Disk.Memories}}</li>
+    <li><span class="swatch space-free"></span>free {{bytes .Free}}</li>
+  </ul>
+  {{if .DiskWarn}}<p class="field-error">Over 80 % used. Delete data sets below that you have downloaded or no longer need. A running run ends once your space is over by a tenth.</p>{{end}}
+</section>
+
+<section>
+  <h2>Data sets</h2>
+  {{if .Datasets}}
+  <form method="post" action="/results/delete" id="delete-datasets"><input type="hidden" name="csrf" value="{{$csrf}}"></form>
+  <table>
+    <thead><tr><th></th><th>Analysis</th><th>Run</th><th>Started</th><th>Length</th><th>Size, compressed</th><th>Download</th></tr></thead>
+    <tbody>{{range .Datasets}}<tr>
+      <td>{{if or (eq .Dataset "ready") (eq .Dataset "failed")}}<input type="checkbox" form="delete-datasets" name="run" value="{{.ID}}" aria-label="select run {{.Number}} of {{.AnalysisName}}">{{end}}</td>
+      <td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td>
+      <td><a href="/runs/{{.ID}}">{{.Number}}</a></td>
+      <td>{{when .Started}}</td>
+      <td>{{.Duration}}{{if .Active}} so far{{end}}</td>
+      <td>{{if eq .Dataset "ready"}}{{bytes .DatasetBytes}}{{else}}—{{end}}</td>
+      <td>{{if eq .Dataset "ready"}}<a href="/runs/{{.ID}}/all.zip">all, zip</a> · <a href="/runs/{{.ID}}/dataset.json">json</a> · <a href="/runs/{{.ID}}/events.csv">events csv</a>{{else if eq .Dataset "recording"}}<span class="meta">recording while the run lasts</span>{{else if eq .Dataset "freezing"}}<span class="meta">being put together</span>{{else}}<span class="meta">failed: {{.DatasetNote}}</span>{{end}}</td>
+    </tr>{{end}}</tbody>
+  </table>
+  <p><button form="delete-datasets" class="danger">Delete the selected data sets</button></p>
+  <p class="meta">A data set holds a run's events of each source and of the comparison, with the times a source was not heard. "all, zip" holds dataset.json, events.csv and, with a comparison, comparison.csv; the run's page says what each holds. Deleting removes the files for good and frees their space; the run stays in the list under <a href="/runs">Runs</a>. A data set is finished, and can be deleted, once its run has ended.</p>
+  {{else}}<p class="meta">No data sets yet. A <a href="/runs">run</a> records one; previews and trials record nothing.</p>{{end}}
+</section>
+
+<section>
+  <h2>Memories</h2>
+  {{if .Memories}}
+  <table>
+    <thead><tr><th>Analysis</th><th>Source</th><th>Memories</th><th>Size</th><th>Reported</th></tr></thead>
+    <tbody>{{range .Memories}}<tr><td><a href="/analyses/{{.AnalysisID}}">{{.AnalysisName}}</a></td><td>{{.SourceName}}</td><td>{{.Count}}</td><td>{{bytes .Bytes}}</td><td>{{when .Updated}}</td></tr>{{end}}</tbody>
+  </table>
+  <p class="meta">The motifs each source of an analysis has learned, kept by the engine so that a run goes on where the last one stopped. They cannot be downloaded. The engine reports their size, and lets you delete one, only while the analysis runs: delete them under "Memories" on the analysis's page during a run.</p>
+  {{else}}<p class="meta">None kept yet. An analysis keeps memories during runs when its memory setting is "learn motifs and keep them".</p>{{end}}
+</section>
+
+<section>
+  <h2>Server use now</h2>
+  <p class="meta">What your streams and analyses use of the server, as the engine measures it. A source's connection and decode is shared equally among the members whose analyses run on it. Nothing here is about money: the counts are held against your cap.</p>
+  <table class="facts">
+    <tr><th>CPU</th><td>{{cores .Now.CPUPercent}} cores{{if .Cap.CPUCores}} of {{.Cap.CPUCores}}{{end}}</td></tr>
+    <tr><th>Memory</th><td>{{printf "%.0f" .Now.MemoryMB}} MB{{if .Cap.MemoryMB}} of {{.Cap.MemoryMB}} MB{{end}}</td></tr>
+    <tr><th>Incoming</th><td>{{printf "%.0f" .Now.InKbps}} kbit/s</td></tr>
+  </table>
+  <p class="meta">{{if .Cap.Set}}Your cap{{if not .OwnCap}}, the same for every member,{{end}} is set by the master admin. Starting a run, a preview or a trial that would go over it is refused.{{else}}No cap is set for you.{{end}}</p>
+  {{if .Running}}
+  <table>
+    <thead><tr><th>What</th><th>Source</th><th>CPU, cores</th><th>Memory, MB</th></tr></thead>
+    <tbody>{{range .Running}}<tr><td>{{if eq .What "connection"}}connection and decode{{if gt .Share 1}} <span class="meta">(your share, of {{.Share}})</span>{{end}}{{else}}{{.Analysis}} <span class="meta">{{.What}}</span>{{end}}</td><td>{{.Source}}</td><td>{{cores .CPUPercent}}</td><td>{{printf "%.1f" .MemoryMB}}</td></tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="meta">Nothing of yours runs now.</p>{{end}}
+</section>
+
+<section>
+  <h2>Last 24 hours</h2>
+  <svg class="usage-bars" viewBox="0 0 600 100" preserveAspectRatio="none" role="img" aria-label="CPU per hour over the last 24 hours">{{range .Day}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Title}}</title></rect>{{end}}</svg>
+  <div class="usage-axis" aria-hidden="true">{{range .Day}}<span>{{.Axis}}</span>{{end}}</div>
+  <p class="meta">CPU per hour, on average, counted in hours back from now (UTC); the highest bar is {{cores .DayMax}} cores. Hover over a bar for its hour.</p>
+  <h2>Last 30 days</h2>
+  <svg class="usage-bars" viewBox="0 0 600 100" preserveAspectRatio="none" role="img" aria-label="CPU per day over the last 30 days">{{range .Month}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Title}}</title></rect>{{end}}</svg>
+  <div class="usage-axis" aria-hidden="true">{{range .Month}}<span>{{.Axis}}</span>{{end}}</div>
+  <p class="meta">CPU per day, on average, labelled with the day of the month (UTC); the highest bar is {{cores .MonthMax}} cores.</p>
+</section>
+{{end}}
+{{end}}

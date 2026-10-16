@@ -559,3 +559,24 @@ func (s *Server) adminWithdraw(w http.ResponseWriter, r *http.Request) {
 	}
 	s.redirect(w, r, "/admin", "Withdrawn; its member has been told.")
 }
+
+// ruleWords says a rule in words, for those who do not read the engine's
+// notation.
+func ruleWords(r engine.Rule) string {
+	var b strings.Builder
+	hz := strconv.FormatFloat(r.Hz, 'g', -1, 64)
+	if r.Kind == engine.RuleLine {
+		fmt.Fprintf(&b, "a line at %s Hz", hz)
+	} else if r.Odd {
+		fmt.Fprintf(&b, "%s Hz and its odd harmonics", hz)
+	} else {
+		fmt.Fprintf(&b, "%s Hz and its harmonics", hz)
+	}
+	if r.TolHz > 0 {
+		fmt.Fprintf(&b, ", within %s Hz", strconv.FormatFloat(r.TolHz, 'g', -1, 64))
+	}
+	if r.DriftPercent > 0 {
+		fmt.Fprintf(&b, ", the base wandering up to %s %%", strconv.FormatFloat(r.DriftPercent, 'g', -1, 64))
+	}
+	return b.String()
+}

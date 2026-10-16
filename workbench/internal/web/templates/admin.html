@@ -35,6 +35,7 @@
   </form>
   <p class="meta">{{if or .Cap.CPUCores .Cap.MemoryMB}}Set: {{if .Cap.CPUCores}}{{.Cap.CPUCores}} cores{{else}}no CPU cap{{end}}, {{if .Cap.MemoryMB}}{{.Cap.MemoryMB}} MB{{else}}no memory cap{{end}}.{{else}}No cap set.{{end}} A run, preview or trial that would go over it is refused; what runs is not stopped.</p>
   <svg class="usage-bars" viewBox="0 0 600 100" preserveAspectRatio="none" role="img" aria-label="The engine's CPU per hour over the last 24 hours">{{range .Day}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Title}}</title></rect>{{end}}</svg>
+  <div class="usage-axis" aria-hidden="true">{{range .Day}}<span>{{.Axis}}</span>{{end}}</div>
   <p class="meta">The engine's CPU per hour over the last 24 hours, on average; the highest bar is {{cores .DayMax}} cores.</p>
 
   <h3>Member cap</h3>
