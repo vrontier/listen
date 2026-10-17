@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/vrontier/listen/listener/internal/fetch"
+	"github.com/vrontier/listen/ingest/fetch"
 )
 
 // Options configure the ingest.

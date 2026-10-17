@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vrontier/listen/listener/internal/fetch"
+	"github.com/vrontier/listen/ingest/fetch"
 )
 
 func needFFmpeg(t *testing.T) {

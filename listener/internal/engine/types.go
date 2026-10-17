@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/vrontier/listen/listener/internal/fetch"
+	"github.com/vrontier/listen/ingest/fetch"
 )
 
 // API version served.

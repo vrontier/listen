@@ -12,7 +12,7 @@ A language model can add a slower narrative layer, turning structured observatio
 
 **Live at <https://listen.vrontier.org>.**
 
-This repository also holds **Listening Observatory Workbench (LOW)**, the research companion where members bring their own streams and decide how they are analysed: see [`workbench/`](workbench/). Both rest on the same parts: `listen-ingest`, the one service per machine that connects to stations, and `listen-engine`, which decodes and analyses for the Workbench (both in [`listener/`](listener/)).
+This repository also holds **Listening Observatory Workbench (LOW)**, the research companion where members bring their own streams and decide how they are analysed: see [`workbench/`](workbench/). Both rest on the same parts: [`listen-ingest`](ingest/), the one service per machine that connects to stations, usable by any other program too, and `listen-engine` in [`listener/`](listener/), which decodes and analyses for the Workbench.
 
 ## Streams
 
@@ -31,8 +31,9 @@ Early development. See [`docs/`](docs/) for the concept and the
 
 ```text
 docs/       concept, event model, visual study
-listener/   Go module: the Observatory's listener (ffmpeg ingestion, DSP, event detection, memory,
-            narrator, WebSocket API), listen-engine and listen-ingest
+ingest/     listen-ingest, a Go module of its own: the one connection to each station on a machine
+listener/   Go module: the Observatory's listener (DSP, event detection, memory, narrator,
+            WebSocket API) and listen-engine
 workbench/  Listening Observatory Workbench, a Go module of its own
 site/       website (vanilla PHP front controller, served by NGINX + PHP-FPM):
             landing page, contact form, one live page per source (p5.js, site/assets/js/)

@@ -26,10 +26,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/vrontier/listen/ingest"
 	"github.com/vrontier/listen/listener/internal/analysis"
 	"github.com/vrontier/listen/listener/internal/events"
 	"github.com/vrontier/listen/listener/internal/hub"
-	"github.com/vrontier/listen/listener/internal/ingest"
 	"github.com/vrontier/listen/listener/internal/memory"
 	"github.com/vrontier/listen/listener/internal/narrate"
 	"github.com/vrontier/listen/listener/internal/relay"

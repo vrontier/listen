@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/vrontier/listen/ingest/fetch"
 	"github.com/vrontier/listen/listener/internal/analysis"
-	"github.com/vrontier/listen/listener/internal/fetch"
 	"github.com/vrontier/listen/listener/internal/source"
 )
 

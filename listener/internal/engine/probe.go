@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/vrontier/listen/listener/internal/fetch"
+	"github.com/vrontier/listen/ingest/fetch"
 )
 
 // probeGate allows one probe per address and a few at a time overall.

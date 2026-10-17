@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"sync/atomic"
 
-	"github.com/vrontier/listen/listener/internal/fetch"
+	"github.com/vrontier/listen/ingest/fetch"
 )
 
 // Client reads feeds from the ingest on this machine, over its socket.

@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vrontier/listen/listener/internal/fetch"
-	"github.com/vrontier/listen/listener/internal/ingest"
+	"github.com/vrontier/listen/ingest"
+	"github.com/vrontier/listen/ingest/fetch"
 )
 
 var _ = http.StatusOK
