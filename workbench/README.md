@@ -19,8 +19,8 @@ Needs Go 1.26 or later. The stand-in serves the control API of [docs/control-api
 ```sh
 go build ./cmd/...
 ./listen-standin -socket engine.sock &
-./workbench -db workbench.db -engine engine.sock -base-url http://127.0.0.1:8090 &
-./workbench -db workbench.db -base-url http://127.0.0.1:8090 admin -email you@example.org -name "Your Name"
+./workbench -db workbench.db -engine engine.sock -base-url http://127.0.0.1:8110 &
+./workbench -db workbench.db -base-url http://127.0.0.1:8110 admin -email you@example.org -name "Your Name"
 ```
 
 The last command creates the master admin and prints a login link. Without `-smtp`, login links and invitations are written to the Workbench's log. A Unix socket path may be at most about 100 characters long. The stand-in's probe answers by words in the address: `unreachable`, `notaudio`, `loud` and `silent` give the failures, `.ogg` a 32 kHz stream.

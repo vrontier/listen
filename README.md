@@ -12,7 +12,7 @@ A language model can add a slower narrative layer, turning structured observatio
 
 **Live at <https://listen.vrontier.org>.**
 
-This repository also holds **Listening Observatory Workbench (LOW)**, the research companion where members bring their own streams and decide how they are analysed: see [`workbench/`](workbench/). Both rest on the same parts: [`listen-ingest`](ingest/), the one service per machine that connects to stations, usable by any other program too, and `listen-engine` in [`listener/`](listener/), which decodes and analyses for the Workbench.
+This repository also holds **Listening Observatory Workbench (LOW)**, the research companion where members bring their own streams and decide how they are analysed: see [`workbench/`](workbench/). Both rest on the same parts: [`listen-ingest`](ingest/), the one service per machine that connects to stations, usable by any other program too, and `listen-engine` in [`listener/`](listener/), which decodes and analyses for the Workbench. The two websites run side by side under their own subdomains; [`deploy/README.md`](deploy/README.md) shows how they fit together and which ports they use.
 
 ## Streams
 

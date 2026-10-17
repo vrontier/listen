@@ -35,7 +35,7 @@ func env(k, def string) string {
 
 func main() {
 	var (
-		addr    = flag.String("addr", "127.0.0.1:8090", "HTTP listen address (behind the web server)")
+		addr    = flag.String("addr", "127.0.0.1:8110", "HTTP listen address (behind the web server)")
 		dbPath  = flag.String("db", "workbench.db", "catalogue database file")
 		dataDir = flag.String("datasets", "", "directory of the runs' data sets (default: \"datasets\" next to the database)")
 		engAddr = flag.String("engine", env("LOW_ENGINE", "/run/listen-engine/control.sock"),

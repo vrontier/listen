@@ -41,7 +41,7 @@ run: build
 	@mkdir -p $(BUILD)/run
 	@cd $(BUILD)/run && trap 'kill 0' EXIT INT TERM; \
 	../listen-standin -socket engine.sock & sleep 0.5; \
-	../workbench -db workbench.db -engine engine.sock -base-url http://127.0.0.1:8090
+	../workbench -db workbench.db -engine engine.sock -base-url http://127.0.0.1:8110
 
 linux:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -trimpath -o $(LINUX)/ ./cmd/...
