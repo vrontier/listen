@@ -58,7 +58,7 @@ scripts/    local development and deployment helpers
 
 ### Requirements
 
-- Go ≥ 1.23 (listener), ffmpeg (audio decoding), PHP 8 with mbstring (site; on Debian/Ubuntu `php8.3-mbstring`), jq (scripts)
+- Go ≥ 1.23 (listener), ffmpeg (audio decoding), PHP 8 (site), jq (scripts)
 - for a server: Linux with systemd, NGINX and PHP-FPM 8.3
 
 ### Configuration
@@ -85,9 +85,9 @@ bin/listener -in capture.mp3 -dump > events.jsonl   # offline, as fast as possib
 ### Deploy to a server
 
 Each source runs as its own listener instance (`listen-listener@<slug>`, systemd,
-bound to 127.0.0.1). NGINX routes `/<slug>/ws/…` and `/<slug>/api/state/current` to it,
-and everything else to the PHP front controller. The other API paths (motifs, history)
-stay on 127.0.0.1. The listener is cross-compiled to a
+bound to 127.0.0.1). NGINX routes `/<slug>/ws/…` and the three API paths the page uses
+(`api/state/current`, `api/motifs`, `api/history/events?type=narrative.update`) to it,
+and everything else to the PHP front controller. The other API paths stay on 127.0.0.1. The listener is cross-compiled to a
 static linux/amd64 binary, so the server needs no Go. `scripts/gen-sources.sh`
 generates the per-source systemd settings and NGINX routes from `sources.json`.
 

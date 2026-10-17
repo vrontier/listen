@@ -3,7 +3,8 @@
 # Staged by scripts/deploy-ionos.sh into ~questmaster/listen-deploy; run as root:
 #   bash /home/questmaster/listen-deploy/install.sh
 # Idempotent: safe to run again after every new staging. It touches only
-# listen.* files: its nginx vhost, its FPM pool, its systemd units and its users.
+# listen.* files: its nginx vhost, its FPM pool, its systemd units and its users,
+# and listen-ingest (its user, binary and unit) when that is staged.
 set -euo pipefail
 [[ $(id -u) -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 stage="$(cd "$(dirname "$0")" && pwd)"
@@ -66,6 +67,23 @@ else
   fi
 fi
 
+if [[ -f $stage/listen-ingest ]]; then
+  step "listen-ingest (the one connection to each station; the listeners read through it)"
+  id listen-ingest >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin listen-ingest
+  usermod -aG listen-ingest listen
+  restart=no
+  cmp -s "$stage/listen-ingest" /usr/local/bin/listen-ingest || restart=yes
+  cmp -s "$stage/listen-ingest.service" /etc/systemd/system/listen-ingest.service || restart=yes
+  install -m 0755 "$stage/listen-ingest" /usr/local/bin/listen-ingest.new
+  mv -f /usr/local/bin/listen-ingest.new /usr/local/bin/listen-ingest
+  install -m 0644 "$stage/listen-ingest.service" /etc/systemd/system/listen-ingest.service
+  systemctl daemon-reload
+  systemctl enable --quiet listen-ingest
+  if [[ $restart == yes ]]; then systemctl restart listen-ingest; else systemctl start listen-ingest; fi
+  for i in $(seq 1 20); do [[ -S /run/listen-ingest/feeds.sock ]] && break; sleep 0.25; done
+  ls -l /run/listen-ingest/feeds.sock
+fi
+
 step "listeners"
 systemctl daemon-reload
 for slug in $slugs; do
@@ -99,7 +117,10 @@ step "nginx"
 vhost=/etc/nginx/sites-available/listen.vrontier.org
 snip=/etc/nginx/snippets/listen-sources.conf
 bak="$vhost.bak-$(date +%Y%m%d-%H%M%S)"
-[[ -f $vhost ]] && cp -p "$vhost" "$bak"
+# A backup only when the vhost changes, so unchanged runs leave no copies.
+if [[ -f $vhost ]] && ! cmp -s "$stage/listen.vrontier.org.conf" "$vhost"; then
+  cp -p "$vhost" "$bak"
+fi
 [[ -f $snip ]] && cp -p "$snip" "$snip.prev"
 install -m 0644 "$stage/listen-sources.conf" "$snip"
 install -m 0644 "$stage/listen.vrontier.org.conf" "$vhost"
@@ -115,6 +136,9 @@ systemctl reload nginx
 
 step "status"
 sleep 3
+if [[ -f $stage/listen-ingest ]]; then
+  printf '%-22s %s\n' "listen-ingest" "$(systemctl is-active listen-ingest)"
+fi
 for slug in $slugs; do
   printf '%-22s %s\n' "$slug" "$(systemctl is-active "listen-listener@$slug")"
 done

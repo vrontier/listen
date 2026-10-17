@@ -52,7 +52,7 @@ Updates: `scripts/deploy-staging.sh`. It builds a static linux/amd64 listener, s
 | Listener binary | `/usr/local/bin/listen-listener` | `listener/` |
 | systemd template | `/etc/systemd/system/listen-listener@.service`, one instance per source | `systemd/listen-listener@.service` |
 | Per-source arguments | `/etc/listen/sources/<slug>.env` (generated: port, input, flags) | `site/_config/sources.json` |
-| Per-source routes | `/etc/nginx/snippets/listen-sources.conf` (generated: `/<slug>/ws/…`, `/<slug>/api/state/current`) | `site/_config/sources.json` |
+| Per-source routes | `/etc/nginx/snippets/listen-sources.conf` (generated: `/<slug>/ws/…` and the three API paths the page uses, `api/state/current`, `api/motifs` and `api/history/events?type=narrative.update`) | `site/_config/sources.json` |
 | Listener state | `/var/lib/listen` (user `listen`, 0700; captures in `samples/`, memory in `memory/<source>/<input>/`) | — |
 | Site | `/var/www/listen.home.arpa` | `site/` |
 | PHP-FPM pool | `/etc/php/8.3/fpm/pool.d/listen.conf`, socket `/run/php/php8.3-fpm-listen.sock` | `php-fpm/listen.conf` |
@@ -61,7 +61,7 @@ Updates: `scripts/deploy-staging.sh`. It builds a static linux/amd64 listener, s
 | Contact form | `site/_config/mail.php` (generated from `.email` by `scripts/mail-config.sh`, deployed with the site, root:www-data 0640 in a directory nginx never serves); rate limit in `/var/lib/listen-web` (www-data, 0700) | `.email` (gitignored) |
 | Narrator credentials | `/etc/listen/llm.env` (root, 0600): `LLM_API_KEY`, `NARRATOR_URL`, `NARRATOR_MODEL`; optional, narrator off without it | — |
 
-Each listener instance listens on its port from `sources.json` on 127.0.0.1 (8095 to 8109, see the port plan above; 8080 belongs to another service on that host). nginx proxies `/<slug>/ws/…` and `/<slug>/api/state/current` to it; everything else goes to the PHP front controller in its own FPM pool (`open_basedir` limited to the site and `/var/lib/listen-web`). Access is limited to the home LAN and WireGuard.
+Each listener instance listens on its port from `sources.json` on 127.0.0.1 (8095 to 8109, see the port plan above; 8080 belongs to another service on that host). nginx proxies `/<slug>/ws/…` and those three API paths to it; everything else goes to the PHP front controller in its own FPM pool (`open_basedir` limited to the site and `/var/lib/listen-web`). Access is limited to the home LAN and WireGuard.
 
 Staging listens **on demand**: each listener connects to its source only while a live page is open and disconnects 30 s after the last one closed (`-on-demand -idle-after 30s`, added by `scripts/deploy-staging.sh`). Production listens continuously, so the memory covers every hour, and each provider sees only one connection from us. To compare: `LISTEN_MODE=continuous scripts/deploy-staging.sh`; to change the close time: `IDLE_AFTER=2m scripts/deploy-staging.sh`.
 

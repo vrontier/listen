@@ -6,6 +6,9 @@
 #   scripts/deploy-ionos.sh              # stage everything; admin runs install.sh
 #   scripts/deploy-ionos.sh --site-only  # PHP site only, no root step needed
 #                                        # (after the first install)
+#   scripts/deploy-ionos.sh --no-ingest  # stage the listeners connecting to
+#                                        # the stations themselves, without
+#                                        # listen-ingest (the way back)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -14,6 +17,9 @@ web=/var/www/listen.vrontier.org
 stage=bin/ionos-stage
 cfg=site/_config/sources.json
 samples=/var/lib/listen/samples
+
+ingest=/run/listen-ingest/feeds.sock
+[[ ${1:-} == --no-ingest ]] && ingest=
 
 if [[ ${1:-} == --site-only ]]; then
   echo "syncing site to $host:$web"
@@ -26,7 +32,7 @@ fi
 
 rm -rf "$stage" && mkdir -p "$stage/samples"
 echo "generating per-source files from $cfg"
-NODE_MODE=continuous scripts/gen-sources.sh "$stage/gen" $'\n    limit_conn perip 20;\n    limit_req zone=general burst=20 nodelay;'
+NODE_MODE=continuous NODE_INGEST="$ingest" scripts/gen-sources.sh "$stage/gen" $'\n    limit_conn perip 20;\n    limit_req zone=general burst=20 nodelay;'
 mv "$stage/gen/sources" "$stage/gen/listen-sources.conf" "$stage/gen/slugs" "$stage/" && rm -rf "$stage/gen"
 
 # Archive sources read files from $samples on the server; ship those we have.
@@ -36,6 +42,12 @@ for f in $(jq -r --arg d "$samples/" '.sources[].listener.input | select(startsw
 done
 
 scripts/build-listener.sh "$stage/listen-listener"
+# listen-ingest: the server's one connection to each station; the listeners
+# read through it (-ingest in their settings).
+if [[ -n $ingest ]]; then
+  scripts/build-listener.sh "$stage/listen-ingest" listen-ingest
+  cp deploy/systemd/listen-ingest.service "$stage/"
+fi
 scripts/build-listener.sh bin/listen-mcp-linux-amd64 listen-mcp
 
 # Contact form: mail.php (gitignored) from .email (gitignored).

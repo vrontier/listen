@@ -2,7 +2,7 @@
 
 Listening Observatory (https://listen.vrontier.org) needs one root step on this server.
 `questmaster` has already staged everything in `/home/questmaster/listen-deploy/`.
-Run one script there as root. It is idempotent and touches only `listen.*` files.
+Run one script there as root. It is idempotent and touches only `listen.*` files and `listen-ingest`.
 
 ```sh
 sudo -i          # or log in as root
@@ -17,9 +17,9 @@ status line per source, which should read `active`.
 | Area | Change |
 |---|---|
 | Packages | Installs `ffmpeg` (apt) if missing. The listeners use it to decode the audio. |
-| User | Creates the system user `listen` (nologin, home `/var/lib/listen`). The listeners run as this user. |
-| Binary | Installs `/usr/local/bin/listen-listener`, a static Go binary. |
-| systemd | Installs the template `/etc/systemd/system/listen-listener@.service` and enables and restarts one instance per source: `listen-listener@<slug>`. Each instance listens on `127.0.0.1` only (ports 8095–8098), with a hardened unit (ProtectSystem=strict, no capabilities). |
+| User | Creates the system user `listen` (nologin, home `/var/lib/listen`). The listeners run as this user. Creates the system user `listen-ingest` (nologin) and adds `listen` to its group. |
+| Binary | Installs `/usr/local/bin/listen-listener` and `/usr/local/bin/listen-ingest`, static Go binaries. |
+| systemd | Installs the template `/etc/systemd/system/listen-listener@.service` and enables and restarts one instance per source: `listen-listener@<slug>`. Each instance listens on `127.0.0.1` only (one port per source, from 8095–8109), with a hardened unit (ProtectSystem=strict, no capabilities). Installs `/etc/systemd/system/listen-ingest.service` and enables it: the server's one connection to each live stream, on the Unix socket `/run/listen-ingest/feeds.sock` (group `listen-ingest`, 0660), hardened the same way (Nice=5, CPUQuota=50%, MemoryMax=512M, TasksMax=256). It is restarted only when its binary or unit changed. |
 | Config | Writes `/etc/listen/sources/<slug>.env` (one per source; sources no longer configured are stopped and removed). Writes `/etc/listen/llm.env` (0600) on the first run only, with the LiteLLM key copied from `/home/mike/.env` (`LITELLM_API_KEY`) for the interpretation text. Without a key that layer stays off. |
 | Data | Installs the archive audio files in `/var/lib/listen/samples/` (listen:listen 0640). The listeners keep their memory in `/var/lib/listen/memory/`. Creates `/var/lib/listen-web/` (listen-web, 0700) for the contact form's rate limit. |
 | Site | Syncs `/var/www/listen.vrontier.org` (owner questmaster:www-data, 2755/0644). Installs `_config/mail.php` (SMTP credentials of listening.observatory@vrontier.org) as root:listen-web 0640. nginx never serves `/_…`. |
@@ -28,21 +28,35 @@ status line per source, which should read `active`.
 
 No other vhost, pool or service is touched. Outbound connections:
 
-- the listeners: the live streams (HTTPS) and the LiteLLM proxy on this server;
+- listen-ingest: the live streams (HTTPS), one connection per stream;
+- the listeners: the LiteLLM proxy on this server (they read the streams from listen-ingest's socket);
 - PHP: smtp.ionos.de:587.
 
 ## Check
 
 ```sh
-systemctl status 'listen-listener@*' --no-pager | grep -E '●|Active'
-journalctl -u 'listen-listener@*' -n 20 --no-pager
+systemctl status listen-ingest 'listen-listener@*' --no-pager | grep -E '●|Active'
+journalctl -u listen-ingest -u 'listen-listener@*' -n 20 --no-pager
+curl -s --unix-socket /run/listen-ingest/feeds.sock http://ingest/v1/feeds   # one entry per live stream, consumers 1
 curl -s https://listen.vrontier.org/ -o /dev/null -w '%{http_code}\n'       # 200
 ```
 
 ## Undo
 
+The listeners without listen-ingest (they connect to the streams themselves again):
+
 ```sh
-systemctl disable --now 'listen-listener@*'
+sed -i 's# -ingest /run/listen-ingest/feeds.sock##' /etc/listen/sources/*.env
+systemctl restart 'listen-listener@*'
+systemctl disable --now listen-ingest
+```
+
+The next staging then comes with `scripts/deploy-ionos.sh --no-ingest`, until the ingest is wanted again.
+
+Everything:
+
+```sh
+systemctl disable --now listen-ingest 'listen-listener@*'
 cp -p /etc/nginx/sites-available/listen.vrontier.org.bak-<date> /etc/nginx/sites-available/listen.vrontier.org
 rm /etc/nginx/snippets/listen-sources.conf
 nginx -t && systemctl reload nginx

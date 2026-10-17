@@ -47,6 +47,7 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 UMask=0077
 
+Nice=10
 CPUQuota=100%
 MemoryMax=512M
 TasksMax=256

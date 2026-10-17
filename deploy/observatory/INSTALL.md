@@ -9,8 +9,8 @@ Every running Observatory opens its own connection to each stream it listens to,
 ## What you need
 
 - **ffmpeg** (decoding) and **jq** (the scripts), on every system.
-- **PHP 8** with `mbstring`, for the website.
-- For a server: **Linux with systemd**, **nginx** and **PHP-FPM**. The programs also run on macOS and Windows, but the server setup below is for Linux; on Windows, use the Windows Subsystem for Linux for the scripts.
+- **PHP 8**, for the website.
+- For a server: **Linux with systemd**, **nginx**, **PHP-FPM** and an address (a domain name) pointing to it. The programs also run on macOS and Windows, but the server setup below is for Linux; on Windows, use the Windows Subsystem for Linux for the scripts.
 
 ## Try it on your computer
 
@@ -23,16 +23,19 @@ Stop it with Ctrl-C. Memories (what the listener has learned to recognise) are k
 
 ## Install it on a Linux server
 
-The steps below use `/var/www/observatory` for the website and `observatory.example.org` as its address; use your own.
+The steps below use `/var/www/observatory` for the website and `observatory.example.org` as its address; use your own. Run them from the unpacked archive's folder.
 
-**1. Programs and user.**
+**1. Programs and users.** The listeners run as `listen`, the website's PHP as `observatory-web`; neither can log in.
 
 ```sh
-sudo apt-get install ffmpeg jq nginx php-fpm php-mbstring
+sudo apt-get install ffmpeg jq rsync nginx php-fpm certbot
 sudo install -m 0755 bin/listen-listener /usr/local/bin/listen-listener
 sudo useradd --system --home-dir /var/lib/listen --no-create-home --shell /usr/sbin/nologin listen
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin observatory-web
 sudo install -d -o listen -g listen -m 0700 /var/lib/listen
 ```
+
+Only ports 80 and 443 (and SSH) need to be open to the outside; the listeners answer on 127.0.0.1 only. A fresh nginx tells every visitor its version: uncomment `server_tokens off;` in `/etc/nginx/nginx.conf`.
 
 **2. Your sources.** If you tried it on your computer, bring your `site/_config/sources.json` along. Otherwise copy `site/_config/sources.example.json` to `site/_config/sources.json` now and describe your streams as in "Try it" above; the next steps need it. A local recording must be readable by the user `listen`, for example in `/var/lib/listen/samples/` (create it with `sudo install -d -o listen -g listen -m 0700 /var/lib/listen/samples`).
 
@@ -40,47 +43,72 @@ sudo install -d -o listen -g listen -m 0700 /var/lib/listen
 
 ```sh
 sudo install -d -m 0755 /var/www/observatory
-sudo cp -r site/. /var/www/observatory/
+sudo rsync -r --exclude _config/mail.php site/ /var/www/observatory/
+ls /var/www/observatory/_config/
 ```
 
-The site reads `/var/www/observatory/_config/sources.json`; after every change to your `site/_config/sources.json`, copy it there again.
+`_config/` should now hold `sources.json` and the `*.example.*` files, nothing else; the contact form's settings come in step 6.
 
-**4. One listener per source.** `scripts/gen-sources.sh` reads `site/_config/sources.json` and writes each source's settings and the web server's routes:
+**4. One listener per source, and their routes.**
 
 ```sh
-scripts/gen-sources.sh /tmp/observatory-gen
-sudo install -d /etc/listen/sources
-sudo cp /tmp/observatory-gen/sources/*.env /etc/listen/sources/
-sudo cp /tmp/observatory-gen/listen-sources.conf /etc/nginx/snippets/
-sudo cp systemd/listen-listener@.service /etc/systemd/system/
-sudo systemctl daemon-reload
-for slug in $(cat /tmp/observatory-gen/slugs); do sudo systemctl enable --now "listen-listener@$slug"; done
+sudo install -m 0644 systemd/listen-listener@.service /etc/systemd/system/
+sudo install -m 0644 deploy/observatory-limits.conf /etc/nginx/conf.d/
+sudo scripts/apply-sources.sh
 ```
 
-Each listener listens on its port on 127.0.0.1 only. By default they listen continuously; `NODE_MODE=on-demand scripts/gen-sources.sh …` makes them connect only while someone has the page open. If you also run [`listen-ingest`](https://github.com/vrontier/listen/tree/main/ingest), `NODE_INGEST=/run/listen-ingest/feeds.sock scripts/gen-sources.sh …` makes every listener read through it, so that each stream is connected once on the machine.
+`scripts/apply-sources.sh` reads `site/_config/sources.json`, writes each source's settings to `/etc/listen/sources/<slug>.env`, starts one listener per source (`listen-listener@<slug>`) and installs their routes as `/etc/nginx/snippets/listen-sources.conf`, with the per-visitor limits of `observatory-limits.conf` (10 requests a second, 20 connections at a time). It ends with one line per source, which should read `active`.
 
-**5. PHP and nginx.** Use your PHP version in the paths (`ls /etc/php` shows it; 8.3 on Ubuntu 24.04):
+Each listener answers on its port on 127.0.0.1 only. By default they listen continuously; `sudo NODE_MODE=on-demand scripts/apply-sources.sh` makes them connect only while someone has the page open. If you also run [`listen-ingest`](https://github.com/vrontier/listen/tree/main/ingest), `sudo NODE_INGEST=/run/listen-ingest/feeds.sock scripts/apply-sources.sh` makes every listener read through it, so that each stream is connected once on the machine. The script's header lists its other settings.
+
+**5. The certificate.** Let's Encrypt checks that the address is yours over port 80, at the first certificate and at every renewal. A small site for that check comes first, then the certificate:
 
 ```sh
-sudo cp deploy/php-fpm-pool.conf /etc/php/8.3/fpm/pool.d/observatory.conf
-sudo cp -n deploy/snippets/*.conf /etc/nginx/snippets/
-sudo cp deploy/nginx-site.conf /etc/nginx/sites-available/observatory
-sudo ln -s /etc/nginx/sites-available/observatory /etc/nginx/sites-enabled/observatory
-# edit the server name and certificate paths in /etc/nginx/sites-available/observatory, then
-sudo systemctl restart php8.3-fpm && sudo nginx -t && sudo systemctl reload nginx
+sudo install -d -m 0755 /var/www/letsencrypt
+printf 'server {\n    listen 80;\n    listen [::]:80;\n    server_name observatory.example.org;\n    location ^~ /.well-known/acme-challenge/ { root /var/www/letsencrypt; }\n}\n' | sudo tee /etc/nginx/sites-available/observatory >/dev/null
+sudo ln -sfn /etc/nginx/sites-available/observatory /etc/nginx/sites-enabled/observatory
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot certonly --webroot -w /var/www/letsencrypt -d observatory.example.org --deploy-hook 'systemctl reload nginx'
 ```
 
-`cp -n` keeps snippets of the same name that your server already has. A certificate for your address, for example from Let's Encrypt, goes where `nginx-site.conf` says. If you chose another directory than `/var/www/observatory`, change it in both files.
+certbot renews the certificate by itself and reloads nginx after each renewal; the site of the next step keeps the check open.
 
-**6. Optional: the contact form.** Copy `site/_config/mail.example.php` to `/var/www/observatory/_config/mail.php` (readable by the web server only), fill in your mail account, and give it a `state_dir` that PHP may write (for example `/var/lib/listen-web`, owned by `www-data`) to limit submissions to five per hour per visitor. Without the file the page shows an address instead of the form.
+**6. PHP and nginx.** Use your PHP version in the paths (`ls /etc/php` shows it; 8.3 on Ubuntu 24.04), and your address in the site:
 
-**7. Optional: the narrator.** A language model can turn what the listeners detect into short sentences. Put `LLM_API_KEY`, `NARRATOR_URL` (any OpenAI-compatible endpoint) and `NARRATOR_MODEL` into `/etc/listen/llm.env` (root only, mode 0600) and restart the listeners. Without the file the narrator stays off.
+```sh
+sudo install -m 0644 deploy/php-fpm-pool.conf /etc/php/8.3/fpm/pool.d/observatory.conf
+sudo php-fpm8.3 -t && sudo systemctl reload php8.3-fpm
+for f in deploy/snippets/*.conf; do [ -e "/etc/nginx/snippets/${f##*/}" ] || sudo install -m 0644 "$f" /etc/nginx/snippets/; done
+sudo sed 's/observatory\.example\.org/your.address.org/g' deploy/nginx-site.conf | sudo tee /etc/nginx/sites-available/observatory >/dev/null
+sudo nginx -t && sudo systemctl reload nginx
+```
 
-**8. Optional: an AI assistant.** `bin/listen-mcp` gives an assistant read-only access to the listeners over MCP, typically through SSH. Install it on the server (`sudo install -m 0755 bin/listen-mcp /usr/local/bin/`) and tell it where your sources are: `{"mcpServers": {"listen": {"command": "ssh", "args": ["<host>", "listen-mcp", "-sources", "/var/www/observatory/_config/sources.json"]}}}`.
+`reload` lets the other sites on the machine keep serving. Snippets of the same name that your server already has are kept. If you chose another directory than `/var/www/observatory`, change it in the pool, in the site and in `OBSERVATORY_WEB` for `scripts/apply-sources.sh`.
+
+**7. Optional: the contact form.** Without it the page shows an address instead of the form.
+
+```sh
+cp site/_config/mail.example.php mail.php
+openssl rand -hex 32        # the form's secret
+# edit mail.php: your mail account, and the secret above in 'secret'
+sudo install -o root -g observatory-web -m 0640 mail.php /var/www/observatory/_config/mail.php
+sudo install -d -o observatory-web -g observatory-web -m 0700 /var/lib/listen-web
+rm mail.php
+```
+
+Only PHP's own user can read the file, so no other site on the machine sees the mail password. The form stays off while the secret is the example's placeholder or shorter than 32 characters. `/var/lib/listen-web` keeps a hash of each visitor's address for an hour, to limit submissions to five per hour per visitor.
+
+**8. Optional: the narrator.** A language model can turn what the listeners detect into short sentences. Put `LLM_API_KEY`, `NARRATOR_URL` (any OpenAI-compatible endpoint) and `NARRATOR_MODEL` into `/etc/listen/llm.env` (root only, mode 0600) and restart the listeners (`sudo systemctl restart 'listen-listener@*'`). Without the file the narrator stays off.
+
+**9. Optional: an AI assistant.** `bin/listen-mcp` gives an assistant read-only access to the listeners over MCP, typically through SSH. Install it on the server (`sudo install -m 0755 bin/listen-mcp /usr/local/bin/`) and tell it where your sources are: `{"mcpServers": {"listen": {"command": "ssh", "args": ["<host>", "listen-mcp", "-sources", "/var/www/observatory/_config/sources.json"]}}}`.
 
 ## Changing sources later
 
-Edit `site/_config/sources.json`, copy it to `/var/www/observatory/_config/`, and repeat step 4. Remove the listener of a source you took out with `sudo systemctl disable --now listen-listener@<slug>`. A listener keeps its memory per source and input under `/var/lib/listen/memory/<slug>/`, so changing a source's input starts a new memory, and changing back resumes the old one.
+Edit `site/_config/sources.json` and run `sudo scripts/apply-sources.sh` again. It restarts the listeners whose settings changed, starts new ones, stops those of sources you took out and removes their settings, reloads nginx with the new routes (or keeps the old ones if nginx refuses them) and copies `sources.json` to the website. A listener keeps its memory per source and input under `/var/lib/listen/memory/<slug>/`, so changing a source's input starts a new memory, and changing back resumes the old one; the memory of a source taken out stays there until you remove it.
+
+## Beyond this guide
+
+A public server attracts scanners. Blocking them (fail2ban, CrowdSec, a list of known bad user agents) is your server's policy rather than part of the Observatory; their documentation is the place to start.
 
 ## Next to the Workbench
 

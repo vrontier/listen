@@ -23,7 +23,13 @@ function contact_config(): ?array
         return null;
     }
     $cfg = require $file;
-    return is_array($cfg) && !empty($cfg['secret']) && !empty($cfg['smtp']['host']) ? $cfg : null;
+    // A secret left at the example's placeholder, or too short to sign
+    // with, would let anyone forge form tokens: the form stays off.
+    $secret = (string) ($cfg['secret'] ?? '');
+    if (strlen($secret) < 32 || $secret === 'replace-with-a-long-random-string') {
+        return null;
+    }
+    return is_array($cfg) && !empty($cfg['smtp']['host']) ? $cfg : null;
 }
 
 // token = "<unix time>.<hmac>" — must be at least 4 s and at most 2 h old.

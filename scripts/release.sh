@@ -60,8 +60,8 @@ observatory)
     local stage=$1
     mkdir -p "$stage/scripts" "$stage/deploy"
     rsync -a --exclude '_config/sources.json' --exclude '_config/mail.php' --exclude '.DS_Store' site/ "$stage/site/"
-    cp scripts/dev.sh scripts/dev-router.php scripts/gen-sources.sh scripts/mail-config.sh "$stage/scripts/"
-    cp -R deploy/observatory/nginx-site.conf deploy/observatory/php-fpm-pool.conf deploy/observatory/snippets "$stage/deploy/"
+    cp scripts/dev.sh scripts/dev-router.php scripts/gen-sources.sh scripts/apply-sources.sh scripts/mail-config.sh "$stage/scripts/"
+    cp -R deploy/observatory/nginx-site.conf deploy/observatory/php-fpm-pool.conf deploy/observatory/observatory-limits.conf deploy/observatory/snippets "$stage/deploy/"
   }
   ;;
 *)
