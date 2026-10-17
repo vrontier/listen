@@ -53,6 +53,9 @@ jobs:
             engine) title="listen-engine $version" ;;
             workbench) title="Listening Observatory Workbench $version" ;;
           esac
+          # The checkout leaves the tag without its annotation; fetch it, since
+          # its message is the release text.
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           notes="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
           [ -n "$notes" ] || notes="$title"
           gh release create "$GITHUB_REF_NAME" "$OUT"/* --title "$title" --notes "$notes"
