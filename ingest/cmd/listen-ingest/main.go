@@ -10,11 +10,13 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -34,7 +36,12 @@ func main() {
 	)
 	var allowHosts list
 	flag.Var(&allowHosts, "allow-host", "a host or host:port accepted although on a private network (repeatable)")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("listen-ingest", version())
+		return
+	}
 	m, err := strconv.ParseUint(*mode, 8, 32)
 	if err != nil {
 		log.Fatalf("-mode: %v", err)
@@ -51,7 +58,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := os.Chmod(*socket, os.FileMode(m)); err != nil {
+	// Windows keeps no Unix modes; access there is the directory's.
+	if err := os.Chmod(*socket, os.FileMode(m)); err != nil && runtime.GOOS != "windows" {
 		log.Fatal(err)
 	}
 	log.Printf("ingest on %s (mode %s)", *socket, *mode)
@@ -71,8 +79,12 @@ func main() {
 	os.Remove(*socket)
 }
 
+// baseVersion is the ingest's release; a release build sets it from its tag
+// (-ldflags "-X main.baseVersion=…").
+var baseVersion = "0.1.0"
+
 func version() string {
-	v := "0.1.0"
+	v := baseVersion
 	if bi, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range bi.Settings {
 			if s.Key == "vcs.revision" && len(s.Value) >= 7 {

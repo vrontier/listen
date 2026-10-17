@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -54,7 +55,12 @@ func main() {
 	flag.IntVar(&lim.MaxBitrateKbps, "max-bitrate", lim.MaxBitrateKbps, "highest bit rate (kbit/s) a probe accepts")
 	flag.IntVar(&lim.Groups, "max-groups", lim.Groups, "groups the engine holds at most, all callers together")
 	flag.IntVar(&lim.MembersPerGroup, "max-members-per-group", lim.MembersPerGroup, "analyses per group at most")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("listen-engine", engine.Version())
+		return
+	}
 
 	var specs []callerSpec
 	for _, c := range callers {
@@ -172,7 +178,8 @@ func (cs callerSpec) listen() (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Chmod(cs.path, cs.mode); err != nil {
+	// Windows keeps no Unix modes; access there is the directory's.
+	if err := os.Chmod(cs.path, cs.mode); err != nil && runtime.GOOS != "windows" {
 		ln.Close()
 		return nil, err
 	}

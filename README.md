@@ -14,6 +14,18 @@ A language model can add a slower narrative layer, turning structured observatio
 
 This repository also holds **Listening Observatory Workbench (LOW)**, the research companion where members bring their own streams and decide how they are analysed: see [`workbench/`](workbench/). Both rest on the same parts: [`listen-ingest`](ingest/), the one service per machine that connects to stations, usable by any other program too, and `listen-engine` in [`listener/`](listener/), which decodes and analyses for the Workbench. The two websites run side by side under their own subdomains; [`deploy/README.md`](deploy/README.md) shows how they fit together and which ports they use.
 
+## What to download
+
+Ready-built programs for Linux, macOS and Windows are on the [releases page](https://github.com/vrontier/listen/releases), one release line per part:
+
+| You want to run | Download | Also needs |
+|---|---|---|
+| the Workbench, for your own research | `listen-workbench` | `listen-engine` and `listen-ingest`, ffmpeg |
+| an engine for the Workbench | `listen-engine` | `listen-ingest`, ffmpeg |
+| one connection per station for programs of your own | `listen-ingest` | nothing |
+
+Each archive holds the programs, a README and, for Linux, systemd units. The Observatory itself is a website with per-source configuration and is installed from this repository ([`deploy/README.md`](deploy/README.md)). Releases are made with `scripts/release.sh` from tags `ingest/v…`, `engine/v…` and `workbench/v…`.
+
 ## Streams
 
 The observatory listens to several sources at once. Each has its own page at `/<slug>`

@@ -3,7 +3,6 @@ package engine
 import (
 	"runtime"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -183,14 +182,6 @@ func (r *run) memoryEstimate() float64 {
 		mb += 1 + 0.02*float64(mem.Established())
 	}
 	return mb
-}
-
-func selfCPU() time.Duration {
-	var ru syscall.Rusage
-	if syscall.Getrusage(syscall.RUSAGE_SELF, &ru) != nil {
-		return 0
-	}
-	return time.Duration(ru.Utime.Nano() + ru.Stime.Nano())
 }
 
 func hostCores() int { return runtime.NumCPU() }

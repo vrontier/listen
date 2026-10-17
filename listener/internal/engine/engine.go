@@ -202,8 +202,15 @@ func (e *Engine) Close() {
 	e.loops.Wait()
 }
 
+// baseVersion is the engine's release; a release build sets it from its tag
+// (-ldflags "-X …/internal/engine.baseVersion=…").
+var baseVersion = "0.2.0"
+
+// Version is the engine's release and, in a build from git, its commit.
+func Version() string { return version() }
+
 func version() string {
-	v := "0.2.0"
+	v := baseVersion
 	if bi, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range bi.Settings {
 			if s.Key == "vcs.revision" && len(s.Value) >= 7 {

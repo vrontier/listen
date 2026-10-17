@@ -8,6 +8,8 @@ In this repository, the Observatory's listeners and `listen-engine` (which serve
 
 ## Running it
 
+Download `listen-ingest` for your system from the [releases page](https://github.com/vrontier/listen/releases), or build it:
+
 ```sh
 go build ./cmd/listen-ingest
 ./listen-ingest -socket /run/listen-ingest/feeds.sock
@@ -21,7 +23,7 @@ go build ./cmd/listen-ingest
 | `-allow-private` | off | accept stations on private networks (a closed intranet, tests) |
 | `-allow-host` | none | a host or `host:port` accepted although on a private network; repeatable |
 
-A systemd unit is in [`../deploy/systemd/listen-ingest.service`](../deploy/systemd/listen-ingest.service).
+A systemd unit is in [`../deploy/systemd/listen-ingest.service`](../deploy/systemd/listen-ingest.service) and in the Linux archives. On Windows, give `-socket` a path of your own.
 
 ## What it accepts
 

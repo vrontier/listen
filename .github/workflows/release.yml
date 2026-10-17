@@ -1,0 +1,58 @@
+# Builds and publishes a release of one component when its tag is pushed:
+#   ingest/v0.1.0     listen-ingest
+#   engine/v0.2.0     listen-engine
+#   workbench/v0.1.0  Listening Observatory Workbench
+# The archives for Linux, macOS and Windows come from scripts/release.sh.
+name: release
+
+on:
+  push:
+    tags:
+      - "ingest/v*"
+      - "engine/v*"
+      - "workbench/v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
+          cache: false
+      - name: Test
+        run: |
+          component="${GITHUB_REF_NAME%%/*}"
+          case "$component" in
+            ingest) dir=ingest ;;
+            engine) dir=listener ;;
+            workbench) dir=workbench ;;
+          esac
+          sudo apt-get install -y -qq ffmpeg >/dev/null
+          (cd "$dir" && go vet ./... && go test ./...)
+      - name: Build
+        run: |
+          component="${GITHUB_REF_NAME%%/*}"
+          version="${GITHUB_REF_NAME#*/v}"
+          scripts/release.sh "$component" "$version"
+          echo "OUT=dist/$component-$version" >> "$GITHUB_ENV"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          component="${GITHUB_REF_NAME%%/*}"
+          version="${GITHUB_REF_NAME#*/v}"
+          case "$component" in
+            ingest) title="listen-ingest $version" ;;
+            engine) title="listen-engine $version" ;;
+            workbench) title="Listening Observatory Workbench $version" ;;
+          esac
+          notes="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          [ -n "$notes" ] || notes="$title"
+          gh release create "$GITHUB_REF_NAME" "$OUT"/* --title "$title" --notes "$notes"
