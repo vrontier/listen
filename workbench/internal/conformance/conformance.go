@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 // Options say what to check and how.

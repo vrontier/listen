@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // Every access with a token is noted (catalogue/access.go): a data stream

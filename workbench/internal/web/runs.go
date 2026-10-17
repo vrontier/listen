@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 // A run keeps an analysis's sources connected from its start until it is

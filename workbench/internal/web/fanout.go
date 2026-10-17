@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 // fanout holds one engine subscription per analysis, or per group, and

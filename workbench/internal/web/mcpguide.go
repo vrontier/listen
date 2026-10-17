@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // The MCP guide says in plain words how the tools fit together, so that a

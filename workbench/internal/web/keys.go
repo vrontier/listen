@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/llm"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/llm"
 )
 
 // The member's language-model keys (members-and-streams.md, Language-model

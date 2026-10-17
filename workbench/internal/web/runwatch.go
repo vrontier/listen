@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // Runs that end by themselves (design.md, Runs): when a source has sent

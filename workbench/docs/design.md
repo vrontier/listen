@@ -110,12 +110,14 @@ browser, programs, AI assistants
         │
         ▼
 web server ──► Workbench process ──control API, local socket──► engine process ──► listen-ingest ──► stations
-               (this repository)                               (listen repository)
+               (workbench/)                                    (listener/)
                pages, catalogue, login,                        connections, decodes,
                tokens, data stream, MCP                        analyses, memory
 ```
 
 ### Two processes
+
+**Decided** (2026-10-17, the maintainer): one repository again. The Workbench is `workbench/` in the listen repository, a Go module of its own; the engine is in `listener/`. The two processes, the control API between them and the rule that the Workbench imports no engine code stay as described below; "this repository" there means `workbench/`, "the listen repository" the engine's `listener/`.
 
 - **The engine process** lives in the listen repository. It holds the streams, the decodes, the analyses and their memory. It knows nothing about users, accounts, tokens or publication. It is reachable on a local socket only.
 - **The Workbench process** lives in this repository: one Go binary with the pages, the catalogue, the login, the tokens, the data stream and the MCP endpoint. Everything that reaches the outside goes through it, and it alone decides who may see what.

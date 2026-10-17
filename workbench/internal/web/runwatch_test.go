@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 func TestRunVerdict(t *testing.T) {

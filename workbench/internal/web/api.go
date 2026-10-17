@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 // The data stream for programs (design.md, question 7; members-and-

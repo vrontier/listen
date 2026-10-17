@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/engine"
-	"github.com/vrontier/listen-workbench/internal/standin"
+	"github.com/vrontier/listen/workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/standin"
 )
 
 // The stand-in must pass every check, so that it and the contract cannot

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 func TestClientIP(t *testing.T) {

@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/llm"
-	"github.com/vrontier/listen-workbench/internal/secret"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/llm"
+	"github.com/vrontier/listen/workbench/internal/secret"
 )
 
 const (

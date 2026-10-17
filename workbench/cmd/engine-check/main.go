@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/conformance"
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/conformance"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 func main() {

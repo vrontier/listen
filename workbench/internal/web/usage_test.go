@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 // Each analysis counts against its member; a shared connection is split

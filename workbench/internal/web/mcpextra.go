@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // MCP resources and prompts. Resources are what a member can attach to a

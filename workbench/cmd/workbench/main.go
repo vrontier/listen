@@ -19,11 +19,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/engine"
-	"github.com/vrontier/listen-workbench/internal/mail"
-	"github.com/vrontier/listen-workbench/internal/secret"
-	"github.com/vrontier/listen-workbench/internal/web"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/mail"
+	"github.com/vrontier/listen/workbench/internal/secret"
+	"github.com/vrontier/listen/workbench/internal/web"
 )
 
 func env(k, def string) string {

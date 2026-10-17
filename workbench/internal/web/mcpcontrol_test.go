@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // makeTokenWith makes a token on the Tokens page from a filled form.

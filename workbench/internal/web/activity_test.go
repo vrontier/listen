@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 func TestActivity(t *testing.T) {

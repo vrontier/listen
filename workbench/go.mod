@@ -1,4 +1,4 @@
-module github.com/vrontier/listen-workbench
+module github.com/vrontier/listen/workbench
 
 go 1.26.0
 

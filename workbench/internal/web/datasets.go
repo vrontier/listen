@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 // A run's data set (design.md, Runs). While the run lasts, the Workbench

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 // The checks of callers and shared sources (control-api.md; decided

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // The memories' sizes, as the engine reports them during a run, count

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // The Results page shows a member what their runs recorded and how their

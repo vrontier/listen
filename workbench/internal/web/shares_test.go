@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // An owner shares a source; the other member uses it in an analysis of

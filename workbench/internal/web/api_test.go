@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 var secretRE = regexp.MustCompile(`low_[A-Za-z0-9_-]{20,}`)

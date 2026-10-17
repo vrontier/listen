@@ -1,12 +1,14 @@
 # Listening Observatory Workbench
 
-**Listening Observatory Workbench (LOW)** is the research companion to [Listening Observatory](https://github.com/vrontier/listen): tools for researchers to explore live audio streams with their own filters, motifs and AI-assisted analysis.
+**Listening Observatory Workbench (LOW)** is the research companion to Listening Observatory, in the same repository: tools for researchers to explore live audio streams with their own filters, motifs and AI-assisted analysis.
 
 The Observatory is a small, curated, public exhibit: a handful of streams, each analysed one way, with no accounts. The Workbench is where individual exploration happens. A researcher brings a stream, decides how it is analysed, and gets the results as pages, as a data stream, or through an AI assistant.
 
 ## Status
 
-The member area, built and tested against a stand-in for the engine; since 2026-10-16 the intranet installation runs on the real engine, `listen-engine` from the listen repository (control API 1.1, without the timing comparisons yet). The specs in [`docs/`](docs/) record what has been decided, what is proposed and what is still open.
+**Decided** (2026-10-17, the maintainer): the Workbench lives in the listen repository under `workbench/`, next to the ingest, the engine and the Observatory; its history came along. Until then it was the repository `listen-workbench`. Mentions of "the listen repository" in the documents below mean the rest of this repository.
+
+The member area, built and tested against a stand-in for the engine; since 2026-10-16 the intranet installation runs on the real engine, `listen-engine` from [`listener/`](../listener) in this repository (control API 1.1, without the timing comparisons yet). The specs in [`docs/`](docs/) record what has been decided, what is proposed and what is still open.
 
 Working: invitation by the master admin, login by email link, registering a source with a probe, draft and production, pausing and deleting, analyses with one or more sources and settings per source, the analysis page grouped per source (live spectrogram, events, motifs, settings and filter rules with validation by the engine, memories), revisions, runs that fix one revision and produce a data set each (events and comparison as CSV and JSON) with a Runs page to manage them, a ten-minute preview that records nothing, a trial of changed settings next to a run, comparing two or more sources on one time axis during a run (activity per second, correlations, a map with distances and the night side; on the stand-in's made-up data), usage accounting with caps for the server and per member and a disk quota counting data sets and memories, sharing a source with other members, a Results page with the data sets of runs to download or delete and the disk space they take, tokens for programs with a data stream (JSON and Server-Sent Events) and an MCP endpoint (with a summary and a "since" cursor for assistants, and, for a token the member allows control, making and changing analyses and starting and stopping previews and runs within limits set per token), publishing an analysis as a public research page with reports to the master admin, members' language-model API keys (checked with the provider, stored encrypted), runs that stop by themselves when a source stops sending (with a mail when a run ends), the operator's contact for streams the member does not run, coordinates rounded to about 10 km on public pages, a limit of live visitors per published analysis, the list of who is connected, the audit trail. Not yet: the timing comparisons that need station time, the language-model interpretation, motif definitions and captures.
 
@@ -29,7 +31,7 @@ Tests: `go test ./...`. The engine's control API version this Workbench needs: *
 
 ## Deploying
 
-`make deploy intranet` runs the tests, builds the Workbench for Linux and installs it on the intranet host as `low.home.arpa`. The engine, `listen-engine`, is installed there beforehand from the listen repository (`scripts/deploy-engine.sh`), with its own user and group `listen-engine`, its unit `listen-engine.service` and its socket `/run/listen-engine/control.sock`; the Workbench's user is put in its group. The engine reads every station through `listen-ingest`, installed by the same script, the platform's only component that connects to stations. That host's SSH name goes in `deploy/local.mk` (ignored by git) as `INTRANET_HOST = …`; the account needs sudo without a password. `make deploy production` is reserved for `low.vrontier.org`, which is not set up yet.
+`make deploy intranet` runs the tests, builds the Workbench for Linux and installs it on the intranet host as `low.home.arpa`. The engine, `listen-engine`, is installed there beforehand with `scripts/deploy-engine.sh` at the top of this repository, with its own user and group `listen-engine`, its unit `listen-engine.service` and its socket `/run/listen-engine/control.sock`; the Workbench's user is put in its group. The engine reads every station through `listen-ingest`, installed by the same script, the platform's only component that connects to stations. That host's SSH name goes in `deploy/local.mk` (ignored by git) as `INTRANET_HOST = …`; the account needs sudo without a password. `make deploy production` is reserved for `low.vrontier.org`, which is not set up yet.
 
 What `deploy/install.sh` sets up there:
 
@@ -37,7 +39,7 @@ What `deploy/install.sh` sets up there:
 |---|---|
 | User and group `low` | system user, no login |
 | Program | `/usr/local/bin/low-workbench` |
-| Engine | `listen-engine.service` from the listen repository, socket `/run/listen-engine/control.sock`, which the Workbench uses (`LOW_ENGINE` in its unit). The stand-in no longer runs on the host: a deploy removes its earlier unit `low-engine.service` |
+| Engine | `listen-engine.service` from `listener/`, socket `/run/listen-engine/control.sock`, which the Workbench uses (`LOW_ENGINE` in its unit). The stand-in no longer runs on the host: a deploy removes its earlier unit `low-engine.service` |
 | Workbench | `low-workbench.service` on 127.0.0.1:8110, catalogue `/var/lib/low/workbench.db` |
 | Reserved addresses | `/etc/low/reserved-inputs`: hosts or addresses the Listening Observatory listens to, one per line, kept on the host only. Members cannot register them, and they are never put into the engine (`LOW_RESERVED_INPUTS`) |
 | Settings | `/etc/low/workbench.env` (base address, mail server, the sealing key of language-model keys); created once, then kept. Back up its `LOW_KEYS_SECRET` apart from the catalogue: without it, saved keys cannot be opened. `LOW_PUBLISHING=on` and `LOW_LLM_KEYS=on` there turn on publishing and the keys page; both are off |

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // A trial tries changed settings next to a running run, without touching

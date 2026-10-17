@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 // A stream's spectrogram view (decided 2026-10-16): the stream's own

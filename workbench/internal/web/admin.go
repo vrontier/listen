@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/engine"
-	"github.com/vrontier/listen-workbench/internal/mail"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/mail"
 )
 
 type adminData struct {

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // Tools for a session with a language model: short answers, and a cursor

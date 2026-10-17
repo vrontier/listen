@@ -21,11 +21,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/engine"
-	"github.com/vrontier/listen-workbench/internal/llm"
-	"github.com/vrontier/listen-workbench/internal/mail"
-	"github.com/vrontier/listen-workbench/internal/secret"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/llm"
+	"github.com/vrontier/listen/workbench/internal/mail"
+	"github.com/vrontier/listen/workbench/internal/secret"
 )
 
 //go:embed templates/*.html

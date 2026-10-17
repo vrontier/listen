@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/standin"
+	"github.com/vrontier/listen/workbench/internal/standin"
 )
 
 func main() {

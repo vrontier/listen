@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // MCP over HTTP (design.md, question 8): an endpoint in the Workbench

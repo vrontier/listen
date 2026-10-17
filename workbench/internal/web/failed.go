@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
-	"github.com/vrontier/listen-workbench/internal/engine"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/engine"
 )
 
 // An analysis in the engine can fail on its own (decided 2026-10-16): its

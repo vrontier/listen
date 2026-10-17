@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // The Home page is where a member lands: the way through the Workbench,

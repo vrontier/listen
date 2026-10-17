@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // Starting and stopping previews and runs, for the pages and for tokens

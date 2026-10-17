@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/vrontier/listen-workbench/internal/catalogue"
+	"github.com/vrontier/listen/workbench/internal/catalogue"
 )
 
 // The AI pages (members-and-streams.md, Tokens): an overview of how a
