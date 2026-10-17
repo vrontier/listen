@@ -34,16 +34,18 @@ sudo useradd --system --home-dir /var/lib/listen --no-create-home --shell /usr/s
 sudo install -d -o listen -g listen -m 0700 /var/lib/listen
 ```
 
-**2. The website.**
+**2. Your sources.** If you tried it on your computer, bring your `site/_config/sources.json` along. Otherwise copy `site/_config/sources.example.json` to `site/_config/sources.json` now and describe your streams as in "Try it" above; the next steps need it. A local recording must be readable by the user `listen`, for example in `/var/lib/listen/samples/` (create it with `sudo install -d -o listen -g listen -m 0700 /var/lib/listen/samples`).
+
+**3. The website.**
 
 ```sh
 sudo install -d -m 0755 /var/www/observatory
 sudo cp -r site/. /var/www/observatory/
 ```
 
-`sources.json` in `/var/www/observatory/_config/` is the one the site reads; keep your copy in step 3 and this one the same (copy it again after every change).
+The site reads `/var/www/observatory/_config/sources.json`; after every change to your `site/_config/sources.json`, copy it there again.
 
-**3. One listener per source.** `scripts/gen-sources.sh` reads `site/_config/sources.json` and writes each source's settings and the web server's routes:
+**4. One listener per source.** `scripts/gen-sources.sh` reads `site/_config/sources.json` and writes each source's settings and the web server's routes:
 
 ```sh
 scripts/gen-sources.sh /tmp/observatory-gen
@@ -57,28 +59,28 @@ for slug in $(cat /tmp/observatory-gen/slugs); do sudo systemctl enable --now "l
 
 Each listener listens on its port on 127.0.0.1 only. By default they listen continuously; `NODE_MODE=on-demand scripts/gen-sources.sh …` makes them connect only while someone has the page open. If you also run [`listen-ingest`](https://github.com/vrontier/listen/tree/main/ingest), `NODE_INGEST=/run/listen-ingest/feeds.sock scripts/gen-sources.sh …` makes every listener read through it, so that each stream is connected once on the machine.
 
-**4. PHP and nginx.**
+**5. PHP and nginx.** Use your PHP version in the paths (`ls /etc/php` shows it; 8.3 on Ubuntu 24.04):
 
 ```sh
-sudo cp deploy/php-fpm-pool.conf /etc/php/*/fpm/pool.d/observatory.conf
-sudo cp deploy/snippets/*.conf /etc/nginx/snippets/
+sudo cp deploy/php-fpm-pool.conf /etc/php/8.3/fpm/pool.d/observatory.conf
+sudo cp -n deploy/snippets/*.conf /etc/nginx/snippets/
 sudo cp deploy/nginx-site.conf /etc/nginx/sites-available/observatory
 sudo ln -s /etc/nginx/sites-available/observatory /etc/nginx/sites-enabled/observatory
-# edit the server name, certificate paths and the site's directory in the two files, then
-sudo systemctl restart php*-fpm && sudo nginx -t && sudo systemctl reload nginx
+# edit the server name and certificate paths in /etc/nginx/sites-available/observatory, then
+sudo systemctl restart php8.3-fpm && sudo nginx -t && sudo systemctl reload nginx
 ```
 
-A certificate for your address, for example from Let's Encrypt, goes where `nginx-site.conf` says.
+`cp -n` keeps snippets of the same name that your server already has. A certificate for your address, for example from Let's Encrypt, goes where `nginx-site.conf` says. If you chose another directory than `/var/www/observatory`, change it in both files.
 
-**5. Optional: the contact form.** Copy `site/_config/mail.example.php` to `/var/www/observatory/_config/mail.php` (readable by the web server only), fill in your mail account, and give it a `state_dir` that PHP may write (for example `/var/lib/listen-web`, owned by `www-data`) to limit submissions to five per hour per visitor. Without the file the page shows an address instead of the form.
+**6. Optional: the contact form.** Copy `site/_config/mail.example.php` to `/var/www/observatory/_config/mail.php` (readable by the web server only), fill in your mail account, and give it a `state_dir` that PHP may write (for example `/var/lib/listen-web`, owned by `www-data`) to limit submissions to five per hour per visitor. Without the file the page shows an address instead of the form.
 
-**6. Optional: the narrator.** A language model can turn what the listeners detect into short sentences. Put `LLM_API_KEY`, `NARRATOR_URL` (any OpenAI-compatible endpoint) and `NARRATOR_MODEL` into `/etc/listen/llm.env` (root only, mode 0600) and restart the listeners. Without the file the narrator stays off.
+**7. Optional: the narrator.** A language model can turn what the listeners detect into short sentences. Put `LLM_API_KEY`, `NARRATOR_URL` (any OpenAI-compatible endpoint) and `NARRATOR_MODEL` into `/etc/listen/llm.env` (root only, mode 0600) and restart the listeners. Without the file the narrator stays off.
 
-**7. Optional: an AI assistant.** `bin/listen-mcp` gives an assistant read-only access to the listeners over MCP, typically through SSH: `{"mcpServers": {"listen": {"command": "ssh", "args": ["<host>", "listen-mcp"]}}}`.
+**8. Optional: an AI assistant.** `bin/listen-mcp` gives an assistant read-only access to the listeners over MCP, typically through SSH. Install it on the server (`sudo install -m 0755 bin/listen-mcp /usr/local/bin/`) and tell it where your sources are: `{"mcpServers": {"listen": {"command": "ssh", "args": ["<host>", "listen-mcp", "-sources", "/var/www/observatory/_config/sources.json"]}}}`.
 
 ## Changing sources later
 
-Edit `site/_config/sources.json`, copy it to `/var/www/observatory/_config/`, and repeat step 3. Remove the listener of a source you took out with `sudo systemctl disable --now listen-listener@<slug>`. A listener keeps its memory per source and input under `/var/lib/listen/memory/<slug>/`, so changing a source's input starts a new memory, and changing back resumes the old one.
+Edit `site/_config/sources.json`, copy it to `/var/www/observatory/_config/`, and repeat step 4. Remove the listener of a source you took out with `sudo systemctl disable --now listen-listener@<slug>`. A listener keeps its memory per source and input under `/var/lib/listen/memory/<slug>/`, so changing a source's input starts a new memory, and changing back resumes the old one.
 
 ## Next to the Workbench
 

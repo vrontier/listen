@@ -97,7 +97,8 @@ for t in "${targets[@]}"; do
   if [[ $os == windows ]]; then
     (cd "$out/stage" && zip -qr "../$(basename "$stage").zip" "$(basename "$stage")")
   else
-    tar -C "$out/stage" -czf "$out/$(basename "$stage").tar.gz" "$(basename "$stage")"
+    # No extended attributes: macOS adds some that Linux tar warns about.
+    COPYFILE_DISABLE=1 tar --no-xattrs -C "$out/stage" -czf "$out/$(basename "$stage").tar.gz" "$(basename "$stage")"
   fi
   echo "built $(basename "$stage")"
 done
