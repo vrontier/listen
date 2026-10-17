@@ -267,14 +267,47 @@ func previewID(a catalogue.Analysis) string { return fmt.Sprintf("p-%04d", a.ID)
 // startPreview lets the analysis's preview run until the given time.
 func (s *engineSync) startPreview(id int64, until time.Time) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.previews[id] = until
+	s.mu.Unlock()
+	if err := s.db.SavePreview(context.Background(), id, until); err != nil {
+		log.Printf("preview of analysis %d not kept: %v", id, err)
+	}
 }
 
 func (s *engineSync) endPreview(id int64) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	delete(s.previews, id)
+	s.mu.Unlock()
+	if err := s.db.DeletePreview(context.Background(), id); err != nil {
+		log.Printf("preview of analysis %d: %v", id, err)
+	}
+}
+
+// load takes up the previews and trials that went on when the Workbench
+// last stopped (they are kept in the catalogue, so that a restart does
+// not end them). Those past their end are ended by the next round of
+// endedPreviews and endedTrials.
+func (s *engineSync) load(ctx context.Context) error {
+	previews, err := s.db.Previews(ctx)
+	if err != nil {
+		return err
+	}
+	trials, err := s.db.Trials(ctx)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, until := range previews {
+		s.previews[id] = until
+	}
+	for id, t := range trials {
+		s.trials[id] = trial{Started: t.Started, Until: t.Until, Settings: t.Settings}
+	}
+	if n := len(previews) + len(trials); n > 0 {
+		log.Printf("taken up again: %d previews and %d trials", len(previews), len(trials))
+	}
+	return nil
 }
 
 // preview reports until when the analysis's preview runs, if it does.
@@ -292,13 +325,16 @@ func (s *engineSync) preview(id int64) (time.Time, bool) {
 // analyses.
 func (s *engineSync) endedPreviews() []int64 {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	var out []int64
 	for id, until := range s.previews {
 		if !time.Now().Before(until) {
 			delete(s.previews, id)
 			out = append(out, id)
 		}
+	}
+	s.mu.Unlock()
+	for _, id := range out {
+		s.db.DeletePreview(context.Background(), id)
 	}
 	return out
 }
@@ -318,18 +354,24 @@ func trialID(a catalogue.Analysis) string { return fmt.Sprintf("t-%04d", a.ID) }
 
 func (s *engineSync) startTrial(id int64, settings map[int64]json.RawMessage) trial {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	now := time.Now()
 	t := trial{Started: now, Until: now.Add(trialLength), Settings: settings}
 	s.trials[id] = t
+	s.mu.Unlock()
+	if err := s.db.SaveTrial(context.Background(), id, catalogue.Trial{Started: t.Started, Until: t.Until, Settings: t.Settings}); err != nil {
+		log.Printf("trial of analysis %d not kept: %v", id, err)
+	}
 	return t
 }
 
 func (s *engineSync) endTrial(id int64) (trial, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	t, ok := s.trials[id]
 	delete(s.trials, id)
+	s.mu.Unlock()
+	if err := s.db.DeleteTrial(context.Background(), id); err != nil {
+		log.Printf("trial of analysis %d: %v", id, err)
+	}
 	return t, ok
 }
 
@@ -348,13 +390,16 @@ func (s *engineSync) trialOf(id int64) (trial, bool) {
 // analyses.
 func (s *engineSync) endedTrials() []int64 {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	var out []int64
 	for id, t := range s.trials {
 		if !time.Now().Before(t.Until) {
 			delete(s.trials, id)
 			out = append(out, id)
 		}
+	}
+	s.mu.Unlock()
+	for _, id := range out {
+		s.db.DeleteTrial(context.Background(), id)
 	}
 	return out
 }

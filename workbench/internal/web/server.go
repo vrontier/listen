@@ -123,6 +123,9 @@ func (s *Server) Start(ctx context.Context) {
 	if err := s.db.CutOpenAccess(ctx); err != nil { // data streams open when the Workbench last stopped
 		log.Printf("access: %v", err)
 	}
+	if err := s.sync.load(ctx); err != nil { // previews and trials that went on
+		log.Printf("previews and trials: %v", err)
+	}
 	go s.sync.run(ctx)
 	go s.data.refresh(ctx) // runs that went on, or ended, while the Workbench was down
 	go func() {

@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -185,5 +186,45 @@ func TestIngestUnavailable(t *testing.T) {
 	r.db.CreateUser(ctx, "m@example.org", "Mira", false)
 	if _, page, _ := r.get(r.loginAs("m@example.org"), "/"); !strings.Contains(page, "connection service (listen-ingest) does not answer") {
 		t.Fatal("no banner")
+	}
+}
+
+// Previews and trials survive a restart of the Workbench (a deploy): they
+// are kept in the catalogue and taken up again.
+func TestPreviewAndTrialSurviveRestart(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	u, _ := r.db.CreateUser(ctx, "m@example.org", "Mira", false)
+	st, _ := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050,
+		Texts: catalogue.StreamTexts{Name: "A"}, Probe: []byte(`{}`)})
+	a, _ := r.db.CreateAnalysis(ctx, u.ID, "Watch", "", []int64{st.ID}, nil)
+	b, _ := r.db.CreateAnalysis(ctx, u.ID, "Other", "", []int64{st.ID}, nil)
+	until := time.Now().Add(8 * time.Minute).Truncate(time.Second)
+	r.srv.sync.startPreview(a.ID, until)
+	r.srv.sync.startTrial(b.ID, map[int64]json.RawMessage{st.ID: json.RawMessage(`{"settings":{"min_hz":100}}`)})
+
+	// A second Workbench on the same catalogue, as after a deploy.
+	srv2, err := New(Config{BaseURL: r.web.URL, DatasetDir: t.TempDir()}, r.db, engine.NewClient(&http.Client{}, r.engSrv.URL), r.mail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx2, cancel := context.WithCancel(ctx)
+	defer cancel()
+	srv2.Start(ctx2)
+	if got, ok := srv2.sync.preview(a.ID); !ok || !got.Equal(until) {
+		t.Fatalf("preview after the restart: %v %v, want until %v", ok, got, until)
+	}
+	if tr, ok := srv2.sync.trialOf(b.ID); !ok || string(tr.Settings[st.ID]) != `{"settings":{"min_hz":100}}` {
+		t.Fatalf("trial after the restart: %v %+v", ok, tr)
+	}
+
+	// Ended, they are gone from the catalogue too.
+	srv2.sync.endPreview(a.ID)
+	srv2.sync.endTrial(b.ID)
+	if ps, _ := r.db.Previews(ctx); len(ps) != 0 {
+		t.Fatalf("previews kept after their end: %v", ps)
+	}
+	if ts, _ := r.db.Trials(ctx); len(ts) != 0 {
+		t.Fatalf("trials kept after their end: %v", ts)
 	}
 }
