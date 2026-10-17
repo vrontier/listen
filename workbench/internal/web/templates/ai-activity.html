@@ -1,0 +1,66 @@
+{{define "content"}}
+<h1>AI: activity</h1>
+{{with .Data}}
+{{$d := .}}
+<p class="meta">Every access made with your tokens over the last 30 days: what AI assistants asked and changed through MCP, and what programs read from the data stream. Times are UTC. The tokens themselves are never noted.</p>
+
+<section>
+  <h2>By token</h2>
+  {{if .Summary}}
+  <table>
+    <thead><tr><th class="wide">Token</th><th>Last 24 hours</th><th>Failed</th><th>Last 30 days</th><th>Streams open</th><th class="nowrap">Last access (UTC)</th></tr></thead>
+    <tbody>{{range .Summary}}<tr>
+      <td><a href="/ai/activity?token={{.TokenID}}#accesses">{{.Name}}</a> <code class="small">{{.Hint}}…</code>{{if .Revoked}} <span class="meta">revoked</span>{{end}}</td>
+      <td>{{.Day}}</td><td>{{if .DayFails}}<span class="field-error">{{.DayFails}}</span>{{else}}0{{end}}</td><td>{{.Month}}</td><td>{{.Open}}</td>
+      <td class="nowrap">{{moment .Last}}</td>
+    </tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="meta">No token has been used in the last 30 days. Make one under <a href="/ai/access">Access</a>; <a href="/ai/mcp#connect">MCP</a> says how to connect an assistant.</p>{{end}}
+</section>
+
+<section>
+  <h2 id="accesses">Accesses</h2>
+  {{if .Rows}}
+  <form class="inline-form log-filter" id="log-filter" hidden>
+    <label>Search <input type="search" name="q" placeholder="tool, argument, message" autocomplete="off"></label>
+    <label>Token <select name="token"><option value="">all</option>{{range .Tokens}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+    <label>Through <select name="via"><option value="">MCP and data stream</option><option value="mcp">MCP</option><option value="stream">data stream</option></select></label>
+    <label>Kind <select name="kind"><option value="">reads and changes</option><option value="change">changes</option><option value="read">reads</option></select></label>
+    <label>Call <select name="what"><option value="">all</option></select></label>
+    <label>Result <select name="status"><option value="">all</option><option value="ok">ok</option><option value="failed">failed</option><option value="open">streaming</option><option value="refused">refused</option></select></label>
+    <button type="reset" class="secondary">Clear</button>
+  </form>
+  <p class="meta small" id="log-count" aria-live="polite"></p>
+  <div class="log-scroll" tabindex="0" aria-label="Accesses">
+  <table class="log" id="log">
+    <thead><tr>
+      <th class="nowrap" data-key="at" aria-sort="descending"><button type="button" class="link">Time (UTC)</button></th>
+      <th data-key="token"><button type="button" class="link">Token</button></th>
+      <th data-key="via"><button type="button" class="link">Through</button></th>
+      <th data-key="what"><button type="button" class="link">Call</button></th>
+      <th data-key="status"><button type="button" class="link">Result</button></th>
+      <th class="num" data-key="ms"><button type="button" class="link">Took</button></th>
+      <th class="num" data-key="bytes"><button type="button" class="link">Size</button></th>
+    </tr></thead>
+    {{range .Rows}}<tbody class="entry" data-at="{{.At.UnixMilli}}" data-token="{{.TokenID}}" data-token-name="{{.TokenName}}" data-via="{{.Via}}" data-what="{{.What}}" data-kind="{{if changeTool .What}}change{{else}}read{{end}}" data-status="{{.Status}}" data-ms="{{.Ms}}" data-bytes="{{.Bytes}}">
+      <tr class="l1">
+        <td class="nowrap">{{moment .At}}</td>
+        <td>{{.TokenName}}{{with .Client}} <span class="meta small">{{.}}</span>{{end}}</td>
+        <td class="nowrap">{{if eq .Via "mcp"}}MCP{{else}}data stream{{end}}</td>
+        <td><code>{{.What}}</code>{{if changeTool .What}} <span class="state tone-warn">change</span>{{end}}</td>
+        <td class="nowrap">{{template "status" (status "access" .Status)}}</td>
+        <td class="num nowrap">{{if ne .Status "open"}}{{ms .Ms}}{{end}}</td>
+        <td class="num nowrap">{{if .Bytes}}{{bytes .Bytes}}{{end}}</td>
+      </tr>
+      <tr class="l2"><td colspan="7">{{if .Detail}}<code class="small">{{.Detail}}</code>{{end}}{{if eq .Status "cut"}} <span class="meta">the Workbench restarted while it was sent</span>{{else if .Note}} <span class="{{if eq .Status "ok"}}meta{{else}}field-error{{end}}">{{.Note}}</span>{{end}}{{if and (not .Detail) (not .Note) (ne .Status "cut")}}<span class="meta">{{if eq .Via "mcp"}}no arguments{{else}}no query{{end}}</span>{{end}}</td></tr>
+    </tbody>{{end}}
+  </table>
+  </div>
+  <p class="meta">{{if .Newest}}<a href="{{.Newest}}" data-newest>Newest</a> · {{end}}{{if .Older}}<a href="{{.Older}}">Older</a>{{end}}</p>
+  <p class="meta">Each access takes two lines: when, with which token, through what, the call, its result, how long it took and how much went back; below it, the arguments and the message. Click a column's heading to sort by it, again to reverse. The page holds the newest 500 accesses; filters and sorting work on those, "Older" loads the next 500. An MCP client first says who it is ("initialize") and asks for the tools ("tools/list"); then each tool it calls is an access, with its arguments. A data stream access is one request; live events stay "streaming" until the program disconnects.</p>
+  {{else}}<p class="meta">Nothing yet.</p>{{end}}
+</section>
+
+{{end}}
+<script src="{{asset "mcplog.js"}}" defer></script>
+{{end}}

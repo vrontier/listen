@@ -1,0 +1,29 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+<section>
+<h1>New analysis</h1>
+<p class="meta">Give it a title and choose its sources. Each source starts with the engine's default settings; you set its range and filter rules on the analysis's page afterwards. Nothing connects until you start a run or a preview.</p>
+{{with .Data}}
+{{if not .Picks}}
+  <p class="empty">You have no sources yet. <a href="/sources/new">Register a source</a> first.</p>
+{{else}}
+<form method="post" action="/analyses/new" class="stack wide-form">
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+  <label>Title {{with index .Errs "name"}}<span class="field-error">{{.}}</span>{{end}}
+    <input name="name" value="{{.Name}}" required maxlength="80" autofocus></label>
+  <label>Description <small>optional: what you are looking for</small> {{with index .Errs "description"}}<span class="field-error">{{.}}</span>{{end}}
+    <textarea name="description" rows="3" maxlength="2000">{{.Description}}</textarea></label>
+  <fieldset>
+    <legend>Sources</legend>
+    <p class="meta">One source or several, up to {{.MaxSources}}. Each gets its own range and filter rules in the analysis. Several sources are also compared on one time axis.</p>
+    {{with index .Errs "source"}}<p class="field-error">{{.}}</p>{{end}}
+    {{range .Picks}}
+      <label class="check"><input type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}}, {{end}}{{.Stream.SampleRate}} Hz, {{.Stream.State}}{{if .Shared}}, shared by {{.Stream.OwnerName}}{{end}}</span></label>
+    {{end}}
+  </fieldset>
+  <button>Create the analysis</button>
+</form>
+{{end}}
+{{end}}
+</section>
+{{end}}

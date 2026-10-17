@@ -1,0 +1,43 @@
+{{define "content"}}
+{{with .Data}}
+<h1>Welcome, {{.Name}}</h1>
+<p class="meta">The Workbench analyses live audio streams for you: it finds spectral events and recurring motifs in each source, compares sources with each other, and records what a run finds as a data set to download. This is the way through it, step by step, with where you stand at each step.</p>
+
+<ol class="steps">
+  <li class="card">
+    <h2>Register a source</h2>
+    <p>A source is a live audio stream you are allowed to analyse: your own receiver's, or one whose operator agreed. Give its address under <a href="/sources/new">Register a source</a>; the Workbench listens to it briefly to learn its format and sample rate. The Workbench connects to a source only while an analysis that uses it is in a run or a preview. A new source starts as a draft; put it in service once it proves reliable (both connect alike for now). You can share a source with other members on its page, and use sources others share with you.</p>
+    <p class="meta">Now: {{.Sources}} source{{if ne .Sources 1}}s{{end}} of your own{{if .Shared}}, {{.Shared}} shared with you{{end}}. <a href="/sources">Sources</a></p>
+  </li>
+  <li class="card">
+    <h2>Make an analysis</h2>
+    <p>An analysis listens to one or more sources, up to {{.MaxSources}}, with settings of its own for each: the frequency range, how sensitive it is, filter rules that leave out known interference such as mains hum, and whether it keeps what it learns. Make one under <a href="/analyses/new">New analysis</a>. Start a ten-minute <strong>preview</strong> on its page to watch the live spectrogram and events and to tune the settings; a preview records nothing. Every saved change is a new revision.</p>
+    <p class="meta">Now: {{.Analyses}} analys{{if eq .Analyses 1}}is{{else}}es{{end}}. <a href="/analyses">Analyses</a></p>
+  </li>
+  <li class="card">
+    <h2>Start a run</h2>
+    <p>A run keeps an analysis listening for a set time, or until you stop it, whether or not a page is open. Its settings are fixed while it lasts; to try changed settings, start a <strong>trial</strong> next to it on the analysis's page. A run stops by itself when a source sends nothing for a while (you choose how long), and you get a mail when it ends without your stopping it. Start one on the analysis's page or under <a href="/runs">Runs</a>.</p>
+    <p class="meta">Now: {{if .Running}}<strong>{{.Running}} running</strong>{{else}}nothing running{{end}}, {{.Finished}} finished. <a href="/runs">Runs</a></p>
+  </li>
+  <li class="card">
+    <h2>Look at the results</h2>
+    <p>Each finished run leaves a data set: the events of every source and of the comparison, with the times a source was not heard, as JSON and CSV. Download it under <a href="/results">Results</a>, as one zip or file by file, and delete what you no longer need there: data sets and the analyses' memories share your disk space, and a run is refused while it is full.</p>
+    <p class="meta">Now: {{.Datasets}} data set{{if ne .Datasets 1}}s{{end}}; {{bytes .Disk.Total}} of {{bytes .Quota}} used ({{.UsedPct}} %). <a href="/results">Results</a></p>
+  </li>
+  <li class="card">
+    <h2>Work with an AI assistant or a program</h2>
+    <p>A token lets an AI assistant (through MCP) or your own program (through the data stream) read your analyses, their live events and your data sets. Make one under <a href="/ai/access">AI, Access</a>; a token reads only, unless you allow it more.</p>
+    <p>With <strong>control</strong> allowed for a token, an assistant can also work for you: list your sources, make an analysis, rename it, choose its sources and tune their settings and filter rules (each change a new revision, checked by the engine), preview it for ten minutes, and start and stop runs. You set the limits per token, or none: the longest run, runs a day and at once, previews and changes a day. You get a mail whenever a token starts a run, and the run names the token. An assistant never registers, shares, publishes or deletes anything.</p>
+    <p>For long sessions an assistant can ask for a short summary of an analysis and, during a run, only what is new since it last looked. The <a href="/ai">AI</a> pages say how to give an assistant access step by step, list every tool it can call with a guide to give it and how to connect, and show everything done with your tokens, the changes marked.</p>
+    <p class="meta">Now: {{.Tokens}} token{{if ne .Tokens 1}}s{{end}}{{if .Control}}, {{.Control}} with control{{end}}; {{.Accesses}} access{{if ne .Accesses 1}}es{{end}} in the last 24 hours{{if .ByTokens}}; {{.ByTokens}} run{{if ne .ByTokens 1}}s{{end}} started by a token going on{{end}}. <a href="/ai">AI</a></p>
+  </li>
+  {{if .Publishing}}
+  <li class="card">
+    <h2>Publish</h2>
+    <p>When you choose, publish an analysis on its page: it then appears to everyone under <a href="/research">Research</a>, with its live view while it runs and, if you offer them, its data sets. You can withdraw it at any time.</p>
+  </li>
+  {{end}}
+</ol>
+{{if .Admin}}<p class="meta">As master admin you also have the <a href="/manage">Admin</a> page: invitations, caps, reports and the change log.</p>{{end}}
+{{end}}
+{{end}}

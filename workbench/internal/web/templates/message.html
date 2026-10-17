@@ -1,0 +1,7 @@
+{{define "content"}}
+<section class="narrow">
+  <h1>{{.Data.Heading}}</h1>
+  <p>{{.Data.Text}}</p>
+  {{if .Data.Link}}<p><a href="{{.Data.Link}}">{{.Data.LinkText}}</a></p>{{end}}
+</section>
+{{end}}

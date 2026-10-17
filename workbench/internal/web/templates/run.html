@@ -1,0 +1,65 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+{{with .Data}}
+{{$d := .}}
+<p class="crumbs"><a href="/runs">Runs</a> · <a href="/analyses/{{.Analysis.ID}}">{{.Analysis.Name}}</a></p>
+<div class="heading-row">
+  <h1>{{.Analysis.Name}}, run {{.Run.Number}}</h1>
+  <span class="states">{{if .Run.Active}}{{template "status" (status "activity" "run")}}{{else}}<span class="state tone-neutral">Ended</span>{{end}} <span class="meta">data set</span> {{template "status" (status "dataset" .Run.Dataset)}}</span>
+</div>
+{{if or (eq .Run.Dataset "recording") (eq .Run.Dataset "freezing")}}<meta http-equiv="refresh" content="{{if .Run.Active}}60{{else}}3{{end}}">{{end}}
+<p class="meta">One run of the analysis: when it ran, with which revision, how it ended, and the data set it recorded. The data set holds the events of each source and of the comparison, with the times a source was not heard; it does not depend on the engine keeping anything.</p>
+
+<table class="facts">
+  <tr><th>Started</th><td>{{when .Run.Started}} by {{.Run.StartedBy}}{{with .Run.Token}}, through the token "{{.}}"{{end}}</td></tr>
+  <tr><th>{{if .Run.Active}}Until{{else}}Ended{{end}}</th><td>{{if .Run.Active}}{{if .Run.Ends.IsZero}}it is stopped{{else}}{{when .Run.Ends}}{{end}}{{else if not .Run.Stopped.IsZero}}{{when .Run.Stopped}}{{if .Run.StoppedBy}}, stopped by {{.Run.StoppedBy}}{{else if and .Run.EndNote (ne .Run.EndReason "planned")}}, by itself: {{.Run.EndNote}}{{else}}, as planned{{end}}{{else}}{{when .Run.Ends}}, as planned{{end}}</td></tr>
+  <tr><th>Stops</th><td>{{if .Run.OfflineStop}}when a source sends nothing for {{.Run.OfflineStop}} min{{else}}when all its sources send nothing for 15 min{{end}}</td></tr>
+  <tr><th>Length</th><td>{{.Run.Duration}}{{if .Run.Active}} so far{{end}}</td></tr>
+  <tr><th>Revisions</th><td>rev-{{.Run.Revision}}{{if ne .Run.RevTo .Run.Revision}} to rev-{{.Run.RevTo}}{{end}}</td></tr>
+</table>
+
+<section>
+  <h2>Data set</h2>
+  {{if eq .Run.Dataset "recording"}}
+  <p>Recording. The data set is put together when the run ends.</p>
+  {{else if eq .Run.Dataset "freezing"}}
+  <p>Being put together. This page reloads until it is ready.</p>
+  {{else if eq .Run.Dataset "failed"}}
+  <p class="note warn-note">The data set could not be put together: {{.Run.DatasetNote}}</p>
+  {{else if eq .Run.Dataset "deleted"}}
+  <p class="meta">Deleted.</p>
+  {{else if eq .Run.Dataset "none"}}
+  <p class="meta">None: {{.Run.DatasetNote}}.</p>
+  {{else}}
+  <table>
+    <thead><tr><th>File</th><th>Size</th><th>Content</th></tr></thead>
+    <tbody>
+      <tr><td class="nowrap"><a href="/runs/{{$d.Run.ID}}/all.zip">all.zip</a></td><td class="nowrap">about {{bytes .Packed}}</td><td class="meta">the files below together, compressed in one zip archive</td></tr>
+      {{range .Files}}<tr><td class="nowrap"><a href="/runs/{{$d.Run.ID}}/{{.Name}}">{{.Name}}</a></td><td class="nowrap">{{bytes .Bytes}}</td><td class="meta">{{.About}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  <p class="meta">Times are UTC, wall time at the engine. The single files download uncompressed, at the size shown. The data set is kept compressed, at {{bytes .Run.DatasetBytes}}, and counts so against your disk quota: {{bytes .Used}} of {{bytes .Quota}} used, see <a href="/results">Results</a>.</p>
+
+  <h3>What it holds</h3>
+  <table>
+    <thead><tr><th>Source</th><th>Events</th><th>Transients</th><th>Resonances</th><th>Motifs found or returned</th><th>Motifs at the end</th><th>Not heard</th></tr></thead>
+    <tbody>{{range .Summary.Sources}}<tr><td>{{.Name}}</td><td>{{.Total}}</td><td>{{index .Events "event.transient"}}</td><td>{{index .Events "event.resonance"}}</td><td>{{add (index .Events "motif.detected") (index .Events "motif.returned")}}</td><td>{{.Motifs}}</td><td>{{if .Absences}}{{seconds .AbsentS}} in {{.Absences}} period{{if ne .Absences 1}}s{{end}}{{else}}—{{end}}</td></tr>{{end}}</tbody>
+  </table>
+  <p class="meta">"Not heard" counts the periods of at least a second in which a source was not connected: connecting, paused by its owner, or gone from the engine. They are listed in the JSON and as rows "source.absent" in the events CSV.</p>
+  {{with .Summary.Comparison}}
+  <p>Comparison: {{.Seconds}} seconds of activity, {{.Correlations}} correlations.</p>
+  {{end}}
+  {{if .Pairs}}
+  <table>
+    <thead><tr><th>Pair, last correlation</th><th>r</th><th>Lag</th><th>Baseline r</th></tr></thead>
+    <tbody>{{range .Pairs}}<tr><td>{{.A}} – {{.B}}</td><td>{{with .R}}{{printf "%.2f" .}}{{else}}—{{end}}</td><td>{{with .LagS}}{{printf "%+.0f s" .}}{{else}}—{{end}}</td><td>{{with .BaselineR}}{{printf "%.2f" .}}{{else}}—{{end}}</td></tr>{{end}}</tbody>
+  </table>
+  {{end}}
+  <form method="post" action="/runs/{{.Run.ID}}/delete" class="inline-form danger-inline">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <button class="danger">Delete the data set</button>
+  </form>
+  {{end}}
+</section>
+{{end}}
+{{end}}

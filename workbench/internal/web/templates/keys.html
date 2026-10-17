@@ -1,0 +1,42 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+<h1>Language-model keys</h1>
+{{with .Data}}
+<p class="meta">A language model can describe in words what your analyses hear. It works with your own API key for Anthropic or OpenAI: the provider bills your account with them, and the Workbench handles no money. Without a key there is no interpretation. Everything else works without one.</p>
+<p class="meta">A key is used only for your own analyses, also on sources shared with you, and only while someone is watching. The interpretation itself is not built into the engine yet: until then a saved key is kept, and not used.</p>
+
+{{if not .Ready}}<p class="field-error">This server has no sealing key set, so it cannot keep API keys yet. The master admin sets <code>LOW_KEYS_SECRET</code>.</p>{{end}}
+
+{{range .Rows}}
+<section>
+  <h2>{{.Provider.Name}}</h2>
+  {{if .Key}}
+  <table class="facts">
+    <tr><th>Key</th><td><code>…{{.Key.Hint}}</code></td></tr>
+    <tr><th>Saved</th><td>{{when .Key.Created}}</td></tr>
+    <tr><th>Accepted</th><td>{{when .Key.Checked}}{{if not .Key.Refused.IsZero}} <span class="field-error">refused {{when .Key.Refused}}</span>{{end}}</td></tr>
+  </table>
+  <form method="post" action="/account/keys/{{.Provider.ID}}/check" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="link">check again</button></form>
+  ·
+  <form method="post" action="/account/keys/{{.Provider.ID}}/delete" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="link">delete</button></form>
+  {{end}}
+  {{with .Err}}<p class="field-error">{{.}}</p>{{end}}
+  <form method="post" action="/account/keys/{{.Provider.ID}}" class="stack">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>{{if .Key}}Replace with a new key{{else}}API key{{end}} <small>made on <a href="{{.Provider.Keys}}" rel="noopener noreferrer" target="_blank">{{.Provider.Name}}'s page</a></small><input name="key" type="password" autocomplete="off" spellcheck="false" maxlength="512" required></label>
+    <button>Check and save</button>
+  </form>
+</section>
+{{end}}
+
+<section>
+  <h2>How a key is kept</h2>
+  <ul>
+    <li>Before saving, the Workbench asks the provider once whether the key works, by listing its models. That call costs nothing.</li>
+    <li>The key is stored encrypted. The encryption key is part of the server's settings, not of the database, so a copy of the database alone does not reveal it.</li>
+    <li>After saving, you see only its last four characters. It is never shown again, never written to a log, and never given out through tokens or MCP.</li>
+    <li>Deleting it here deletes it from the Workbench at once. To end it for good, delete it on the provider's page as well.</li>
+  </ul>
+</section>
+{{end}}
+{{end}}

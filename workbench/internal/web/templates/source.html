@@ -1,0 +1,143 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+{{with .Data}}
+<div class="heading-row">
+  <h1>{{.Stream.Texts.Name}}</h1>
+  {{template "status" (status "source" .Stream.State)}}
+</div>
+<p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz · registered {{when .Stream.Created}} by {{.Stream.OwnerName}}</p>
+<p class="meta">{{if .IsOwner}}Your source: its connection, who uses it, its description, with whom you share it, and every change made to it. Its settings for analysis live in each analysis, not here.{{else}}A source {{.Stream.OwnerName}} shares with you: its connection and who uses it. You can use it in your own analyses; its description and state stay with {{.Stream.OwnerName}}.{{end}}</p>
+
+<div class="grid">
+<section>
+  <h2>Connection</h2>
+  {{if .Reserved}}<p class="note warn-note">The Listening Observatory listens to this stream already. It is not connected to from the Workbench, so that the station is not connected to twice; it can be analysed here once its operator has agreed to the Workbench and it reaches the Workbench through the Observatory's own connection.</p>{{end}}
+  {{if .InEngine}}
+    <p>State: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}} for {{since .Engine.Since}}.
+    {{if .Engine.LastData}}Last audio {{since (deref .Engine.LastData)}} ago.{{end}}</p>
+    {{if .Engine.LastError}}<p class="field-error">{{.Engine.LastError.Message}}</p>{{end}}
+  {{else}}
+    <p>Not in the engine{{if eq .Stream.State "paused"}}: the stream is paused{{end}}.</p>
+  {{end}}
+  <p class="meta">{{if or (eq .Stream.State "draft") (eq .Stream.State "production")}}The source connects only while an analysis that uses it is in a run or a preview.{{end}}</p>
+
+  <p><a class="button" href="/analyses/new?source={{.Stream.Slug}}">New analysis with this source</a></p>
+  <h3>Who is connected</h3>
+  <table>
+    <thead><tr><th>Analysis</th><th>Member</th><th>State</th><th>Reading now</th></tr></thead>
+    <tbody>
+    {{$slug := .Stream.Slug}}
+    {{range .Consumers}}
+      <tr><td>{{if .Mine}}<a href="/analyses/{{.Analysis.ID}}">{{.Analysis.Name}}</a>{{else}}{{.Analysis.Name}}{{end}}</td><td>{{.Owner}}</td><td>{{template "status" (status "activity" .State)}}</td>
+      <td>{{.Readers.People}} page{{if ne .Readers.People 1}}s{{end}}, {{.Readers.Programs}} token{{if ne .Readers.Programs 1}}s{{end}}</td></tr>
+    {{end}}
+    {{if not .Consumers}}<tr><td colspan="4" class="meta">No analysis uses this source yet.</td></tr>{{end}}
+    </tbody>
+  </table>
+
+  {{if and .IsOwner (ne .Stream.State "suspended")}}
+  <h3>Mode</h3>
+  <div class="actions">
+    {{if eq .Stream.State "paused"}}
+      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="resume">Resume</button></form>
+    {{else}}
+      {{if eq .Stream.State "draft"}}
+      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="production">Put in service</button></form>
+      {{else}}
+      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="draft" class="secondary">Back to draft</button></form>
+      {{end}}
+      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="pause" class="secondary">Pause</button></form>
+    {{end}}
+  </div>
+  {{end}}
+</section>
+
+<section>
+  <h2>Spectrogram view</h2>
+  <p class="meta">What the spectrogram of every analysis of this source shows: by default each analysis's own bands, on a log scale over its analysed range and after its filter rules. A view of the source's own shows the whole signal instead, unfiltered, on a linear or log scale over a range you choose, for example 0 to 16 kHz for VLF radio. It is computed once for the source and changes nothing in the analyses.</p>
+  {{if .IsOwner}}
+  <form method="post" action="/sources/{{.Stream.Slug}}/view" class="stack wide-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <div class="row">
+      <label>Scale <select name="view_scale"><option value="">each analysis's bands</option><option value="linear" {{if eq .View.Scale "linear"}}selected{{end}}>linear</option><option value="log" {{if eq .View.Scale "log"}}selected{{end}}>log</option></select></label>
+      <label>Lowest Hz <small>empty: 0, or 20 on a log scale</small><input name="view_min" inputmode="decimal" value="{{with .View.MinHz}}{{.}}{{end}}"></label>
+      <label>Highest Hz <small>empty: half the sample rate, {{half .Stream.SampleRate}} Hz</small><input name="view_max" inputmode="decimal" value="{{with .View.MaxHz}}{{.}}{{end}}"></label>
+      <label>Bands <small>rows; empty: 240</small><input name="view_bands" inputmode="numeric" value="{{with .View.Bands}}{{.}}{{end}}"></label>
+    </div>
+    <button>Save the view</button>
+  </form>
+  {{end}}
+  {{with .Engine.View}}<p class="meta">In effect: {{.Scale}}, {{.MinHz}} to {{.MaxHz}} Hz in {{.Bands}} bands.</p>{{else}}{{if .Stream.View}}<p class="meta">Saved; in effect once the source is in the engine.</p>{{else if not .IsOwner}}<p class="meta">Each analysis's own bands.</p>{{end}}{{end}}
+</section>
+
+<section>
+  <h2>Description</h2>
+  {{if not .IsOwner}}
+  <p>{{if .Stream.Texts.Description}}{{.Stream.Texts.Description}}{{else}}<span class="meta">No description.</span>{{end}}</p>
+  <p class="meta">{{with .Stream.Texts.Credit}}Credit: {{.}}{{end}}{{with .Stream.Texts.CreditURL}} · <a href="{{.}}" rel="noopener">{{.}}</a>{{end}}</p>
+  <p class="meta">{{.Stream.OwnerName}} shares this source with you. Its settings, state and texts stay with them; your analyses of it are your own.</p>
+  {{else}}
+  <form method="post" action="/sources/{{.Stream.Slug}}" class="stack">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Name {{with index .Errs "name"}}<span class="field-error">{{.}}</span>{{end}}<input name="name" value="{{.Texts.Name}}" required maxlength="80"></label>
+    <div class="row">
+      <label>Place {{with index .Errs "place"}}<span class="field-error">{{.}}</span>{{end}}<input name="place" value="{{.Texts.Place}}" maxlength="80"></label>
+      <label>Coordinates <small>latitude, longitude; optional</small> {{with index .Errs "coords"}}<span class="field-error">{{.}}</span>{{end}}
+        <span class="with-button"><input name="coords" id="coords" value="{{.Texts.Coords}}" placeholder="50.12345, 10.54321" inputmode="decimal"><button type="button" class="secondary" data-map-for="coords" hidden>Map</button></span></label>
+      <label>Time zone {{with index .Errs "timezone"}}<span class="field-error">{{.}}</span>{{end}}<input name="timezone" value="{{.Texts.TimeZone}}"></label>
+    </div>
+    <label>Description {{with index .Errs "description"}}<span class="field-error">{{.}}</span>{{end}}<textarea name="description" rows="3" maxlength="2000">{{.Texts.Description}}</textarea></label>
+    <div class="row">
+      <label>Credit line {{with index .Errs "credit"}}<span class="field-error">{{.}}</span>{{end}}<input name="credit" value="{{.Texts.Credit}}" maxlength="200"></label>
+      <label>Credit link {{with index .Errs "credit_url"}}<span class="field-error">{{.}}</span>{{end}}<input name="credit_url" value="{{.Texts.CreditURL}}"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="audio" {{if .Stream.AudioAllowed}}checked{{end}}> Audio may be played in the browser</label>
+    <button>Save</button>
+  </form>
+  <p class="meta">Address: <code>{{.Stream.Input}}</code><br>{{if eq .Stream.Attestation "own"}}Run by {{.Stream.OwnerName}}, as stated {{when .Stream.Attested}}.<br>{{else if eq .Stream.Attestation "operator"}}Run by {{.Stream.Operator}}, who agreed to its analysis here, as {{.Stream.OwnerName}} stated {{when .Stream.Attested}}.<br>{{end}}Checked: {{.Probe.Codec}}, {{.Probe.SampleRate}} Hz, {{.Probe.BitrateKbps}} kbit/s. The address and the sample rate cannot be changed.</p>
+  {{end}}
+</section>
+</div>
+
+{{if .IsOwner}}
+<section>
+  <h2>Shared with</h2>
+  {{if .Shares}}
+  <table>
+    <thead><tr><th>Member</th>{{if .Publish}}<th>May publish</th>{{end}}<th></th></tr></thead>
+    <tbody>{{$consents := .Consents}}{{range .Shares}}<tr><td>{{.Name}}</td>
+      {{if $.Data.Publish}}<td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/consent" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}">{{if index $consents .ID}}yes · <button class="link" name="agree" value="0">no longer</button>{{else}}no · <button class="link" name="agree" value="1">agree</button>{{end}}</form></td>{{end}}
+      <td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/unshare" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}"><button class="link">stop sharing</button></form></td></tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="meta">Nobody else. Only you can use this source.</p>{{end}}
+  <form method="post" action="/sources/{{.Stream.Slug}}/share" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Member's address <input type="email" name="email" required></label>
+    <button class="secondary">Share</button>
+  </form>
+  <p class="meta">A member you share the source with may use it in their own analyses and sees this page and who is connected; they cannot change it. The source keeps one connection however many use it, and its cost is split among those whose analyses run on it. Share only what your operator's agreement covers. Pausing the source stops it for everyone.{{if .Publish}} A member may publish an analysis that uses the source only once you agree; when you no longer agree, or stop sharing, their published analyses that use it are withdrawn and they are told.{{end}}</p>
+</section>
+{{end}}
+
+{{if .IsOwner}}
+<section>
+  <h2>Changes</h2>
+  <table class="audit">
+    <thead><tr><th>When</th><th>Who</th><th>What</th><th>Details</th></tr></thead>
+    <tbody>{{range .Audit}}<tr><td>{{when .At}}</td><td>{{.UserName}}</td><td>{{.Action}}</td><td><code class="small">{{.After}}</code></td></tr>{{end}}</tbody>
+  </table>
+</section>
+
+<section class="danger">
+  <h2>Delete</h2>
+  <p>Deleting removes the source and its memories. Analyses that use it, also those of members you share it with, lose this source and keep their others. The change log keeps a record.</p>
+  <form method="post" action="/sources/{{.Stream.Slug}}/delete" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Type the name to confirm <input name="confirm" autocomplete="off"></label>
+    <button class="danger">Delete</button>
+  </form>
+</section>
+{{end}}
+{{end}}
+{{template "mappicker"}}
+{{end}}

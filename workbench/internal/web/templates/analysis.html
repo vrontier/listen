@@ -1,0 +1,303 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+{{with .Data}}
+{{$d := .}}
+<p class="crumbs"><a href="/analyses">Analyses</a></p>
+<div class="heading-row">
+  <h1>{{.Analysis.Name}}</h1>
+  <span class="states">{{if .Run}}{{template "status" (status "activity" "run")}}{{else if not .Preview.IsZero}}{{template "status" (status "activity" "preview")}}{{else}}{{template "status" (status "activity" "idle")}}{{end}} {{template "status" (status "visibility" .Analysis.State)}} <span class="meta">{{.Analysis.Label}}</span></span>
+</div>
+{{if .Analysis.Description}}<p>{{.Analysis.Description}}</p>{{end}}
+<p class="meta">Start a run or a preview here, and watch each source live while it lasts. Below: each source's settings and filter rules, its memories, which sources the analysis uses, its runs and revisions. Settings are fixed while a run lasts; a trial tries changed settings next to it.</p>
+<div class="run-bar">
+{{with .Run}}
+  <form method="post" action="/analyses/{{$d.Analysis.ID}}/stop" class="inline-form" data-confirm="Stop run {{.Number}} of {{$d.Analysis.Name}} now? Its data set is put together from what it has recorded so far." data-confirm-yes="Stop the run">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <span class="run-on">Run {{.Number}} since {{when .Started}}, {{if .Ends.IsZero}}until stopped{{else}}until {{when .Ends}}{{end}}{{if .OfflineStop}}, or until a source sends nothing for {{.OfflineStop}} min{{end}}.</span>
+    <button class="stop-x" title="Stop run {{.Number}}" aria-label="Stop run {{.Number}}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  </form>
+  <p class="meta">The sources stay connected while the run lasts, whether or not this page is open. What it finds goes into the run's data set.{{range $d.Sources}}{{if not .Running}} {{.Stream.Texts.Name}} is {{.Stream.State}} and does not run.{{end}}{{end}}</p>
+  {{with $d.Trial}}
+  <div class="actions">
+    <span class="preview-on">Trial since {{when .Started}}, until {{clock .Until}} UTC: the changed settings run next to the run, learning in memory only.</span>
+    <form method="post" action="/analyses/{{$d.Analysis.ID}}/trial/keep" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button>Keep: stop the run, save as revision {{add $d.Analysis.Revision 1}}</button></form>
+    <form method="post" action="/analyses/{{$d.Analysis.ID}}/trial/end" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="secondary">Discard the trial</button></form>
+  </div>
+  {{end}}
+{{else}}
+  <div class="actions">
+  <form method="post" action="/analyses/{{$d.Analysis.ID}}/run" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Run <select name="length">{{range $d.RunLengths}}<option value="{{.Value}}" {{if eq .Value "24h"}}selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+    {{template "run-options"}}
+    <button>Start a run</button>
+  </form>
+  {{if $d.Preview.IsZero}}
+  <form method="post" action="/analyses/{{$d.Analysis.ID}}/preview" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <button class="secondary">Preview for 10 minutes</button>
+  </form>
+  {{else}}
+  <form method="post" action="/analyses/{{$d.Analysis.ID}}/preview/end" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <button class="secondary">End the preview</button>
+  </form>
+  {{end}}
+  </div>
+  {{if $d.Preview.IsZero}}
+  <p class="meta">Not running. A run connects the sources and records what the analysis finds into a data set; a preview shows them live for ten minutes and records nothing.</p>
+  {{template "run-options-note"}}
+  {{else}}
+  <p class="preview-on">Preview until {{clock $d.Preview}} UTC. Nothing is recorded: motifs are learned in memory and forgotten, and the analysis's own memory is not touched.</p>
+  {{end}}
+{{end}}
+{{with .LastRun}}
+  <p class="meta">Last run: {{.Number}}, {{when .Started}} to {{when .Stopped}} ({{.Duration}}). {{template "dataset-link" .}}</p>
+{{end}}
+</div>
+
+{{$live := or .Run (not .Preview.IsZero)}}
+{{if $live}}
+{{if gt (len .Sources) 1}}
+<section class="compare"{{if .Comparing}} data-state="/analyses/{{.Analysis.ID}}/compare/state" data-live="/analyses/{{.Analysis.ID}}/compare/live"{{end}}>
+  <div class="live-head">
+    <h2 class="live-title">Comparison</h2>
+    {{if .Comparing}}<span class="status conn conn-info">Connecting…</span> <span class="compare-status meta"></span>{{end}}
+  </div>
+  {{if .Comparing}}
+  <ol class="lane-names" hidden>{{range .Sources}}{{if .Running}}<li data-stream="{{.Stream.EngineID}}"{{with .Stream.Texts.Lat}} data-lat="{{.}}"{{end}}{{with .Stream.Texts.Lon}} data-lon="{{.}}"{{end}}>{{.Stream.Texts.Name}}</li>{{end}}{{end}}</ol>
+  <div class="compare-map" hidden></div>
+  <p class="compare-map-note meta small" hidden>Stations, the distance between each pair with the time a radio wave needs for it, and the night side of the earth (shaded), which matters for long paths at low frequencies. Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, loaded by your browser from openstreetmap.org.</p>
+  <div class="lanes-bar">
+    <div class="compare-controls" role="radiogroup" aria-label="What the lanes show">
+      <label class="check"><input type="radio" name="lane-metric" value="flux" checked> flux</label>
+      <label class="check"><input type="radio" name="lane-metric" value="level_db"> level</label>
+      <label class="check" hidden><input type="radio" name="lane-metric" value="impulse_rate"> impulse rate</label>
+    </div>
+    <span class="paused-note" hidden>Display paused; the comparison goes on.</span>
+    <button type="button" class="seg pause" aria-pressed="false">Pause</button>
+  </div>
+  <div class="lanes-wrap">
+    <canvas class="lanes" width="960" height="240" tabindex="0" role="img" aria-label="Activity of each source per second over the last ten minutes, one lane per source, on one time axis in UTC. Arrow keys read values."></canvas>
+    <div class="readout" hidden></div>
+  </div>
+  <h3>Correlation <span class="meta corr-series"></span></h3>
+  <table class="correlations"><thead><tr><th>Pair</th><th>r</th><th title="Positive: the second source hears the same later">Lag</th><th title="The same pair shifted 150 s apart: what chance alone gives">Baseline r</th><th>Above baseline</th></tr></thead><tbody><tr><td colspan="5" class="meta">The first correlation comes after five minutes of activity.</td></tr></tbody></table>
+  <p class="meta">Lanes show each source's activity per second over the last ten minutes, on one time axis in UTC; gaps are seconds in which a source was not heard. Each lane is scaled to its own range. The times are wall time at the engine, so the sources are aligned to a few seconds, not to their stations' clocks: the lag of a correlation is mostly the difference of the streams' delays on their way here. The correlation compares one series of each pair over the last five minutes (named above the table: flux, until the engine measures impulses), at lags up to 30 s, and is worth something only well above its baseline, the same pair shifted 150 s apart.</p>
+  <link rel="stylesheet" href="{{asset "leaflet/leaflet.css"}}">
+  <script src="{{asset "leaflet/leaflet.js"}}" defer></script>
+  <script src="{{asset "compare.js"}}" defer></script>
+  {{else if not .Run}}
+  <p class="note">The sources are compared during runs only.</p>
+  {{else if not .Groups}}
+  <p class="note">The engine does not compare sources yet: it lacks the group analyses of control API 1.1. The sources are shown one below the other, each on its own.</p>
+  {{else}}
+  <p class="note">Fewer than two of the sources are running, so there is nothing to compare now.</p>
+  {{end}}
+</section>
+{{end}}
+{{end}}
+
+<form method="post" action="/analyses/{{.Analysis.ID}}/settings" id="settings">
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+</form>
+{{with .Warnings}}<div class="note warn-note">{{range .}}<p>{{.}}</p>{{end}}</div>{{end}}
+
+{{range .Sources}}
+{{$p := .Prefix}}
+<section class="live source-block" {{if .Live}}data-live="{{.LivePath}}" data-data="{{.DataPath}}"{{end}}>
+  <div class="live-head">
+    <h2 class="live-title"><a href="/sources/{{.Stream.Slug}}">{{.Stream.Texts.Name}}</a></h2>
+    {{if .Live}}<span class="status conn conn-info">Connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else if .Reserved}}<span class="meta">The Listening Observatory listens to this stream; it is not analysed here until its operator has agreed to the Workbench.</span>{{else if not .Running}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{else}}<span class="meta">{{.Stream.SampleRate}} Hz · live during a run or a preview</span>{{end}}
+  </div>
+  {{if .Failed}}<div class="note bad-note">
+    <p>{{template "status" (status "activity" "failed")}} The analysis of this source failed in {{.FailedIn}}: {{.Failed.Message}}. Its other sources go on; nothing of this source is recorded until it runs again.</p>
+    <form method="post" action="/analyses/{{$d.Analysis.ID}}/restart" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button>Start it again</button></form>
+  </div>{{end}}
+  {{if .Live}}
+  {{template "instrument" (instrument .Stream.Texts.Name false)}}
+  <div class="grid">
+    <div>
+      <h3>Events</h3>
+      <ol class="events"></ol>
+    </div>
+    <div>
+      <h3>Motifs</h3>
+      <table class="motifs"><thead><tr><th>Motif</th><th>Kind</th><th>Seen</th><th>Presence</th><th>Last</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+  {{end}}
+
+  <details class="block"{{if or (not $d.Run) $d.Errs}} open{{end}}>
+    <summary>Settings and filter rules{{if $d.Run}} <span class="meta">(the run keeps revision {{$d.Analysis.Revision}}; changes here can only be tried in a trial)</span>{{end}}</summary>
+    <fieldset class="source-settings" data-prefix="{{$p}}">
+      <p class="meta">{{.Stream.SampleRate}} Hz.{{if .Engine}} In use: {{hz .Engine.Effective.MinHz}} to {{hz .Engine.Effective.MaxHz}}, peaks searched from {{hz .Engine.Effective.PeakMinHz}} to {{hz .Engine.Effective.PeakMaxHz}}, bins of {{hz .Engine.Effective.BinHz}}.{{end}} Empty means the engine's default.</p>
+      <div class="row four">
+        <label>Lowest Hz {{with index $d.Errs (printf "%smin_hz" $p)}}<span class="field-error">{{.}}</span>{{end}}<input form="settings" name="{{$p}}min_hz" value="{{.Form.MinHz}}" inputmode="decimal" placeholder="20"></label>
+        <label>Highest Hz {{with index $d.Errs (printf "%smax_hz" $p)}}<span class="field-error">{{.}}</span>{{end}}<input form="settings" name="{{$p}}max_hz" value="{{.Form.MaxHz}}" inputmode="decimal" placeholder="near half the rate"></label>
+        <label>Transient threshold {{with index $d.Errs (printf "%stransient_k" $p)}}<span class="field-error">{{.}}</span>{{end}}<input form="settings" name="{{$p}}transient_k" value="{{.Form.TransientK}}" inputmode="decimal" placeholder="6"></label>
+        <label>Gap between transients, s {{with index $d.Errs (printf "%stransient_gap_s" $p)}}<span class="field-error">{{.}}</span>{{end}}<input form="settings" name="{{$p}}transient_gap_s" value="{{.Form.TransientGap}}" inputmode="decimal" placeholder="0.3"></label>
+      </div>
+
+      <h3>Filter rules</h3>
+      <p class="meta">A rule removes spectral peaks at known interference of this receiver before resonances and motifs are derived from them. It does not change the audio or the spectrogram. A comb covers a frequency and its harmonics.</p>
+      {{with index $d.Errs (printf "%srules" $p)}}<p class="field-error">{{.}}</p>{{end}}
+      <table class="rules">
+        <thead><tr><th>Kind</th><th>Hz</th><th>Odd only</th><th>Tolerance Hz</th><th>Drift %</th><th title="The rule as the engine applies it, in its own notation; shown during a run">Applied as</th></tr></thead>
+        <tbody>
+        {{range $i, $r := .Form.Rules}}
+        <tr>
+          <td><select form="settings" name="{{$p}}rule_kind_{{$i}}"><option value="comb" {{if eq $r.Kind "comb"}}selected{{end}}>comb</option><option value="line" {{if eq $r.Kind "line"}}selected{{end}}>line</option></select></td>
+          <td><input form="settings" name="{{$p}}rule_hz_{{$i}}" value="{{$r.Hz}}" inputmode="decimal" size="7">{{with index $d.Errs (printf "%srule_hz_%d" $p $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
+          <td><input form="settings" type="checkbox" name="{{$p}}rule_odd_{{$i}}" {{if $r.Odd}}checked{{end}}></td>
+          <td><input form="settings" name="{{$p}}rule_tol_{{$i}}" value="{{$r.Tol}}" inputmode="decimal" size="5" placeholder="1.5 bins">{{with index $d.Errs (printf "%srule_tol_%d" $p $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
+          <td><input form="settings" name="{{$p}}rule_drift_{{$i}}" value="{{$r.Drift}}" inputmode="decimal" size="4">{{with index $d.Errs (printf "%srule_drift_%d" $p $i)}}<span class="field-error">{{.}}</span>{{end}}</td>
+          <td class="saved-as">{{if $r.Text}}<code>{{$r.Text}}</code>{{else}}<span class="meta">—</span>{{end}}</td>
+        </tr>
+        {{end}}
+        </tbody>
+      </table>
+      <input form="settings" type="hidden" name="{{$p}}rule_count" value="{{len .Form.Rules}}" class="rule-count">
+
+      <h3>Memory</h3>
+      {{$mm := .Form.MemoryMode}}
+      <label class="check"><input form="settings" type="radio" name="{{$p}}memory_mode" value="disk" {{if eq $mm "disk"}}checked{{end}}> learn motifs and keep them with the history</label>
+      <label class="check"><input form="settings" type="radio" name="{{$p}}memory_mode" value="ram" {{if eq $mm "ram"}}checked{{end}}> learn motifs but keep nothing</label>
+      <label class="check"><input form="settings" type="radio" name="{{$p}}memory_mode" value="off" {{if eq $mm "off"}}checked{{end}}> no motifs, no history</label>
+      {{with index $d.Errs (printf "%smemory_mode" $p)}}<span class="field-error">{{.}}</span>{{end}}
+
+      <div class="actions">
+        <button type="button" class="secondary add-rule" hidden>Add a rule</button>
+        {{if gt (len $d.Sources) 1}}<button type="button" class="secondary copy-settings" hidden>Copy these settings to all sources</button>{{end}}
+        {{if $d.Run}}<button form="settings" formaction="/analyses/{{$d.Analysis.ID}}/trial">{{if $d.Trial}}Change the trial{{else}}Try these settings in a trial{{end}}</button>
+        {{else}}<button form="settings">Save as revision {{add $d.Analysis.Revision 1}}</button>{{end}}
+      </div>
+    </fieldset>
+  </details>
+
+  <details class="block">
+    <summary>Memories</summary>
+    {{if .Memories}}
+    <table>
+      <thead><tr><th>Key</th><th>Motifs</th><th>Size</th><th>Last used</th><th></th></tr></thead>
+      <tbody>{{$src := .Stream.ID}}{{range .Memories}}<tr><td><code class="small">{{.Key}}</code>{{if .InUse}} <span class="meta">in use</span>{{end}}</td><td>{{.Motifs}}</td><td>{{bytes .Bytes}}</td><td>{{when .LastUsed}}</td>
+        <td>{{if not .InUse}}<form method="post" action="/analyses/{{$d.Analysis.ID}}/memories/{{$src}}/delete" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="key" value="{{.Key}}"><button class="link">delete</button></form>{{end}}</td></tr>{{end}}</tbody>
+    </table>
+    <p class="meta">Memories count against your disk quota. One made with other ranges or rules can be deleted; the one in use cannot.</p>
+    {{else}}<p class="meta">{{if .EngineErr}}{{.EngineErr}}{{else}}None kept yet.{{end}}</p>{{end}}
+  </details>
+</section>
+{{if .TrialLive}}
+<section class="live trial-block" data-live="{{.TrialPath}}" data-data="{{.TrialData}}">
+  <div class="live-head">
+    <h2 class="live-title">Trial on {{.Stream.Texts.Name}}</h2>
+    <span class="status conn conn-info">Connecting…</span> <span class="clock meta"></span> <span class="level meta"></span>
+  </div>
+  {{template "instrument" (instrument (print "the trial on " .Stream.Texts.Name) true)}}
+  <div class="grid">
+    <div><h3>Events in the trial</h3><ol class="events"></ol></div>
+    <div><h3>Motifs in the trial</h3><table class="motifs"><thead><tr><th>Motif</th><th>Kind</th><th>Seen</th><th>Presence</th><th>Last</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+{{end}}
+{{end}}
+{{if $live}}<p class="meta">Times are UTC. The landscape shows the last 60 seconds of spectra, one line a second, newest in front; the spectrogram shows the analysed range, newest on the right. Copper marks the spectral peaks left after the filter rules; the bands themselves are never filtered. Pause freezes the display only. Motifs are what a source's memory has found to recur{{if not .Run}}; in a preview they are learned afresh and forgotten{{end}}.</p>{{end}}
+<script src="{{asset "landscape.js"}}" defer></script>
+<script src="{{asset "analysis.js"}}" defer></script>
+
+<section>
+  <h2>Sources and revision</h2>
+  {{if .Run}}<p class="note">The sources and their settings are fixed while the run lasts, so that the run's data set holds one configuration: revision {{.Analysis.Revision}}. Stop the run to change them; the next run starts with the new revision.</p>{{end}}
+  <fieldset{{if .Run}} disabled{{end}}>
+    <legend>Sources</legend>
+    {{with index .Errs "source"}}<p class="field-error">{{.}}</p>{{end}}
+    {{range .Picks}}
+      <label class="check"><input form="settings" type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{.Stream.SampleRate}} Hz, {{.Stream.State}}{{if .Shared}}, shared by {{.Stream.OwnerName}}{{end}}</span></label>
+    {{end}}
+    <p class="meta">Up to {{.MaxSources}}. A source added here starts with the default settings; a source taken out loses its settings and memories in this analysis.</p>
+  </fieldset>
+  {{with .Compare}}
+  <fieldset{{if $d.Run}} disabled{{end}}>
+    <legend>Comparison</legend>
+    <input form="settings" type="hidden" name="compare_form" value="1">
+    {{with index $d.Errs "compare"}}<p class="field-error">{{.}}</p>{{end}}
+    {{range .}}
+      <label class="check"><input form="settings" type="checkbox" name="compare" value="{{.ID}}" {{if .Checked}}checked{{end}} {{if .Blocked}}disabled{{end}}> {{.Label}}{{if .Blocked}} <span class="meta">({{.Blocked}})</span>{{end}}</label>
+    {{end}}
+    <p class="meta">How the sources are compared on one time axis, during runs. These are the comparisons the engine offers now; station clocks and coincidence of impulses follow once it reads the stations' own time.</p>
+  </fieldset>
+  {{end}}
+  {{if not .Run}}
+  <p class="meta">Saving makes a new revision of the whole analysis: its sources, each source's settings above, and the comparison. Changing a source's range or rules starts a fresh motif memory for it; the earlier one is kept and comes back if you return to the same values. The engine checks every source's settings before anything is saved.</p>
+  <button form="settings">Save as revision {{add .Analysis.Revision 1}}</button>
+  {{end}}
+</section>
+
+<section>
+  <h2>Publication</h2>
+  {{if eq .Analysis.State "published"}}
+  <p>Published since {{when .Analysis.Published}} at <a href="/research/{{.Analysis.Slug}}">/research/{{.Analysis.Slug}}</a>{{if .Analysis.PublishData}}, with the data sets of finished runs{{end}}. Everyone can see it; the title and description you change here change there too.</p>
+  <div class="actions">
+    {{if .Publishing}}<a class="button secondary" href="/analyses/{{.Analysis.ID}}/publish">Change what is offered</a>{{end}}
+    <form method="post" action="/analyses/{{.Analysis.ID}}/withdraw" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="secondary">Withdraw</button></form>
+  </div>
+  {{else}}
+  {{if .Publishing}}
+  <p class="meta">{{if eq .Analysis.State "withdrawn"}}Withdrawn on {{when .Analysis.Withdrawn}}; its public page says so.{{else}}Private: only you see it.{{end}} Publishing shows it to everyone at once, without review; you see the page first.</p>
+  <p><a class="button secondary" href="/analyses/{{.Analysis.ID}}/publish">{{if eq .Analysis.State "withdrawn"}}Publish again…{{else}}Publish…{{end}}</a></p>
+  {{else}}
+  <p class="meta">{{if eq .Analysis.State "withdrawn"}}Withdrawn on {{when .Analysis.Withdrawn}}.{{else}}Private: only you see it.{{end}} Publishing is not open on this Workbench yet.</p>
+  {{end}}
+  {{end}}
+</section>
+
+<section>
+  <h2>Title and description</h2>
+  <form method="post" action="/analyses/{{.Analysis.ID}}" class="stack">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Title {{with index .Errs "name"}}<span class="field-error">{{.}}</span>{{end}}<input name="name" value="{{.Name}}" required maxlength="80"></label>
+    <label>Description {{with index .Errs "description"}}<span class="field-error">{{.}}</span>{{end}}<textarea name="description" rows="3" maxlength="2000">{{.Description}}</textarea></label>
+    <button>Save</button>
+  </form>
+  <p class="meta">Title and description are not part of a revision; they can be changed during a run.</p>
+</section>
+
+<section>
+  <h2>Runs</h2>
+  {{if .Runs}}
+  <table>
+    <thead><tr><th>#</th><th>Started</th><th>Ended</th><th>Length</th><th>Revisions</th><th>By</th><th>Data set</th></tr></thead>
+    <tbody>{{range .Runs}}<tr>
+      <td><a href="/runs/{{.ID}}">{{.Number}}</a></td>
+      <td>{{when .Started}}</td>
+      <td>{{if .Active}}<span class="run-on">running</span>{{if not .Ends.IsZero}} <span class="meta">until {{when .Ends}}</span>{{end}}{{else}}{{when .Stopped}}{{if .StoppedBy}} <span class="meta">stopped by {{.StoppedBy}}</span>{{else}} <span class="meta">as planned</span>{{end}}{{end}}</td>
+      <td>{{.Duration}}</td>
+      <td>rev-{{.Revision}}{{if ne .RevTo .Revision}} to rev-{{.RevTo}}{{end}}</td>
+      <td>{{.StartedBy}}{{with .Token}} <span class="meta small">token {{.}}</span>{{end}}</td>
+      <td>{{template "dataset-link" .}}</td>
+    </tr>{{end}}</tbody>
+  </table>
+  <p class="meta">All runs are also under <a href="/runs">Runs</a>.</p>
+  {{else}}<p class="meta">No runs yet.</p>{{end}}
+</section>
+
+<section>
+  <h2>Revisions</h2>
+  <table>
+    <thead><tr><th>#</th><th>When</th><th>By</th><th>Sources and settings</th></tr></thead>
+    <tbody>{{range .Revisions}}<tr><td>{{.Revision}}</td><td>{{when .Created}}</td><td>{{.CreatedBy}}</td><td><code class="small">{{printf "%s" .Spec}}</code></td></tr>{{end}}</tbody>
+  </table>
+</section>
+
+<section class="danger">
+  <h2>Delete</h2>
+  <p>Deleting removes the analysis and its memories at every source. The sources stay. The change log keeps a record.</p>
+  <form method="post" action="/analyses/{{.Analysis.ID}}/delete" class="inline-form">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Type the title to confirm <input name="confirm" autocomplete="off"></label>
+    <button class="danger">Delete</button>
+  </form>
+</section>
+{{end}}
+{{end}}
+

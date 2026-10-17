@@ -1,0 +1,44 @@
+{{define "content"}}
+<h1>AI</h1>
+{{with .Data}}
+<p>Let an AI assistant work with your analyses: Claude Code, Claude Desktop or any other client that speaks MCP, the Model Context Protocol. It answers your questions about what your sources hear, follows a run as it goes and reads your data sets; if you allow it, it also sets analyses up and runs them for you. Access is by token: you decide per token what it may do, and you see everything done with it.</p>
+
+<section>
+  <h2>What an assistant can do</h2>
+  <ul>
+    <li><strong>Read, with every token for MCP:</strong> your analyses and the sources you may use, where an analysis stands, its live events, motifs and comparison while it runs or previews, and only what is new since the assistant last looked; your runs and their data sets, as summaries or line by line.</li>
+    <li><strong>Change, only with a token you allowed control:</strong> make an analysis, rename it, choose its sources and tune their settings and filter rules (each change a new revision, checked by the engine first), preview it for ten minutes, start and stop runs. Within the limits you set for that token, or none.</li>
+    <li><strong>Never:</strong> register a source, share, publish or delete anything, or see anyone else's analyses.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>How to give an assistant access</h2>
+  <ol class="steps">
+    <li>
+      <h3>Make a token</h3>
+      <p>Under <a href="/ai/access">Access</a>, name the token after where it is used and tick <strong>MCP</strong>. Tick <strong>Control</strong> only if the assistant should change things, and set its limits: the longest run, runs a day and at once, previews and changes a day. Copy the token when it is shown: it is shown only once. Keep it in an environment variable, not in a file you share.</p>
+    </li>
+    <li>
+      <h3>Connect the assistant</h3>
+      <p>Add the Workbench as an MCP server at <code>{{.Base}}/mcp</code>, with the token in the header. <a href="/ai/mcp#connect">MCP</a> has the line for Claude Code and the entry for <code>.mcp.json</code>. The assistant must be able to reach this address.</p>
+    </li>
+    <li>
+      <h3>Ask it</h3>
+      <p>The assistant receives a guide when it connects and finds the tools by itself. For a smaller model, paste the <a href="/ai/mcp#guide">guide</a> into its session first. Ask, for instance: "What did my last run find?", "Follow my analysis and tell me what is new", "How do the sources compare?", or, with control, "Make an analysis of these two sources and run it for an hour".</p>
+    </li>
+    <li>
+      <h3>Keep an eye on it</h3>
+      <p><a href="/ai/activity">Activity</a> lists every call, with its arguments and result, the changes and refusals marked. You get a mail whenever a token starts a run, and the run names the token. Change a token's permissions and limits, or revoke it, under <a href="/ai/access">Access</a>; it counts from the token's next call on.</p>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2>Your own programs</h2>
+  <p>The same tokens, with <strong>Data stream</strong> ticked, let a program read your analyses as JSON and their live events over HTTP. <a href="/ai/access">Access</a> lists the addresses. The data stream only reads.</p>
+</section>
+
+<p class="meta">Now: {{.Tokens}} token{{if ne .Tokens 1}}s{{end}}, {{.MCP}} for MCP{{if .Control}}, {{.Control}} with control{{end}}; {{.Accesses}} access{{if ne .Accesses 1}}es{{end}} in the last 24 hours{{if not .Last.IsZero}}, the last {{moment .Last}} UTC{{end}}{{if .ByTokens}}; {{.ByTokens}} run{{if ne .ByTokens 1}}s{{end}} started by a token going on{{end}}.</p>
+{{end}}
+{{end}}

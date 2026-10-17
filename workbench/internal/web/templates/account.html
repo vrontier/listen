@@ -1,0 +1,39 @@
+{{define "content"}}
+{{$csrf := .CSRF}}
+<h1>Account</h1>
+{{with .Data}}
+<p class="meta">Your name as others see it, the address you log in with, and how the Workbench looks for you. Member since {{when .User.Created}}.</p>
+
+<section>
+  <h2>Name</h2>
+  <form method="post" action="/account/name" class="stack short">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Display name <small>shown to members you share sources with, on runs you start, and on what you publish</small><input name="name" value="{{.Name}}" required maxlength="60"></label>
+    <button>Save the name</button>
+  </form>
+</section>
+
+<section>
+  <h2>Email address</h2>
+  <p>You log in with <strong>{{.User.Email}}</strong>. Mails from the Workbench go there.</p>
+  {{if .Waiting}}
+  <div class="note">
+    <p>Waiting for <strong>{{.Pending.Email}}</strong>: open the link sent there by {{when .Pending.Expires}} to make it your address. Until then nothing changes.</p>
+    <form method="post" action="/account/email/cancel" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="secondary">Cancel the change</button></form>
+  </div>
+  {{end}}
+  <form method="post" action="/account/email" class="stack short">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>New address <small>we send a link there; your address changes once you open it, within 24 hours</small><input name="email" type="email" value="{{.Email}}" required autocomplete="email"></label>
+    <button>Send the link</button>
+  </form>
+  <p class="meta">Once the new address is confirmed, the old one gets a notice and every session of your account ends, so other browsers log in again with the new address. Tokens under <a href="/ai/access">AI, Access</a> keep working.</p>
+</section>
+
+<section>
+  <h2>Look</h2>
+  <label class="short">Theme <select class="theme-choice"><option value="">as the system</option><option value="light">light</option><option value="dark">night</option></select></label>
+  <p class="meta">Kept in this browser; the same choice is at the bottom of the sidebar.</p>
+</section>
+{{end}}
+{{end}}

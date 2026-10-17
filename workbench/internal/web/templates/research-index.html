@@ -1,0 +1,12 @@
+{{define "content"}}
+<h1>Research</h1>
+<p class="meta">Analyses of live audio streams that their members have published.</p>
+{{if not .Data}}<p class="empty">Nothing is published yet.</p>{{end}}
+{{range .Data}}
+<article class="card">
+  <h2><a href="/research/{{.Slug}}">{{.Name}}</a></h2>
+  <p class="meta">By {{.OwnerName}} · published {{when .Published}} · {{range $i, $s := .Sources}}{{if $i}}, {{end}}{{$s.Stream.Texts.Name}}{{end}}</p>
+  {{if .Description}}<p class="prose clamp">{{.Description}}</p>{{end}}
+</article>
+{{end}}
+{{end}}

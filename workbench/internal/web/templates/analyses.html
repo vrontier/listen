@@ -1,0 +1,22 @@
+{{define "content"}}
+<div class="heading-row">
+  <h1>Analyses</h1>
+  <a class="button" href="/analyses/new">New analysis</a>
+</div>
+<p class="meta">An analysis is what you study: one source or several, each with its own frequency range, filter rules and motif memory, and from two sources on a comparison on one time axis. Its settings are saved as numbered revisions. It listens only during a run, which records a data set, or a ten-minute preview, which records nothing. Analyses are yours alone, also on shared sources.</p>
+{{with .Data}}
+{{if not .Analyses}}
+  <p class="empty">No analyses yet. An analysis takes one or more of your <a href="/sources">sources</a>, with filters per source; from two sources on it compares them on one time axis.</p>
+{{end}}
+{{range .Analyses}}
+<article class="card">
+  <div class="heading-row">
+    <h2><a href="/analyses/{{.ID}}">{{.Name}}</a></h2>
+    <span class="states">{{if index $.Data.Running .ID}}{{template "status" (status "activity" "run")}} {{end}}{{template "status" (status "visibility" .State)}} <span class="meta">{{.Label}}</span></span>
+  </div>
+  {{if .Description}}<p>{{.Description}}</p>{{end}}
+  <p class="meta">{{len .Sources}} source{{if ne (len .Sources) 1}}s{{end}}: {{range $i, $s := .Sources}}{{if $i}}, {{end}}{{$s.Stream.Texts.Name}}{{end}}</p>
+</article>
+{{end}}
+{{end}}
+{{end}}
