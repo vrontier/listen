@@ -31,7 +31,9 @@ import (
 	"github.com/coder/websocket"
 )
 
-const version = "0.1.0"
+// baseVersion is the Observatory's release; a release build sets it from its
+// tag (-ldflags "-X main.baseVersion=…").
+var baseVersion = "0.1.0"
 
 type sourceCfg struct {
 	Slug     string   `json:"slug"`
@@ -70,7 +72,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	s := &server{name: "listen-observatory", version: version, tools: a.tools(), out: os.Stdout}
+	s := &server{name: "listen-observatory", version: baseVersion, tools: a.tools(), out: os.Stdout}
 	if err := s.serve(ctx, os.Stdin); err != nil {
 		log.Fatal(err)
 	}

@@ -4,13 +4,14 @@
 #   scripts/release.sh ingest 0.1.0
 #   scripts/release.sh engine 0.2.0
 #   scripts/release.sh workbench 0.1.0
+#   scripts/release.sh observatory 0.1.0
 # The release workflow (.github/workflows/release.yml) runs it for a tag
-# ingest/v0.1.0, engine/v0.2.0 or workbench/v0.1.0 and publishes the result.
+# ingest/v…, engine/v…, workbench/v… or observatory/v… and publishes the result.
 # ALLOW_DIRTY=1 builds from an uncommitted tree (for trying it out).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-component="${1:?usage: release.sh ingest|engine|workbench <version>}"
-version="${2:?usage: release.sh ingest|engine|workbench <version>}"
+component="${1:?usage: release.sh ingest|engine|workbench|observatory <version>}"
+version="${2:?usage: release.sh ingest|engine|workbench|observatory <version>}"
 version="${version#v}"
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must be like 1.2.3" >&2; exit 2; }
 
@@ -20,7 +21,10 @@ if [[ -n $(git status --porcelain) && ${ALLOW_DIRTY:-} != 1 ]]; then
 fi
 
 # Per component: its module, the variable that carries the version, the
-# commands to build (name=package) and the files that go along.
+# commands to build (name=package), the folder in the archive they go into,
+# and the files that go along.
+bindir=.
+extras() { :; }
 case "$component" in
 ingest)
   dir=ingest
@@ -43,8 +47,25 @@ workbench)
   docs=(workbench/README.md workbench/LICENSE)
   units=(workbench/deploy/systemd/low-workbench.service)
   ;;
+observatory)
+  dir=listener
+  var=main.baseVersion
+  cmds=("listen-listener=./cmd/listener" "listen-mcp=./cmd/listen-mcp")
+  bindir=bin
+  docs=(deploy/observatory/INSTALL.md LICENSE)
+  units=(deploy/systemd/listen-listener@.service)
+  # The website without the local configuration, the scripts it is run
+  # with, and the server templates.
+  extras() {
+    local stage=$1
+    mkdir -p "$stage/scripts" "$stage/deploy"
+    rsync -a --exclude '_config/sources.json' --exclude '_config/mail.php' --exclude '.DS_Store' site/ "$stage/site/"
+    cp scripts/dev.sh scripts/dev-router.php scripts/gen-sources.sh scripts/mail-config.sh "$stage/scripts/"
+    cp -R deploy/observatory/nginx-site.conf deploy/observatory/php-fpm-pool.conf deploy/observatory/snippets "$stage/deploy/"
+  }
+  ;;
 *)
-  echo "unknown component: $component (ingest, engine or workbench)" >&2
+  echo "unknown component: $component (ingest, engine, workbench or observatory)" >&2
   exit 2
   ;;
 esac
@@ -58,17 +79,17 @@ root=$PWD
 for t in "${targets[@]}"; do
   os=${t%/*} arch=${t#*/}
   name="listen-$component"
-  [[ $component == workbench ]] && name="listen-workbench"
   stage="$out/stage/${name}_${version}_${os}_${arch}"
-  mkdir -p "$stage"
+  mkdir -p "$stage/$bindir"
   ext=""
   [[ $os == windows ]] && ext=".exe"
   for c in "${cmds[@]}"; do
     bin=${c%%=*} pkg=${c#*=}
     (cd "$dir" && CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath \
-      -ldflags "-s -w -X $var=$version" -o "$root/$stage/$bin$ext" "$pkg")
+      -ldflags "-s -w -X $var=$version" -o "$root/$stage/$bindir/$bin$ext" "$pkg")
   done
   cp "${docs[@]}" "$stage/"
+  extras "$stage"
   if [[ $os == linux ]]; then
     mkdir -p "$stage/systemd"
     cp "${units[@]}" "$stage/systemd/"

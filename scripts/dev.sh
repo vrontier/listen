@@ -18,7 +18,13 @@ if [[ -f .llm ]]; then set -a; . ./.llm; set +a; fi
 # Contact form config from .email (if present); no rate limit locally.
 scripts/mail-config.sh >/dev/null
 
-(cd listener && go build -o ../bin/listener ./cmd/listener)
+# From the repository, build the listener; a release archive brings it built.
+listener=bin/listener
+if [[ -d listener ]]; then
+  (cd listener && go build -o ../bin/listener ./cmd/listener)
+else
+  listener=bin/listen-listener
+fi
 
 pids=()
 trap 'kill "${pids[@]}" 2>/dev/null' EXIT INT TERM
@@ -34,7 +40,7 @@ while read -r s; do
     + (if .max_hz != null then ["-spectrogram-max-hz", (.max_hz | tostring)] else [] end)
     + (if .bands != null then ["-spectrogram-bands", (.bands | tostring)] else [] end) else [] end;
     (.listener.args // [])[], sgargs[], (if .audio then "-audio" else empty end)' <<<"$s")
-  bin/listener -source "$slug" -addr "127.0.0.1:$port" -in "$in" -memory-dir bin/dev-memory ${args[@]+"${args[@]}"} \
+  "$listener" -source "$slug" -addr "127.0.0.1:$port" -in "$in" -memory-dir bin/dev-memory ${args[@]+"${args[@]}"} \
     2>&1 | sed -u "s/^/[$slug] /" &
   pids+=($!)
   echo "  http://127.0.0.1:8000/$slug"

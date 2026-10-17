@@ -22,9 +22,10 @@ Ready-built programs for Linux, macOS and Windows are on the [releases page](htt
 |---|---|---|
 | the Workbench, for your own research | `listen-workbench` | `listen-engine` and `listen-ingest`, ffmpeg |
 | an engine for the Workbench | `listen-engine` | `listen-ingest`, ffmpeg |
+| an Observatory of your own, for streams you choose | `listen-observatory` | ffmpeg, PHP; for a server nginx and PHP-FPM |
 | one connection per station for programs of your own | `listen-ingest` | nothing |
 
-Each archive holds the programs, a README and, for Linux, systemd units. The Observatory itself is a website with per-source configuration and is installed from this repository ([`deploy/README.md`](deploy/README.md)). Releases are made with `scripts/release.sh` from tags `ingest/v…`, `engine/v…` and `workbench/v…`.
+Each archive holds the programs, a README or install guide and, for Linux, systemd units. The Observatory's archive also holds the website and the server templates; its guide is [`deploy/observatory/INSTALL.md`](deploy/observatory/INSTALL.md). Releases are made with `scripts/release.sh` from tags `ingest/v…`, `engine/v…`, `workbench/v…` and `observatory/v…`.
 
 ## Streams
 

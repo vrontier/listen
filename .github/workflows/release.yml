@@ -2,6 +2,7 @@
 #   ingest/v0.1.0     listen-ingest
 #   engine/v0.2.0     listen-engine
 #   workbench/v0.1.0  Listening Observatory Workbench
+#   observatory/v0.1.0  Listening Observatory (listener, website, templates)
 # The archives for Linux, macOS and Windows come from scripts/release.sh.
 name: release
 
@@ -11,6 +12,7 @@ on:
       - "ingest/v*"
       - "engine/v*"
       - "workbench/v*"
+      - "observatory/v*"
 
 permissions:
   contents: write
@@ -31,7 +33,7 @@ jobs:
           component="${GITHUB_REF_NAME%%/*}"
           case "$component" in
             ingest) dir=ingest ;;
-            engine) dir=listener ;;
+            engine|observatory) dir=listener ;;
             workbench) dir=workbench ;;
           esac
           sudo apt-get install -y -qq ffmpeg >/dev/null
@@ -52,6 +54,7 @@ jobs:
             ingest) title="listen-ingest $version" ;;
             engine) title="listen-engine $version" ;;
             workbench) title="Listening Observatory Workbench $version" ;;
+            observatory) title="Listening Observatory $version" ;;
           esac
           # The checkout leaves the tag without its annotation; fetch it, since
           # its message is the release text.

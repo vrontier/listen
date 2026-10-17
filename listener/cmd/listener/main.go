@@ -21,6 +21,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -80,7 +81,12 @@ func main() {
 	)
 	flag.Var(&ignore, "ignore", "filter rule for known interference, repeatable: comb=<hz>[,odd][,tol=<hz>] (harmonics of a base, "+
 		"e.g. comb=16.7,odd,tol=4 for a 16.7 Hz railway) or line=<hz>[,tol=<hz>]")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("listen-listener", version())
+		return
+	}
 	if *in == "" {
 		flag.Usage()
 		os.Exit(2)
@@ -540,4 +546,20 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+// baseVersion is the Observatory's release; a release build sets it from its
+// tag (-ldflags "-X main.baseVersion=…").
+var baseVersion = "0.1.0"
+
+func version() string {
+	v := baseVersion
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range bi.Settings {
+			if s.Key == "vcs.revision" && len(s.Value) >= 7 {
+				v += "+" + s.Value[:7]
+			}
+		}
+	}
+	return v
 }
