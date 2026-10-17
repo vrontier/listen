@@ -18,7 +18,7 @@
 GO      ?= go
 BUILD   := build
 LINUX   := $(BUILD)/linux-amd64
-VERSION := $(shell git describe --always --dirty 2>/dev/null || echo unknown)
+VERSION := $(shell git describe --always --dirty --match 'workbench/v*' 2>/dev/null || echo unknown)
 
 .PHONY: build test run deploy admin intranet production deploy-intranet deploy-production admin-intranet linux
 
