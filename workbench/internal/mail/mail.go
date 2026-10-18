@@ -1,9 +1,8 @@
-// Package mail sends the Workbench's few messages: invitations and login
-// links.
+// Package mail sends the Workbench's few messages: invitations, login
+// links and notices about runs.
 package mail
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"net/smtp"
@@ -12,7 +11,7 @@ import (
 	"time"
 )
 
-// Sender delivers one plain-text message.
+// Sender delivers one message, given as plain text.
 type Sender interface {
 	Send(to, subject, body string) error
 }
@@ -26,19 +25,22 @@ func (Log) Send(to, subject, body string) error {
 	return nil
 }
 
-// SMTP sends through a mail server. Auth is used only when User is set.
+// SMTP sends through a mail server, as text and as HTML in the
+// Workbench's look (compose.go). Auth is used only when User is set.
 type SMTP struct {
 	Addr     string // host:port
 	From     string
 	User     string
 	Password string
+	Look     Look
 }
 
 func (s SMTP) Send(to, subject, body string) error {
-	if strings.ContainsAny(to+subject, "\r\n") {
-		return fmt.Errorf("mail: line break in header")
-	}
 	host, _, err := net.SplitHostPort(s.Addr)
+	if err != nil {
+		return err
+	}
+	msg, err := Compose(s.From, to, subject, body, s.Look, time.Now())
 	if err != nil {
 		return err
 	}
@@ -46,15 +48,7 @@ func (s SMTP) Send(to, subject, body string) error {
 	if s.User != "" {
 		auth = smtp.PlainAuth("", s.User, s.Password, host)
 	}
-	msg := "From: " + s.From + "\r\n" +
-		"To: " + to + "\r\n" +
-		"Subject: " + subject + "\r\n" +
-		"Date: " + time.Now().Format(time.RFC1123Z) + "\r\n" +
-		"MIME-Version: 1.0\r\n" +
-		"Content-Type: text/plain; charset=utf-8\r\n" +
-		"Content-Transfer-Encoding: 8bit\r\n\r\n" +
-		strings.ReplaceAll(body, "\n", "\r\n")
-	return smtp.SendMail(s.Addr, auth, s.From, []string{to}, []byte(msg))
+	return smtp.SendMail(s.Addr, auth, s.From, []string{to}, msg)
 }
 
 // Memory keeps messages for tests.

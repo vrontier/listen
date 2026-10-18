@@ -93,7 +93,7 @@ func main() {
 		if *smtpFrom == "" {
 			log.Fatal("-smtp needs -smtp-from")
 		}
-		sender = mail.SMTP{Addr: *smtpAddr, From: *smtpFrom, User: *smtpUser, Password: os.Getenv("LOW_SMTP_PASSWORD")}
+		sender = mail.SMTP{Addr: *smtpAddr, From: *smtpFrom, User: *smtpUser, Password: os.Getenv("LOW_SMTP_PASSWORD"), Look: mail.Look{Base: *baseURL}}
 	} else {
 		log.Printf("no mail server set: login links and invitations are written to this log")
 	}
