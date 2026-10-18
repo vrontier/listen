@@ -339,11 +339,18 @@ type runFileView struct {
 	About string
 }
 
+// pairSummary is a pair's last correlation, formatted for the run page;
+// "—" where the comparison had no value.
 type pairSummary struct {
-	A, B      string
-	R         *float64
-	LagS      *float64
-	BaselineR *float64
+	A, B         string
+	R, Lag, Base string
+}
+
+func fmtPtr(p *float64, format string) string {
+	if p == nil {
+		return "—"
+	}
+	return fmt.Sprintf(format, *p)
 }
 
 // diskQuota is a member's disk quota (decided 2026-10-14), against which
@@ -377,7 +384,7 @@ func (s *Server) runPage(w http.ResponseWriter, r *http.Request) {
 			}
 			json.Unmarshal(raw, &p)
 			p.A, p.B = or(names[p.A], p.A), or(names[p.B], p.B)
-			d.Pairs = append(d.Pairs, pairSummary{p.A, p.B, p.R, p.LagS, p.BaselineR})
+			d.Pairs = append(d.Pairs, pairSummary{p.A, p.B, fmtPtr(p.R, "%.2f"), fmtPtr(p.LagS, "%+.0f s"), fmtPtr(p.BaselineR, "%.2f")})
 		}
 	}
 	about := map[string]string{

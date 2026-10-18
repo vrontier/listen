@@ -52,7 +52,7 @@
   {{if .Pairs}}
   <table>
     <thead><tr><th>Pair, last correlation</th><th>r</th><th>Lag</th><th>Baseline r</th></tr></thead>
-    <tbody>{{range .Pairs}}<tr><td>{{.A}} – {{.B}}</td><td>{{with .R}}{{printf "%.2f" .}}{{else}}—{{end}}</td><td>{{with .LagS}}{{printf "%+.0f s" .}}{{else}}—{{end}}</td><td>{{with .BaselineR}}{{printf "%.2f" .}}{{else}}—{{end}}</td></tr>{{end}}</tbody>
+    <tbody>{{range .Pairs}}<tr><td>{{.A}} – {{.B}}</td><td>{{.R}}</td><td>{{.Lag}}</td><td>{{.Base}}</td></tr>{{end}}</tbody>
   </table>
   {{end}}
   <form method="post" action="/runs/{{.Run.ID}}/delete" class="inline-form danger-inline">

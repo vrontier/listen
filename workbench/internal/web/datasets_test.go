@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -231,5 +232,28 @@ func TestDatasetKeepsToRun(t *testing.T) {
 	}
 	if len(at) != 3 || at[0] != "2026-10-18T15:08:54Z" || at[2] != "2026-10-18T15:13:54.9Z" {
 		t.Fatalf("events.csv: %v", all)
+	}
+}
+
+// The run page shows a pair's last correlation as numbers.
+func TestRunPageCorrelation(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	u, _ := r.db.CreateUser(ctx, "m@example.org", "M", false)
+	st, _ := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050,
+		Texts: catalogue.StreamTexts{Name: "A"}, Probe: []byte(`{}`)})
+	a, _ := r.db.CreateAnalysis(ctx, u.ID, "x", "", []int64{st.ID}, nil)
+	run, _ := r.db.StartRun(ctx, a.ID, u.ID, time.Time{})
+	r.db.StopRun(ctx, a.ID, u.ID)
+	r.db.SetDataset(ctx, run.ID, catalogue.DatasetReady, 10, "",
+		json.RawMessage(`{"sources":[],"files":{},"comparison":{"seconds":60,"correlations":1,"last_pairs":[{"a":"s-1","b":"s-2","r":0.376,"lag_s":10,"baseline_r":0.158,"n":290},{"a":"s-1","b":"s-3","r":0.2,"lag_s":0}]}}`))
+	_, page, _ := r.get(r.loginAs("m@example.org"), "/runs/"+strconv.FormatInt(run.ID, 10))
+	for _, want := range []string{"<td>0.38</td><td>&#43;10 s</td><td>0.16</td>", "<td>0.20</td><td>&#43;0 s</td><td>—</td>"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("run page without %q", want)
+		}
+	}
+	if strings.Contains(page, "%!") {
+		t.Error("a format error on the run page")
 	}
 }
