@@ -36,7 +36,7 @@ func env(k, def string) string {
 
 // baseVersion is the Workbench's release; a release build sets it from its
 // tag (-ldflags "-X main.baseVersion=…").
-var baseVersion = "0.1.0"
+var baseVersion = "0.2.0"
 
 func version() string {
 	v := baseVersion
