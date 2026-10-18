@@ -525,6 +525,17 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 	if end.IsZero() {
 		end = run.Ends
 	}
+	// Only what falls within the run: the subscriptions may deliver a little
+	// before its start and until the recording is let go. The times kept are
+	// whole seconds, so the second of the end is in.
+	inRun := func(path string, fn func([]byte) error) error {
+		return eachLine(path, func(b []byte) error {
+			if t := eventTime(b); t.Before(run.Started) || !t.Before(end.Add(time.Second)) {
+				return nil
+			}
+			return fn(b)
+		})
+	}
 	revs, err := d.s.db.Revisions(ctx, a.ID)
 	if err != nil {
 		return err
@@ -596,7 +607,7 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 			w.Write(meta[:len(meta)-1])
 			io.WriteString(w, `,"events":[`)
 			n := 0
-			err := eachLine(filepath.Join(dir, st.EngineID()+".jsonl"), func(b []byte) error {
+			err := inRun(filepath.Join(dir, st.EngineID()+".jsonl"), func(b []byte) error {
 				if n > 0 {
 					io.WriteString(w, ",")
 				}
@@ -625,7 +636,7 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 			w.Write(b)
 			io.WriteString(w, `,"note":"activity per second is in comparison.csv","correlations":[`)
 			n := 0
-			err := eachLine(cpath, func(b []byte) error {
+			err := inRun(cpath, func(b []byte) error {
 				var e struct {
 					Type    string `json:"type"`
 					Payload struct {
@@ -675,7 +686,7 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 				row[8] = strconv.FormatFloat(g.Seconds, 'f', 3, 64)
 				cw.Write(row)
 			}
-			err := eachLine(filepath.Join(dir, src.Stream.EngineID()+".jsonl"), func(b []byte) error {
+			err := inRun(filepath.Join(dir, src.Stream.EngineID()+".jsonl"), func(b []byte) error {
 				t := eventTime(b)
 				for len(gaps) > 0 && !gaps[0].From.After(t) {
 					gap(gaps[0])
@@ -707,7 +718,7 @@ func (d *datasets) write(ctx context.Context, run catalogue.Run, a catalogue.Ana
 		err = writeGz(filepath.Join(dir, fileCompare+".gz"), func(w io.Writer) error {
 			cw := csv.NewWriter(w)
 			cw.Write(compareColumns)
-			err := eachLine(filepath.Join(dir, groupTopic+".jsonl"), func(b []byte) error {
+			err := inRun(filepath.Join(dir, groupTopic+".jsonl"), func(b []byte) error {
 				for _, row := range compareRows(names, b) {
 					cw.Write(row)
 				}

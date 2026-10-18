@@ -126,3 +126,42 @@ func TestRunEndsByItself(t *testing.T) {
 		t.Fatalf("switch at 30: %d", got.OfflineStop)
 	}
 }
+
+// A run ends at its planned end, not at the next round of the 30-second
+// ticker, and a second preview does not lengthen the first.
+func TestEndsOnTime(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	u, _ := r.db.CreateUser(ctx, "m@example.org", "M", false)
+	st, _ := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050,
+		Texts: catalogue.StreamTexts{Name: "A"}, Probe: []byte(`{}`)})
+	a, _ := r.db.CreateAnalysis(ctx, u.ID, "Dusk", "", []int64{st.ID}, nil)
+
+	until, why, _, err := r.srv.startPreviewAs(ctx, u.ID, a)
+	if err != nil || why != "" {
+		t.Fatalf("preview: %v %s", err, why)
+	}
+	again, why, _, _ := r.srv.startPreviewAs(ctx, u.ID, a)
+	if !strings.Contains(why, "already in a preview") || !again.Equal(until) {
+		t.Fatalf("second preview: %s %v", why, again)
+	}
+	r.srv.endPreviewOf(ctx, a)
+
+	ends := time.Now().UTC().Truncate(time.Second).Add(2 * time.Second)
+	run, err := r.db.StartRunWith(ctx, a.ID, u.ID, ends, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.srv.wakeEnds()
+	for deadline := ends.Add(3 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		if run, _ = r.db.Run(ctx, run.ID); !run.Stopped.IsZero() {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the run did not end at its planned end")
+		}
+	}
+	if !run.Stopped.Equal(ends) {
+		t.Fatalf("stopped %v, planned %v", run.Stopped, ends)
+	}
+}

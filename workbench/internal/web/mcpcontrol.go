@@ -160,7 +160,7 @@ func (s *Server) checkLimit(ctx context.Context, t catalogue.APIToken, name stri
 	case name == "start_run":
 		if l.RunHours > 0 {
 			if a.Hours == nil {
-				return fmt.Sprintf("this token may start runs of at most %d hours; give hours.", l.RunHours), nil
+				return fmt.Sprintf("this token may start runs of at most %d hours; give hours.", l.RunHours) + where, nil
 			}
 			if *a.Hours > float64(l.RunHours) {
 				return fmt.Sprintf("this token may start runs of at most %d hours, not %g.", l.RunHours, *a.Hours) + where, nil
@@ -334,6 +334,8 @@ func (s *Server) callControl(ctx context.Context, name string, rawArgs json.RawM
 		out := map[string]any{"analysis_id": saved.ID, "revision": saved.Revision, "saved": true}
 		if len(warns) > 0 {
 			out["warnings"] = warns
+		} else {
+			out["checked"] = "the engine accepted the settings without warnings"
 		}
 		if s.pushSourcesCtx(ctx, append(append([]catalogue.AnalysisSource{}, before...), saved.Sources...)) != nil {
 			out["note"] = notTaken

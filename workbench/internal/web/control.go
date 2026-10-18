@@ -38,6 +38,7 @@ func (s *Server) startRunAs(ctx context.Context, user int64, a catalogue.Analysi
 		return
 	}
 	s.sync.endPreview(a.ID)
+	s.wakeEnds()
 	if s.pushSourcesCtx(ctx, a.Sources) != nil {
 		note = notTaken
 	}
@@ -72,11 +73,15 @@ func (s *Server) startPreviewAs(ctx context.Context, user int64, a catalogue.Ana
 	if _, inRun, _ := s.db.ActiveRun(ctx, a.ID); inRun {
 		return until, a.Name + " is in a run; its live data can be read already.", "", nil
 	}
+	if until, on := s.sync.preview(a.ID); on {
+		return until, a.Name + " is already in a preview, until " + until.UTC().Format("15:04:05") + " UTC; it is not lengthened.", "", nil
+	}
 	if why, err = s.capRefusal(ctx, user, a, false); err != nil || why != "" {
 		return
 	}
 	until = time.Now().UTC().Add(previewLength)
 	s.sync.startPreview(a.ID, until)
+	s.wakeEnds()
 	if s.pushSourcesCtx(ctx, a.Sources) != nil {
 		note = notTaken
 	}

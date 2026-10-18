@@ -168,6 +168,44 @@ func (s *Server) analysisRunStop(w http.ResponseWriter, r *http.Request) {
 
 func runPath(id int64) string { return "/runs/" + strconv.FormatInt(id, 10) }
 
+// endOnTime ends runs, previews and trials at their planned end, not up
+// to a round of the 30-second ticker later: a run's data set ends there.
+func (s *Server) endOnTime(ctx context.Context) {
+	for {
+		wait := 30 * time.Second
+		now := time.Now()
+		if end, ok, err := s.db.NextRunEnd(ctx); err == nil && ok {
+			wait = min(wait, end.Sub(now))
+		}
+		if end, ok := s.sync.nextEnd(); ok {
+			wait = min(wait, end.Sub(now))
+		}
+		if wait <= 0 {
+			wait = time.Second // overdue, as when closing failed: not at once again
+		}
+		t := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return
+		case <-s.wake:
+			t.Stop()
+			continue
+		case <-t.C:
+		}
+		s.endRuns(ctx)
+		s.endPreviews(ctx)
+	}
+}
+
+// wakeEnds tells endOnTime that an end may have come nearer.
+func (s *Server) wakeEnds() {
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
 // endRuns closes the runs that reached their planned end, and lets their
 // sources go back to what their state asks.
 func (s *Server) endRuns(ctx context.Context) {

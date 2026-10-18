@@ -82,6 +82,8 @@ type Server struct {
 
 	probesMu sync.Mutex
 	probes   map[string]probeEntry // "user\x00input"
+
+	wake chan struct{} // a run or preview started: its end may come sooner
 }
 
 type probeEntry struct {
@@ -103,6 +105,7 @@ func New(cfg Config, db *catalogue.DB, eng *engine.Client, m mail.Sender) (*Serv
 		sync: newEngineSync(eng, db), live: newFanout(eng),
 		secure: strings.HasPrefix(cfg.BaseURL, "https://"),
 		probes: map[string]probeEntry{},
+		wake:   make(chan struct{}, 1),
 	}
 	s.data = newDatasets(s, cfg.DatasetDir)
 	s.sync.onState = s.data.noteState
@@ -132,6 +135,7 @@ func (s *Server) Start(ctx context.Context) {
 		<-ctx.Done()
 		s.data.close()
 	}()
+	go s.endOnTime(ctx)
 	go func() {
 		t := time.NewTicker(30 * time.Second)
 		defer t.Stop()
@@ -140,10 +144,8 @@ func (s *Server) Start(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				s.endRuns(ctx)
 				s.watchRuns(ctx)
 				s.tellRunEnds(ctx)
-				s.endPreviews(ctx)
 				s.data.refresh(ctx)
 				s.measureMemories(ctx)
 			}
@@ -355,6 +357,9 @@ var funcs = template.FuncMap{
 	"ms": func(n int64) string {
 		if n < 1000 {
 			return strconv.FormatInt(n, 10) + " ms"
+		}
+		if d := time.Duration(n) * time.Millisecond; d < time.Hour {
+			return d.Round(time.Second).String() // a stream held 2m30s is not "2m0s"
 		}
 		return roundDuration(time.Duration(n) * time.Millisecond)
 	},

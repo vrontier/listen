@@ -88,11 +88,11 @@ func TestMCPControl(t *testing.T) {
 	if text, isErr := r.toolText(ctl, "update_source_settings", aid+`,"source_id":`+sid+`,"min_hz":-5}`); !isErr || !strings.Contains(text, "engine refused") || !strings.Contains(text, "settings.min_hz") {
 		t.Fatalf("settings the engine refuses: %s", text)
 	}
-	if text, isErr := r.toolText(ctl, "update_source_settings", aid+`,"source_id":`+sid+`,"min_hz":100,"rules":[{"kind":"line","hz":50,"tol_hz":1}]}`); isErr || !strings.Contains(text, `"revision": 2`) {
+	if text, isErr := r.toolText(ctl, "update_source_settings", aid+`,"source_id":`+sid+`,"min_hz":100,"rules":[{"kind":"line","hz":150,"tol_hz":1}]}`); isErr || !strings.Contains(text, `"revision": 2`) || !strings.Contains(text, "without warnings") {
 		t.Fatalf("update_source_settings: %s", text)
 	}
 	a, _ := r.db.Analysis(ctx, made.ID)
-	if !strings.Contains(string(a.Sources[0].Spec), `"min_hz":100`) || !strings.Contains(string(a.Sources[0].Spec), `"hz":50`) {
+	if !strings.Contains(string(a.Sources[0].Spec), `"min_hz":100`) || !strings.Contains(string(a.Sources[0].Spec), `"hz":150`) {
 		t.Fatalf("settings saved: %s", a.Sources[0].Spec)
 	}
 	if text, isErr := r.toolText(ctl, "update_source_settings", aid+`,"source_id":`+sid+`,"min_hz":100}`); isErr || !strings.Contains(text, "Nothing changed") {
@@ -111,7 +111,7 @@ func TestMCPControl(t *testing.T) {
 	}
 
 	// Runs: at most two hours, one a day; the member is told.
-	if text, isErr := r.toolText(ctl, "start_run", aid+`}`); !isErr || !strings.Contains(text, "at most 2 hours; give hours") {
+	if text, isErr := r.toolText(ctl, "start_run", aid+`}`); !isErr || !strings.Contains(text, "at most 2 hours; give hours") || !strings.Contains(text, "AI, Access") {
 		t.Fatalf("run without hours: %s", text)
 	}
 	if text, isErr := r.toolText(ctl, "start_run", aid+`,"hours":3}`); !isErr || !strings.HasPrefix(text, "Refused:") {

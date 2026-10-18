@@ -353,6 +353,24 @@ func (s *engineSync) endedPreviews() []int64 {
 	return out
 }
 
+// nextEnd is the earliest end of a preview or a trial, if any.
+func (s *engineSync) nextEnd() (time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var next time.Time
+	for _, until := range s.previews {
+		if next.IsZero() || until.Before(next) {
+			next = until
+		}
+	}
+	for _, t := range s.trials {
+		if next.IsZero() || t.Until.Before(next) {
+			next = t.Until
+		}
+	}
+	return next, !next.IsZero()
+}
+
 // A trial runs changed settings next to a run (design.md, question 16):
 // one more engine analysis per source, t-NNNN, learning in memory only. It
 // does not touch the run or its data set.

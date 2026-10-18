@@ -60,15 +60,22 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request, scope stri
 	}
 	h := r.Header.Get("Authorization")
 	secret, ok := strings.CutPrefix(h, "Bearer ")
-	if !ok || !strings.HasPrefix(secret, catalogue.TokenPrefix) {
+	if !ok || strings.TrimSpace(secret) == "" {
 		w.Header().Set("WWW-Authenticate", `Bearer realm="workbench"`)
 		apiError(w, http.StatusUnauthorized, "no_token", "This needs a token in the header \"Authorization: Bearer low_…\". Members create tokens under AI, Access.")
 		return r, false
 	}
+	invalid := func(message string) {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="workbench", error="invalid_token"`)
+		apiError(w, http.StatusUnauthorized, "invalid_token", message)
+	}
+	if !strings.HasPrefix(secret, catalogue.TokenPrefix) {
+		invalid("This is not a Workbench token: they begin with \"low_\". Members create tokens under AI, Access.")
+		return r, false
+	}
 	t, u, err := s.db.APIToken(r.Context(), strings.TrimSpace(secret))
 	if err != nil {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="workbench", error="invalid_token"`)
-		apiError(w, http.StatusUnauthorized, "invalid_token", "The token is unknown or revoked.")
+		invalid("The token is unknown or revoked. Members see their tokens under AI, Access.")
 		return r, false
 	}
 	if !t.Has(scope) {
@@ -104,7 +111,7 @@ type apiSource struct {
 	Lon        *float64 `json:"lon,omitempty"`
 	SampleRate int      `json:"sample_rate"`
 	State      string   `json:"state"`
-	Owner      string   `json:"owner"`
+	Steward    string   `json:"steward"` // who registered the source and looks after it
 	Settings   any      `json:"settings"`
 }
 
@@ -174,7 +181,7 @@ func (s *Server) toAPIAnalysis(ctx context.Context, a catalogue.Analysis) apiAna
 		var settings any
 		json.Unmarshal(src.Spec, &settings)
 		out.Sources = append(out.Sources, apiSource{ID: src.Stream.ID, Name: src.Stream.Texts.Name, Place: src.Stream.Texts.Place,
-			Lat: src.Stream.Texts.Lat, Lon: src.Stream.Texts.Lon, SampleRate: src.Stream.SampleRate, State: src.Stream.State, Owner: src.Stream.OwnerName, Settings: settings})
+			Lat: src.Stream.Texts.Lat, Lon: src.Stream.Texts.Lon, SampleRate: src.Stream.SampleRate, State: src.Stream.State, Steward: src.Stream.OwnerName, Settings: settings})
 	}
 	return out
 }
@@ -404,6 +411,25 @@ func (t *tokenStreams) give(id int64) {
 	}
 }
 
+// eventTypeKinds are the first parts of the engine's event types; the
+// engine may add types, so a name is checked by its form, not by a list.
+var eventTypeKinds = []string{"signal", "feature", "event", "motif", "memory", "system", "narrative", "group"}
+
+// eventType reports whether t is named like one of the engine's event
+// types, such as event.transient.
+func eventType(t string) bool {
+	kind, name, ok := strings.Cut(t, ".")
+	if !ok || name == "" || !slices.Contains(eventTypeKinds, kind) {
+		return false
+	}
+	for _, c := range name {
+		if !(c >= 'a' && c <= 'z' || c == '_' || c == '.') {
+			return false
+		}
+	}
+	return true
+}
+
 // apiEvents passes the live events of an analysis's sources, and of their
 // comparison, on to a program while the analysis is in a run or a
 // preview. Each event names its source: its data is
@@ -425,13 +451,23 @@ func (s *Server) apiEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	var types []string
 	if v := r.URL.Query().Get("types"); v != "" {
-		types = strings.Split(v, ",")
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if !eventType(t) {
+				apiError(w, http.StatusBadRequest, "bad_types", fmt.Sprintf("%q is not an event type. Types are named like event.transient, signal.spectrum or group.activity, separated by commas.", t))
+				return
+			}
+			types = append(types, t)
+		}
 	}
 	var only []int64
 	for _, v := range r.URL.Query()["source"] {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			only = append(only, n)
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || !slices.ContainsFunc(a.Sources, func(src catalogue.AnalysisSource) bool { return src.Stream.ID == n }) {
+			apiError(w, http.StatusBadRequest, "bad_source", fmt.Sprintf("%q is not the id of one of this analysis's sources; GET /data/v1/analyses/%d lists them.", v, a.ID))
+			return
 		}
+		only = append(only, n)
 	}
 	if !openStreams.take(tok.ID) {
 		apiError(w, http.StatusTooManyRequests, "too_many_streams", fmt.Sprintf("This token holds %d data streams open already.", streamsPerToken))
@@ -481,7 +517,11 @@ func (s *Server) apiEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(200)
-	io.WriteString(w, ": connected to "+a.Name+"\n\n")
+	hello := ": connected to " + a.Name
+	if types != nil {
+		hello += "; only " + strings.Join(types, ", ")
+	}
+	io.WriteString(w, hello+"\n\n")
 	fl.Flush()
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()

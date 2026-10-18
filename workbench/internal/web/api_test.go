@@ -65,6 +65,12 @@ func TestTokensAndDataStream(t *testing.T) {
 	if code, _ := r.api("", "/data/v1/analyses"); code != http.StatusUnauthorized {
 		t.Fatalf("no token: %d", code)
 	}
+	if code, body := r.api("nope", "/data/v1/analyses"); code != http.StatusUnauthorized || !strings.Contains(body, `"invalid_token"`) || !strings.Contains(body, "AI, Access") {
+		t.Fatalf("not a Workbench token: %d %s", code, body)
+	}
+	if code, body := r.api(secret+"x", "/data/v1/analyses"); code != http.StatusUnauthorized || !strings.Contains(body, `"invalid_token"`) {
+		t.Fatalf("unknown token: %d %s", code, body)
+	}
 	if code, _ := r.api("", "/data/v1/analyses?token="+secret); code != http.StatusBadRequest {
 		t.Fatalf("token in the address: %d", code)
 	}
@@ -72,7 +78,7 @@ func TestTokensAndDataStream(t *testing.T) {
 		t.Fatalf("MCP token on the data stream: %d", code)
 	}
 	code, body := r.api(secret, "/data/v1/analyses")
-	if code != 200 || !strings.Contains(body, `"title": "Night watch"`) || !strings.Contains(body, `"state": "idle"`) {
+	if code != 200 || !strings.Contains(body, `"title": "Night watch"`) || !strings.Contains(body, `"state": "idle"`) || !strings.Contains(body, `"steward": "M"`) {
 		t.Fatalf("analyses: %d %s", code, body)
 	}
 	aPath := "/data/v1/analyses/" + strconv.FormatInt(a.ID, 10)
@@ -87,6 +93,12 @@ func TestTokensAndDataStream(t *testing.T) {
 	_, page, _ := r.get(member, "/analyses/"+strconv.FormatInt(a.ID, 10))
 	csrf := csrfOf(t, page)
 	r.post(member, "/analyses/"+strconv.FormatInt(a.ID, 10)+"/run", url.Values{"csrf": {csrf}, "length": {"1h"}})
+	if code, body := r.api(secret, aPath+"/events?types=bogus"); code != http.StatusBadRequest || !strings.Contains(body, `\"bogus\" is not an event type`) {
+		t.Fatalf("unknown type: %d %s", code, body)
+	}
+	if code, body := r.api(secret, aPath+"/events?source=9999"); code != http.StatusBadRequest || !strings.Contains(body, "bad_source") {
+		t.Fatalf("someone else's source: %d %s", code, body)
+	}
 	req, _ := http.NewRequest(http.MethodGet, r.web.URL+aPath+"/events?types=signal.frame", nil)
 	req.Header.Set("Authorization", "Bearer "+secret)
 	resp, err := http.DefaultClient.Do(req)
@@ -101,6 +113,9 @@ func TestTokensAndDataStream(t *testing.T) {
 		Data   json.RawMessage `json:"data"`
 	}
 	event := ""
+	if !sc.Scan() || sc.Text() != ": connected to Night watch; only signal.frame" {
+		t.Fatalf("first line: %q", sc.Text())
+	}
 	for sc.Scan() {
 		line := sc.Text()
 		if v, ok := strings.CutPrefix(line, "event: "); ok {

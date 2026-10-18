@@ -189,3 +189,47 @@ func TestAbsenceRecorded(t *testing.T) {
 		}
 	}
 }
+
+// A data set holds only what falls within its run, though the recording
+// may have caught a little before its start and after its end.
+func TestDatasetKeepsToRun(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	u, _ := r.db.CreateUser(ctx, "m@example.org", "M", false)
+	st, _ := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: u.ID, Input: "https://s.example.org/a", SampleRate: 22050,
+		Texts: catalogue.StreamTexts{Name: "A"}, Probe: []byte(`{}`)})
+	a, _ := r.db.CreateAnalysis(ctx, u.ID, "x", "", []int64{st.ID}, nil)
+	run, _ := r.db.StartRun(ctx, a.ID, u.ID, time.Time{})
+	t0 := time.Date(2026, 10, 18, 15, 8, 54, 0, time.UTC)
+	run.Started, run.Stopped = t0, t0.Add(5*time.Minute)
+	dir := r.srv.data.runDir(run.ID)
+	os.MkdirAll(dir, 0o750)
+	var lines []string
+	for _, d := range []time.Duration{-2 * time.Second, 0, time.Minute, 5*time.Minute + 900*time.Millisecond, 5*time.Minute + 29*time.Second} {
+		lines = append(lines, `{"type":"event.transient","timestamp":"`+t0.Add(d).Format(time.RFC3339Nano)+`","payload":{"strength":0.5,"duration_ms":50}}`)
+	}
+	os.WriteFile(filepath.Join(dir, st.EngineID()+".jsonl"), []byte(strings.Join(lines, "\n")+"\n"), 0o640)
+	if err := r.srv.data.write(ctx, run, a); err != nil {
+		t.Fatal(err)
+	}
+	run, _ = r.db.Run(ctx, run.ID)
+	var sum datasetSummary
+	json.Unmarshal(run.Summary, &sum)
+	// The start, a minute in, and the second of the end.
+	if len(sum.Sources) != 1 || sum.Sources[0].Total != 3 {
+		t.Fatalf("summary: %s", run.Summary)
+	}
+	f, _ := os.Open(filepath.Join(dir, fileEvents+".gz"))
+	defer f.Close()
+	zr, _ := gzip.NewReader(f)
+	all, _ := csv.NewReader(zr).ReadAll()
+	var at []string
+	for _, row := range all[1:] {
+		if row[3] == "event.transient" {
+			at = append(at, row[1])
+		}
+	}
+	if len(at) != 3 || at[0] != "2026-10-18T15:08:54Z" || at[2] != "2026-10-18T15:13:54.9Z" {
+		t.Fatalf("events.csv: %v", all)
+	}
+}

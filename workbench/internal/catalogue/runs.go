@@ -234,6 +234,16 @@ func (d *DB) EndRuns(ctx context.Context) ([]int64, error) {
 	return ids, err
 }
 
+// NextRunEnd is the earliest planned end of a run that goes on, if any.
+func (d *DB) NextRunEnd(ctx context.Context) (time.Time, bool, error) {
+	var ends sql.NullString
+	err := d.db.QueryRowContext(ctx, `SELECT MIN(ends) FROM runs WHERE stopped IS NULL AND ends IS NOT NULL`).Scan(&ends)
+	if err != nil || !ends.Valid {
+		return time.Time{}, false, err
+	}
+	return parseStamp(ends.String), true, nil
+}
+
 // closeEnded marks runs past their planned end as stopped at that end, with
 // an entry in the audit trail by no one.
 func closeEnded(ctx context.Context, tx *sql.Tx, now time.Time) error {
