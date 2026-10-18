@@ -153,7 +153,7 @@ func TestAbsenceRecorded(t *testing.T) {
 		}
 	}
 	waitState("connected")
-	for _, state := range []string{catalogue.StreamPaused, catalogue.StreamDraft} {
+	for _, state := range []string{catalogue.StreamPaused, catalogue.StreamActive} {
 		r.db.SetStreamState(ctx, st.ID, u.ID, state)
 		st, _ = r.db.Stream(ctx, st.ID)
 		r.srv.sync.push(ctx, st)

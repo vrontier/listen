@@ -46,7 +46,7 @@ browser ──► web server ──► Workbench process ──control API──
    - "I run this stream or have the right to have it analysed" (**decided** as a requirement, see rule 4 in [design.md](design.md)). **Decided** (2026-10-15, question 12): if the member does not run the stream, they also give the operator's name or contact; the Workbench takes their word for the permission. **Built** (2026-10-15): two choices, "I run this stream myself" or "someone else runs it and has agreed", the second with a field for the operator's name and an email address or web page (3 to 200 characters). Shown on the source's page to its owner and in the master admin's list of streams; streams registered before show "not asked".
    - "Audio may be played in the browser", off by default. Audio is allowed (**decided**, 2026-10-14); the owner switches it on per stream.
 2. **Probe.** On the Workbench's request the engine checks that the stream answers, delivers audio that decodes, and is not silent; it reports the sample rate, the level and the bit rate. The member sees the result at once. The sample rate becomes a property of the stream, the same for all its analyses (see [analyses-and-filters.md](analyses-and-filters.md)). A stream whose probe fails is not saved.
-3. **Draft first.** A new stream is in draft. **Decided** (2026-10-18): it is open to every member at once, unless its steward ticks "only me for now" (see [Sources as a commons](#sources-as-a-commons)); before, it was visible only to its owner and the members they invited. It connects only while an analysis using it is in a run or a preview (decided 2026-10-15, see [design.md](design.md#runs)).
+3. **Draft first** (until 2026-10-18; since then a new stream is active). **Decided** (2026-10-18): a new stream is open to every member at once, unless its steward ticks "only me for now" (see [Sources as a commons](#sources-as-a-commons)); before, it was visible only to its owner and the members they invited. It connects only while an analysis using it is in a run or a preview (decided 2026-10-15, see [design.md](design.md#runs)).
 4. **No analysis is made.** **Decided** (2026-10-14): registering a source creates no analysis. The source's page offers "New analysis with this source"; see [design.md](design.md#analyses-and-sources).
 5. **Afterwards.** The owner can edit the texts, move the stream to production, pause or delete it. The engine reports a stream that has been offline for 24 hours; the Workbench pauses it and tells the owner.
 
@@ -56,30 +56,26 @@ browser ──► web server ──► Workbench process ──control API──
 
 ### Of a stream
 
-**Decided** (2026-10-15): a stream connects only while an analysis using it is in a run or a preview ([design.md](design.md#runs)). This replaces the rule of 2026-10-14 (draft on demand, production possibly always on); "always on" is removed (decided 2026-10-15). The rest of this table is **proposed**.
+**Decided** (2026-10-15): a stream connects only while an analysis using it is in a run or a preview ([design.md](design.md#runs)). This replaces the rule of 2026-10-14 (draft on demand, production possibly always on); "always on" is removed (decided 2026-10-15). **Decided** (2026-10-18): draft and production, which connected alike from then on, are one state, active; streams in either became active, and the buttons "Put in service" and "Back to draft" are gone. Only a state other than active is shown as a tag.
 
 ```text
-draft ──► production
-  ▲  │        │
-  │  ▼        ▼
-  paused ◄────┘
-
-any state ──► suspended (master admin)
+active ──► paused ──► active
+active, paused ──► retired ──► active   (the steward or the master admin)
+any state ──► suspended                 (master admin)
 ```
 
 | State | Connected | Who sees it |
 |---|---|---|
-| Draft | while an analysis using it is in a run or a preview | every member, or only its steward while private |
-| Production | as in draft | as in draft; published analyses are public |
-| Paused | no | as in draft; they see the last state |
-| Retired | no | as in draft; no new analysis can choose it, analyses that use it keep their history (**built** 2026-10-18) |
+| Active | while an analysis using it is in a run or a preview | every member, or only its steward while private; published analyses are public |
+| Paused | no | as when active; they see the last state |
+| Retired | no | as when active; no new analysis can choose it, analyses that use it keep their history (**built** 2026-10-18) |
 | Suspended | no | nobody; the steward sees the reason |
 
 - **Decided:** once a stream is connected, it goes offline only when all its consumers have stopped. A consumer is a page or a token reading one of its analyses, a trial run, or an analysis in a run.
 - **Decided:** a stream always shows who is connected to it. **Proposed:** its page lists, live, each analysis on it with its member's display name, whether it is in a run, and how many pages and tokens are reading. Everyone who may see the stream sees this list. The privacy notice has to say that display names are shown to invited members.
 - **Proposed**, a reading of the answer above that the maintainer should confirm: the owner can still pause the stream while others are consumers, because the owner holds the operator's permission. The other members are told. Without this, a stream whose operator withdraws permission could not be stopped by its owner.
 - **Proposed:** starting a run is checked against the caps (see [Resources and caps](#resources-and-caps)). A long run is for a stream the member runs or whose operator has agreed to continuous listening.
-- A stream in draft builds a motif memory with gaps. Every analysis page states the mode and which hours were actually heard, so that such a memory is not misread.
+- A stream that connects only for runs and previews builds a motif memory with gaps. Every analysis page states the mode and which hours were actually heard, so that such a memory is not misread.
 
 ### Of an analysis
 

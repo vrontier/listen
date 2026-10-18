@@ -143,7 +143,7 @@ func prefixOf(streamID int64) string { return "s" + strconv.FormatInt(streamID, 
 func analysisPath(a catalogue.Analysis) string { return "/analyses/" + strconv.FormatInt(a.ID, 10) }
 
 func running(st catalogue.Stream) bool {
-	return st.State == catalogue.StreamDraft || st.State == catalogue.StreamProduction
+	return st.State == catalogue.StreamActive
 }
 
 // running reports whether a source is analysed here: in a state that

@@ -13,11 +13,10 @@ type status struct {
 var statusWords = map[string]map[string]status{
 	// A source as registered.
 	"source": {
-		"draft":      {"Draft", "neutral"},
-		"production": {"In service", "ok"},
-		"paused":     {"Paused", "neutral"},
-		"suspended":  {"Suspended", "warn"},
-		"retired":    {"Retired", "neutral"},
+		"active":    {"Active", "ok"},
+		"paused":    {"Paused", "neutral"},
+		"suspended": {"Suspended", "warn"},
+		"retired":   {"Retired", "neutral"},
 	},
 	// A source's connection at the engine.
 	"conn": {

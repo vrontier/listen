@@ -31,7 +31,7 @@ func TestSourcesCommons(t *testing.T) {
 
 	// Bob finds Ann's source without being asked to, and not Carol's.
 	_, page, _ := r.get(bobC, "/sources")
-	if !strings.Contains(page, "Registered by other members") || !strings.Contains(page, "steward Ann") || strings.Contains(page, "Cellar") {
+	if !strings.Contains(page, "Registered by other members") || !strings.Contains(page, "steward Ann") || strings.Contains(page, "Cellar") || strings.Contains(page, "Draft") {
 		t.Fatal("Bob's sources")
 	}
 	if code, _, _ := r.get(bobC, "/sources/"+hid.Slug); code != 404 {
@@ -104,7 +104,7 @@ func TestSourcesCommons(t *testing.T) {
 	if code, _, _ := r.post(adm, srcURL+"/state", url.Values{"csrf": {csrfOf(t, page)}, "to": {"unretire"}}); code != http.StatusSeeOther {
 		t.Fatalf("admin brings back: %d", code)
 	}
-	if got, _ := r.db.Stream(ctx, st.ID); got.State != catalogue.StreamDraft {
+	if got, _ := r.db.Stream(ctx, st.ID); got.State != catalogue.StreamActive {
 		t.Fatalf("after the admin: %s", got.State)
 	}
 

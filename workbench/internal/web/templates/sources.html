@@ -4,7 +4,7 @@
   <a class="button" href="/sources/new">Register a source</a>
 </div>
 <p class="meta">A source is a live audio stream: one a member runs, or one whose operator has agreed to its analysis on this Workbench by its members. Sources are shared by all members: every source here can be used in your own analyses, without asking anyone, and your analyses stay your own. Before registering a stream, look whether it is here already; a stream exists once. The Workbench keeps one connection to a source however many analyses use it, and connects only while an analysis that uses it is in a run or a preview.</p>
-<p class="meta">Whoever registers a source looks after it as its steward: its description and credit, the operator's agreement, and its mode. Draft and in service connect alike for now; paused stops a source for everyone, retired takes it out of service for good while analyses keep their history, and suspended is the master admin's. A steward may keep a new source to themselves for now and open it to everyone later.</p>
+<p class="meta">Whoever registers a source looks after it as its steward: its description and credit, the operator's agreement, and its mode. A source is active unless it is marked otherwise: paused stops it for everyone for a while, retired takes it out of service for good while analyses keep their history, and suspended is the master admin's. A steward may keep a new source to themselves for now and open it to everyone later.</p>
 {{with .Data}}
 <h2>Registered by you</h2>
 {{if not .Streams}}
@@ -14,7 +14,7 @@
 <article class="card">
   <div class="heading-row">
     <h2><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></h2>
-    {{template "status" (status "source" .State)}}
+    {{if ne .State "active"}}{{if ne .State "active"}}{{template "status" (status "source" .State)}}{{end}}{{end}}
   </div>
   <p class="meta">{{if .Private}}only you for now · {{else}}open to every member · {{end}}{{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}}{{else}}not in the engine{{end}}</p>
   <p class="meta">{{if .Analyses}}Used by {{range $i, $a := .Analyses}}{{if $i}}, {{end}}{{$a.Name}} ({{$a.OwnerName}}){{end}}.{{else}}No analysis uses it yet.{{end}}</p>
@@ -28,7 +28,7 @@
 <article class="card">
   <div class="heading-row">
     <h2><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></h2>
-    {{template "status" (status "source" .State)}}
+    {{if ne .State "active"}}{{if ne .State "active"}}{{template "status" (status "source" .State)}}{{end}}{{end}}
   </div>
   <p class="meta">steward {{.OwnerName}} · {{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}}{{else}}not in the engine{{end}}</p>
   <p class="meta">{{if .Analyses}}Used by {{range $i, $a := .Analyses}}{{if $i}}, {{end}}{{$a.Name}} ({{$a.OwnerName}}){{end}}.{{else}}No analysis uses it yet.{{end}}</p>

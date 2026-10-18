@@ -247,12 +247,12 @@ func wanted(st catalogue.Stream, inRun bool) (engine.StreamSpec, bool) {
 		}
 	}
 	switch st.State {
-	case catalogue.StreamDraft, catalogue.StreamProduction:
+	case catalogue.StreamActive:
 		if inRun {
 			spec.Mode = engine.Continuous
 		}
 	default:
-		return spec, false // paused or suspended: not in the engine
+		return spec, false // paused, retired or suspended: not in the engine
 	}
 	return spec, true
 }

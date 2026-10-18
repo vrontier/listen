@@ -1,7 +1,7 @@
 {{define "content"}}
 <section class="narrow wide">
 <h1>Register a source</h1>
-<p class="meta">Sources are shared by all members: a stream is registered once, and then every member can use it in their own analyses. So first look under <a href="/sources">Sources</a> whether it is there already; if you enter an address that is, you are shown where it is. Registering takes two steps: the engine checks the stream's address once, then you describe the source and say who allows its analysis here. The address and the sample rate are fixed once saved. You become the source's steward: you keep its description and credit up to date, hold the operator's agreement, and can pause it. A source starts in draft, and connects only while an analysis uses it in a run or a preview.</p>
+<p class="meta">Sources are shared by all members: a stream is registered once, and then every member can use it in their own analyses. So first look under <a href="/sources">Sources</a> whether it is there already; if you enter an address that is, you are shown where it is. Registering takes two steps: the engine checks the stream's address once, then you describe the source and say who allows its analysis here. The address and the sample rate are fixed once saved. You become the source's steward: you keep its description and credit up to date, hold the operator's agreement, and can pause it. A source connects only while an analysis uses it in a run or a preview.</p>
 {{$csrf := .CSRF}}
 {{with .Data}}
 {{if .Existing}}

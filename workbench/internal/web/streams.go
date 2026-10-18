@@ -336,9 +336,9 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	s.probesMu.Lock()
 	delete(s.probes, key)
 	s.probesMu.Unlock()
-	flash := "Source registered, in draft, and open to every member. Create an analysis with it to see what it hears."
+	flash := "Source registered, and open to every member. Create an analysis with it to see what it hears."
 	if d.Private {
-		flash = "Source registered, in draft, for you only for now. Create an analysis with it to see what it hears; open it to every member on this page when it is ready."
+		flash = "Source registered, for you only for now. Create an analysis with it to see what it hears; open it to every member on this page when it is ready."
 	}
 	defer s.syncGroups(r.Context())
 	if err := s.sync.push(r.Context(), st); engine.IsCode(err, "rate_conflict") {
@@ -503,18 +503,14 @@ func (s *Server) streamState(w http.ResponseWriter, r *http.Request) {
 	}
 	var state, flash string
 	switch r.PostFormValue("to") {
-	case "draft":
-		state, flash = catalogue.StreamDraft, "Back in draft."
-	case "production":
-		state, flash = catalogue.StreamProduction, "In service."
 	case "pause":
 		state, flash = catalogue.StreamPaused, "Paused. The stream is disconnected; its memories are kept."
 	case "resume":
-		state, flash = catalogue.StreamDraft, "Resumed, in draft."
+		state, flash = catalogue.StreamActive, "Resumed."
 	case "retire":
 		state, flash = catalogue.StreamRetired, "Retired. Nothing connects to it; analyses that use it keep their history, and no new analysis can choose it."
 	case "unretire":
-		state, flash = catalogue.StreamDraft, "Back in service, in draft."
+		state, flash = catalogue.StreamActive, "Back in service."
 	default:
 		http.Error(w, "unknown state", http.StatusBadRequest)
 		return

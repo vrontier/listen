@@ -11,10 +11,12 @@ import (
 
 // Stream states (members-and-streams.md, "Of a stream").
 const (
-	StreamDraft      = "draft"
-	StreamProduction = "production"
-	StreamPaused     = "paused"
-	StreamSuspended  = "suspended"
+	// StreamActive: the normal state; it connects while an analysis that
+	// uses it is in a run or a preview. Draft and in service, which
+	// connected alike, became this on 2026-10-18.
+	StreamActive    = "active"
+	StreamPaused    = "paused"
+	StreamSuspended = "suspended"
 	// StreamRetired: taken out of service by its steward or the master
 	// admin while other members' analyses still use it; nothing connects,
 	// the analyses keep their history (decided 2026-10-18).
@@ -100,10 +102,10 @@ func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, error) {
 			return err
 		}
 		res, err := tx.ExecContext(ctx, `INSERT INTO streams
-			(slug, owner_id, input, sample_rate, name, place, timezone, lat, lon, description, credit, credit_url, audio_allowed, private, attested, attestation, operator, probe, created, updated)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(slug, owner_id, input, sample_rate, name, place, timezone, lat, lon, description, credit, credit_url, audio_allowed, private, attested, attestation, operator, probe, created, updated, state)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			slug, n.OwnerID, n.Input, n.SampleRate, n.Texts.Name, n.Texts.Place, n.Texts.TimeZone, n.Texts.Lat, n.Texts.Lon, n.Texts.Description,
-			n.Texts.Credit, n.Texts.CreditURL, n.AudioAllowed, n.Private, stamp(now), n.Attestation, n.Operator, string(n.Probe), stamp(now), stamp(now))
+			n.Texts.Credit, n.Texts.CreditURL, n.AudioAllowed, n.Private, stamp(now), n.Attestation, n.Operator, string(n.Probe), stamp(now), stamp(now), StreamActive)
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed: streams.input") {
 				return ErrDuplicateInput
@@ -298,6 +300,17 @@ func migrateStreamPrivate(db *sql.DB) error {
 		return err
 	}
 	_, err := db.Exec(`ALTER TABLE streams ADD COLUMN private INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// migrateStreamActive makes draft and in service one state, active
+// (2026-10-18): they had connected alike since 2026-10-15.
+func migrateStreamActive(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('streams') WHERE name = 'state'`).Scan(&n); err != nil || n == 0 {
+		return err
+	}
+	_, err := db.Exec(`UPDATE streams SET state = ? WHERE state IN ('draft', 'production')`, StreamActive)
 	return err
 }
 

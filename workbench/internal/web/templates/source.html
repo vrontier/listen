@@ -3,7 +3,7 @@
 {{with .Data}}
 <div class="heading-row">
   <h1>{{.Stream.Texts.Name}}</h1>
-  {{template "status" (status "source" .Stream.State)}}
+  {{if ne .Stream.State "active"}}{{template "status" (status "source" .Stream.State)}}{{end}}
 </div>
 <p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz · registered {{when .Stream.Created}} by {{.Stream.OwnerName}}, its steward · {{if .Stream.Private}}only {{.Stream.OwnerName}} for now{{else}}open to every member{{end}}</p>
 <p class="meta">{{if .IsOwner}}Your source, which you look after as its steward: its connection, who uses it, its description, who may use it, and every change made to it. Its settings for analysis live in each analysis, not here.{{else if .IsSteward}}A source {{.Stream.OwnerName}} looks after as its steward. As master admin you can change it as they can.{{else}}A source {{.Stream.OwnerName}} registered and looks after as its steward. Like every open source, you can use it in your own analyses without asking; your analyses and their settings stay your own. Its description and mode stay with {{.Stream.OwnerName}}.{{end}}</p>
@@ -19,7 +19,7 @@
   {{else}}
     <p>Not in the engine{{if eq .Stream.State "paused"}}: the stream is paused{{else if eq .Stream.State "retired"}}: the stream is retired{{end}}.</p>
   {{end}}
-  <p class="meta">{{if or (eq .Stream.State "draft") (eq .Stream.State "production")}}The source connects only while an analysis that uses it is in a run or a preview.{{end}}</p>
+  <p class="meta">{{if eq .Stream.State "active"}}The source connects only while an analysis that uses it is in a run or a preview.{{end}}</p>
 
   {{if and .CanUse (ne .Stream.State "retired") (ne .Stream.State "suspended")}}<p><a class="button" href="/analyses/new?source={{.Stream.Slug}}">New analysis with this source</a></p>{{end}}
   <h3>Who is connected</h3>
@@ -44,16 +44,11 @@
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="resume">Resume</button></form>
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="retire" class="secondary">Retire</button></form>
     {{else}}
-      {{if eq .Stream.State "draft"}}
-      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="production">Put in service</button></form>
-      {{else}}
-      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="draft" class="secondary">Back to draft</button></form>
-      {{end}}
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="pause" class="secondary">Pause</button></form>
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="retire" class="secondary">Retire</button></form>
     {{end}}
   </div>
-  <p class="meta">The mode holds for every member who uses the source. Pause it for a while, for example when the station is down or its operator asks; retire it when it goes out of service for good: nothing connects, no new analysis can choose it, and analyses that use it keep their history. Both can be undone.</p>
+  <p class="meta">The mode holds for every member who uses the source. A source is active unless it is paused or retired. Pause it for a while, for example when the station is down or its operator asks; retire it when it goes out of service for good: nothing connects, no new analysis can choose it, and analyses that use it keep their history. Both can be undone.</p>
   {{end}}
 </section>
 

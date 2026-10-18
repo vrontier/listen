@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS streams (
 	credit        TEXT NOT NULL DEFAULT '',
 	credit_url    TEXT NOT NULL DEFAULT '',
 	audio_allowed INTEGER NOT NULL DEFAULT 0,
-	state         TEXT NOT NULL DEFAULT 'draft',
+	state         TEXT NOT NULL DEFAULT 'active',  -- active, paused, retired, suspended
 	attested      TEXT NOT NULL,
 	attestation   TEXT NOT NULL DEFAULT '',  -- own, operator; '' before it was asked
 	operator      TEXT NOT NULL DEFAULT '',  -- name or contact of the operator, for attestation 'operator'
@@ -305,6 +305,9 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	if err := migrateStreamPrivate(db); err != nil {
+		return err
+	}
+	if err := migrateStreamActive(db); err != nil {
 		return err
 	}
 	return migrateLive(db)
