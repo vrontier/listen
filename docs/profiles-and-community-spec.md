@@ -4,8 +4,8 @@ Status: draft for review (2026-10-10). Nothing here is built yet.
 
 > **Part C moved (2026-10-13).** The community section (accounts, own sources, publishing) is no
 > longer planned for Listening Observatory, which stays a curated exhibit without accounts. It
-> continues in [Listening Observatory Workbench](https://github.com/vrontier/listen-workbench), as
-> `docs/members-and-streams.md` there. Parts A and B (profiles and defined motifs) stay here: they
+> continues in [Listening Observatory Workbench](../workbench/), as
+> [`workbench/docs/members-and-streams.md`](../workbench/docs/members-and-streams.md). Parts A and B (profiles and defined motifs) stay here: they
 > belong to the listener, which both projects share. Part C below is kept as the original draft.
 
 This spec has three parts that build on each other:
