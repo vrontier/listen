@@ -321,6 +321,20 @@ func (s *engineSync) preview(id int64) (time.Time, bool) {
 	return until, ok
 }
 
+// previewing lists the analyses whose preview runs now.
+func (s *engineSync) previewing() []int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []int64
+	now := time.Now()
+	for id, until := range s.previews {
+		if now.Before(until) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // endedPreviews removes the previews past their end and returns their
 // analyses.
 func (s *engineSync) endedPreviews() []int64 {

@@ -3,6 +3,31 @@
 <h1>Welcome, {{.Name}}</h1>
 <p class="meta">The Workbench analyses live audio streams for you: it finds spectral events and recurring motifs in each source, compares sources with each other, and records what a run finds as a data set to download. This is the way through it, step by step, with where you stand at each step.</p>
 
+<section class="card">
+  <h2>Now</h2>
+  <div class="grid">
+    <div>
+      <h3>You</h3>
+      <table class="facts">
+        <tr><th>CPU</th><td>{{cores .Now.Use.CPUPercent}} cores{{if .Now.Cap.CPUCores}} of {{.Now.Cap.CPUCores}}{{end}}</td></tr>
+        <tr><th>Memory</th><td>{{printf "%.0f" .Now.Use.MemoryMB}} MB{{if .Now.Cap.MemoryMB}} of {{.Now.Cap.MemoryMB}} MB{{end}}</td></tr>
+        <tr><th>Sources</th><td>{{.Sources}} registered by you, {{.Others}} by other members</td></tr>
+        <tr><th>Running</th><td>{{.Now.Analyses}} of your {{.Analyses}} analys{{if eq .Analyses 1}}is{{else}}es{{end}}</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>The Workbench</h3>
+      <table class="facts">
+        <tr><th>CPU</th><td>{{cores .Now.Engine.CPUPercent}} cores{{if .Now.ServerCap.CPUCores}} of {{.Now.ServerCap.CPUCores}} allowed{{end}}{{if .Now.Host.Cores}}; the host has {{.Now.Host.Cores}}{{end}}</td></tr>
+        <tr><th>Memory</th><td>{{printf "%.0f" .Now.Engine.MemoryMB}} MB{{if .Now.ServerCap.MemoryMB}} of {{.Now.ServerCap.MemoryMB}} MB allowed{{end}}{{if .Now.Host.MemoryMB}}; the host has {{.Now.Host.MemoryMB}} MB{{end}}</td></tr>
+        <tr><th>Sources</th><td>{{.Now.Sources}} registered, {{.Now.Connected}} connected now</td></tr>
+        <tr><th>Running</th><td>{{.Now.AllRuns}} analys{{if eq .Now.AllRuns 1}}is{{else}}es{{end}} of all members, in a run or a preview</td></tr>
+      </table>
+    </div>
+  </div>
+  <p class="meta">As the engine measures it, every ten seconds. Your figures are what counts against your cap: your analyses, and your equal share of each source's connection while your analyses use it. The Workbench's figures are its engine as a whole. "Running" counts analyses in a run or a preview. Details under <a href="/results">Results</a>.</p>
+</section>
+
 <ol class="steps">
   <li class="card">
     <h2>Find or register a source</h2>

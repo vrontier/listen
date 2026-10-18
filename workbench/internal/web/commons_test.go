@@ -60,6 +60,9 @@ func TestSourcesCommons(t *testing.T) {
 	if _, ok := r.srv.sync.preview(id); !ok {
 		t.Fatal("Bob's preview refused")
 	}
+	if _, page, _ = r.get(bobC, "/"); !strings.Contains(page, "1 of your 1 analysis") || !strings.Contains(page, "1 analysis of all members") || !strings.Contains(page, "2 registered") {
+		t.Fatal("Home's Now does not count Bob's preview or the sources")
+	}
 	r.post(bobC, aURL+"/preview/end", url.Values{"csrf": {bcsrf}})
 
 	// Registering the same address again shows the source that exists.

@@ -151,7 +151,7 @@ func TestHome(t *testing.T) {
 		t.Fatalf("home: %d", code)
 	}
 	for _, want := range []string{"Welcome, Mira", `href="/sources/new"`, `href="/analyses/new"`, `href="/runs"`, `href="/results"`, `href="/ai/access"`, `href="/ai"`,
-		"0 sources registered by you", "nothing running", "Source code on GitHub", `<span>Home</span>`} {
+		"0 sources registered by you", "nothing running", "<h2>Now</h2>", "0 registered, 0 connected now", "0 analyses of all members, in a run or a preview", "0 of your 0 analyses", "Source code on GitHub", `<span>Home</span>`} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("home lacks %q", want)
 		}
