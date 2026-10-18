@@ -45,7 +45,7 @@
     <thead><tr><th>Source</th><th>Events</th><th>Transients</th><th>Resonances</th><th>Motifs found or returned</th><th>Motifs at the end</th><th>Not heard</th></tr></thead>
     <tbody>{{range .Summary.Sources}}<tr><td>{{.Name}}</td><td>{{.Total}}</td><td>{{index .Events "event.transient"}}</td><td>{{index .Events "event.resonance"}}</td><td>{{add (index .Events "motif.detected") (index .Events "motif.returned")}}</td><td>{{.Motifs}}</td><td>{{if .Absences}}{{seconds .AbsentS}} in {{.Absences}} period{{if ne .Absences 1}}s{{end}}{{else}}—{{end}}</td></tr>{{end}}</tbody>
   </table>
-  <p class="meta">"Not heard" counts the periods of at least a second in which a source was not connected: connecting, paused by its owner, or gone from the engine. They are listed in the JSON and as rows "source.absent" in the events CSV.</p>
+  <p class="meta">"Not heard" counts the periods of at least a second in which a source was not connected: connecting, paused or retired by its steward, or gone from the engine. They are listed in the JSON and as rows "source.absent" in the events CSV.</p>
   {{with .Summary.Comparison}}
   <p>Comparison: {{.Seconds}} seconds of activity, {{.Correlations}} correlations.</p>
   {{end}}

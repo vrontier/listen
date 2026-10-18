@@ -100,7 +100,9 @@ func (s *Server) researchView(ctx context.Context, a catalogue.Analysis, preview
 }
 
 // publishProblems lists what keeps a member from publishing an analysis:
-// sources of others whose owners have not agreed, suspended sources.
+// suspended sources, and sources kept private by their stewards. A source
+// of another member needs no one's agreement (decided 2026-10-18): its
+// operator agreed to analysis on this Workbench by its members.
 func (s *Server) publishProblems(ctx context.Context, user int64, a catalogue.Analysis) ([]string, error) {
 	var out []string
 	for _, src := range a.Sources {
@@ -108,12 +110,12 @@ func (s *Server) publishProblems(ctx context.Context, user int64, a catalogue.An
 			out = append(out, src.Stream.Texts.Name+" is suspended by the master admin.")
 			continue
 		}
-		ok, err := s.db.MayPublishWith(ctx, user, src.Stream)
+		ok, err := s.db.MayUseStream(ctx, user, src.Stream)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
-			out = append(out, fmt.Sprintf("%s belongs to %s, who has not agreed to your publishing analyses of it. They can agree on the source's page, under Shared with.", src.Stream.Texts.Name, src.Stream.OwnerName))
+			out = append(out, fmt.Sprintf("%s is kept private by %s for now; take it out of the analysis to publish without it.", src.Stream.Texts.Name, src.Stream.OwnerName))
 		}
 	}
 	return out, nil
@@ -188,56 +190,6 @@ func (s *Server) withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.redirect(w, r, analysisPath(a), "Withdrawn. The public page now says that the work was withdrawn.")
-}
-
-// withdrawUsing withdraws a member's published analyses that use a stream
-// whose owner no longer agrees, and tells the member.
-func (s *Server) withdrawUsing(ctx context.Context, by int64, member catalogue.User, st catalogue.Stream) int {
-	as, err := s.db.PublishedUsing(ctx, member.ID, st.ID)
-	if err != nil {
-		log.Printf("withdraw using %s: %v", st.EngineID(), err)
-		return 0
-	}
-	for _, a := range as {
-		if err := s.db.WithdrawAnalysis(ctx, a.ID, by, "the owner of "+st.Texts.Name+" no longer agrees"); err != nil {
-			log.Printf("withdraw %s: %v", a.EngineID(), err)
-			continue
-		}
-		body := fmt.Sprintf("Hello %s,\n\nyour published analysis \"%s\" uses the source \"%s\", whose owner no longer agrees to its publication. It has been withdrawn; its public page now says so. It is private again and otherwise unchanged.\n\n%s%s\n",
-			member.Name, a.Name, st.Texts.Name, s.cfg.BaseURL, analysisPath(a))
-		if err := s.mail.Send(member.Email, "Withdrawn: "+a.Name, body); err != nil {
-			log.Printf("withdraw mail: %v", err)
-		}
-	}
-	return len(as)
-}
-
-// streamConsent records whether the owner agrees that a member the stream
-// is shared with publishes analyses of it.
-func (s *Server) streamConsent(w http.ResponseWriter, r *http.Request) {
-	sess, _ := sessionFrom(r)
-	st, ok := s.ownStream(w, r)
-	if !ok {
-		return
-	}
-	back := "/sources/" + st.Slug
-	id, _ := strconv.ParseInt(r.PostFormValue("member"), 10, 64)
-	agree := r.PostFormValue("agree") == "1"
-	if err := s.db.SetPublishConsent(r.Context(), st.ID, id, sess.User.ID, agree); err != nil {
-		if isNotFound(err) {
-			s.redirect(w, r, back, "The source is not shared with that member.")
-			return
-		}
-		s.fail(w, r, err)
-		return
-	}
-	if agree {
-		s.redirect(w, r, back, "Agreed: that member may publish analyses that use this source.")
-		return
-	}
-	u, _ := s.db.User(r.Context(), id)
-	n := s.withdrawUsing(r.Context(), sess.User.ID, u, st)
-	s.redirect(w, r, back, fmt.Sprintf("No longer agreed. %d published analys%s of that member withdrawn.", n, map[bool]string{true: "is", false: "es"}[n == 1]))
 }
 
 // --- the public side ---

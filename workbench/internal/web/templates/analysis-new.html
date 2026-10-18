@@ -5,7 +5,7 @@
 <p class="meta">Give it a title and choose its sources. Each source starts with the engine's default settings; you set its range and filter rules on the analysis's page afterwards. Nothing connects until you start a run or a preview.</p>
 {{with .Data}}
 {{if not .Picks}}
-  <p class="empty">You have no sources yet. <a href="/sources/new">Register a source</a> first.</p>
+  <p class="empty">No member has registered a source yet. <a href="/sources/new">Register a source</a> first.</p>
 {{else}}
 <form method="post" action="/analyses/new" class="stack wide-form">
   <input type="hidden" name="csrf" value="{{$csrf}}">
@@ -15,10 +15,10 @@
     <textarea name="description" rows="3" maxlength="2000">{{.Description}}</textarea></label>
   <fieldset>
     <legend>Sources</legend>
-    <p class="meta">One source or several, up to {{.MaxSources}}. Each gets its own range and filter rules in the analysis. Several sources are also compared on one time axis.</p>
+    <p class="meta">One source or several, up to {{.MaxSources}}: your own and every other member's, since sources are shared by all members. Each gets its own range and filter rules in this analysis, which stays yours; other members' analyses of the same source do not see or change them. Several sources are also compared on one time axis.</p>
     {{with index .Errs "source"}}<p class="field-error">{{.}}</p>{{end}}
     {{range .Picks}}
-      <label class="check"><input type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}}, {{end}}{{.Stream.SampleRate}} Hz, {{.Stream.State}}{{if .Shared}}, shared by {{.Stream.OwnerName}}{{end}}</span></label>
+      <label class="check"><input type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}}, {{end}}{{.Stream.SampleRate}} Hz, {{.Stream.State}}{{if .Shared}}, steward {{.Stream.OwnerName}}{{end}}</span></label>
     {{end}}
   </fieldset>
   <button>Create the analysis</button>

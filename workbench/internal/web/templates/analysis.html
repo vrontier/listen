@@ -108,7 +108,7 @@
 <section class="live source-block" {{if .Live}}data-live="{{.LivePath}}" data-data="{{.DataPath}}"{{end}}>
   <div class="live-head">
     <h2 class="live-title"><a href="/sources/{{.Stream.Slug}}">{{.Stream.Texts.Name}}</a></h2>
-    {{if .Live}}<span class="status conn conn-info">Connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else if .Reserved}}<span class="meta">The Listening Observatory listens to this stream; it is not analysed here until its operator has agreed to the Workbench.</span>{{else if not .Running}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{else}}<span class="meta">{{.Stream.SampleRate}} Hz · live during a run or a preview</span>{{end}}
+    {{if .Live}}<span class="status conn conn-info">Connecting…</span> <span class="clock meta" title="Time of the latest analysed audio, as the engine stamps it"></span> <span class="level meta"></span>{{else if .Reserved}}<span class="meta">This address is on this server's list of streams whose operators have not agreed to the Workbench; it is not analysed here.</span>{{else if not .Running}}<span class="meta">The source is {{.Stream.State}}; nothing is analysed now.</span>{{else}}<span class="meta">{{.Stream.SampleRate}} Hz · live during a run or a preview</span>{{end}}
   </div>
   {{if .Failed}}<div class="note bad-note">
     <p>{{template "status" (status "activity" "failed")}} The analysis of this source failed in {{.FailedIn}}: {{.Failed.Message}}. Its other sources go on; nothing of this source is recorded until it runs again.</p>
@@ -212,7 +212,7 @@
     <legend>Sources</legend>
     {{with index .Errs "source"}}<p class="field-error">{{.}}</p>{{end}}
     {{range .Picks}}
-      <label class="check"><input form="settings" type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{.Stream.SampleRate}} Hz, {{.Stream.State}}{{if .Shared}}, shared by {{.Stream.OwnerName}}{{end}}</span></label>
+      <label class="check"><input form="settings" type="checkbox" name="source" value="{{.Stream.ID}}" {{if .Checked}}checked{{end}}> {{.Stream.Texts.Name}} <span class="meta">{{.Stream.SampleRate}} Hz, {{.Stream.State}}{{if .Shared}}, steward {{.Stream.OwnerName}}{{end}}</span></label>
     {{end}}
     <p class="meta">Up to {{.MaxSources}}. A source added here starts with the default settings; a source taken out loses its settings and memories in this analysis.</p>
   </fieldset>

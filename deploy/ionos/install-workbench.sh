@@ -89,10 +89,10 @@ EOF
   fi
   chown root:low "$env"
   chmod 0640 "$env"
-  # Stream addresses the Observatory keeps for itself, which members cannot
-  # register; one host or address per line. Empty: none.
+  # Streams whose operators have not agreed to the Workbench, which members
+  # cannot register; one host or address per line. Empty: none.
   reserved=/etc/low/reserved-inputs
-  [[ -f $reserved ]] || printf '# Addresses the Listening Observatory keeps for itself: one host or address per line.\n' >"$reserved"
+  [[ -f $reserved ]] || printf '# Streams whose operators have not agreed to the Workbench: one host or address per line.\n' >"$reserved"
   chown root:low "$reserved"
   chmod 0640 "$reserved"
 

@@ -3,7 +3,7 @@
 <h1>Language-model keys</h1>
 {{with .Data}}
 <p class="meta">A language model can describe in words what your analyses hear. It works with your own API key for Anthropic or OpenAI: the provider bills your account with them, and the Workbench handles no money. Without a key there is no interpretation. Everything else works without one.</p>
-<p class="meta">A key is used only for your own analyses, also on sources shared with you, and only while someone is watching. The interpretation itself is not built into the engine yet: until then a saved key is kept, and not used.</p>
+<p class="meta">A key is used only for your own analyses, also on sources other members registered, and only while someone is watching. The interpretation itself is not built into the engine yet: until then a saved key is kept, and not used.</p>
 
 {{if not .Ready}}<p class="field-error">This server has no sealing key set, so it cannot keep API keys yet. The master admin sets <code>LOW_KEYS_SECRET</code>.</p>{{end}}
 

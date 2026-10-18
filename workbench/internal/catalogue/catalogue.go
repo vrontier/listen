@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS usage_minutes (
 	in_kbps     REAL NOT NULL,
 	PRIMARY KEY (user_id, minute)
 );
+-- stream_shares: sharing by address, before streams became a commons (2026-10-18); unused.
 CREATE TABLE IF NOT EXISTS stream_shares (
 	stream_id  INTEGER NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
 	user_id    INTEGER NOT NULL REFERENCES users(id),
@@ -301,6 +302,9 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	if err := migrateStreamView(db); err != nil {
+		return err
+	}
+	if err := migrateStreamPrivate(db); err != nil {
 		return err
 	}
 	return migrateLive(db)

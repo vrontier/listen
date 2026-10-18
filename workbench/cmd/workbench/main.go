@@ -65,7 +65,7 @@ func main() {
 
 		publishing = flag.Bool("publishing", env("LOW_PUBLISHING", "") == "on", "let members publish analyses at /research [env LOW_PUBLISHING=on]")
 		llmKeys    = flag.Bool("llm-keys", env("LOW_LLM_KEYS", "") == "on", "offer members the page for their language-model keys [env LOW_LLM_KEYS=on]")
-		reserved   = flag.String("reserved", env("LOW_RESERVED_INPUTS", ""), "file of stream addresses or hosts the Observatory listens to, which members cannot register [env LOW_RESERVED_INPUTS]")
+		reserved   = flag.String("reserved", env("LOW_RESERVED_INPUTS", ""), "file of stream addresses or hosts whose operators have not agreed to the Workbench, which members cannot register [env LOW_RESERVED_INPUTS]")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "usage: workbench [flags]\n       workbench [flags] admin -email ADDRESS -name NAME\n\n")
@@ -125,7 +125,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("reserved inputs: %v", err)
 		}
-		log.Printf("%d addresses reserved for the Observatory", len(reservedList))
+		log.Printf("%d addresses reserved: not open to the Workbench", len(reservedList))
 	}
 	srv, err := web.New(web.Config{BaseURL: *baseURL, DatasetDir: *dataDir, Seal: seal, Publishing: *publishing, LLMKeys: *llmKeys, Reserved: reservedList}, db, engine.Dial(*engAddr), sender)
 	if err != nil {

@@ -15,20 +15,31 @@ const (
 	StreamProduction = "production"
 	StreamPaused     = "paused"
 	StreamSuspended  = "suspended"
+	// StreamRetired: taken out of service by its steward or the master
+	// admin while other members' analyses still use it; nothing connects,
+	// the analyses keep their history (decided 2026-10-18).
+	StreamRetired = "retired"
 )
 
 // Stream is a registered stream. Its address and sample rate never change.
+// Streams are a commons (decided 2026-10-18): every member may use one in
+// their own analyses, unless its steward keeps it private for now. The
+// steward is the member who registered it (OwnerID): they keep its texts,
+// hold the operator's agreement and may pause it, as may the master admin.
 type Stream struct {
 	ID           int64
 	Slug         string
-	OwnerID      int64
+	OwnerID      int64 // the steward
 	OwnerName    string
 	Input        string
 	SampleRate   int
 	Texts        StreamTexts
 	AudioAllowed bool
 	State        string
-	Attested     time.Time
+	// Private: only its steward uses it for now; the steward may open it
+	// to every member at any time.
+	Private  bool
+	Attested time.Time
 	// Attestation says who allowed the analysis: AttestOwn or
 	// AttestOperator; empty for streams registered before it was asked.
 	Attestation string
@@ -67,6 +78,7 @@ type NewStream struct {
 	SampleRate   int
 	Texts        StreamTexts
 	AudioAllowed bool
+	Private      bool
 	Attestation  string
 	Operator     string
 	Probe        json.RawMessage
@@ -75,7 +87,7 @@ type NewStream struct {
 // Attestations: who allowed the analysis of a stream.
 const (
 	AttestOwn      = "own"      // the member runs it
-	AttestOperator = "operator" // its operator agreed
+	AttestOperator = "operator" // its operator agreed to its analysis on this Workbench by its members
 )
 
 // CreateStream registers a stream. It makes no analysis.
@@ -88,10 +100,10 @@ func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, error) {
 			return err
 		}
 		res, err := tx.ExecContext(ctx, `INSERT INTO streams
-			(slug, owner_id, input, sample_rate, name, place, timezone, lat, lon, description, credit, credit_url, audio_allowed, attested, attestation, operator, probe, created, updated)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(slug, owner_id, input, sample_rate, name, place, timezone, lat, lon, description, credit, credit_url, audio_allowed, private, attested, attestation, operator, probe, created, updated)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			slug, n.OwnerID, n.Input, n.SampleRate, n.Texts.Name, n.Texts.Place, n.Texts.TimeZone, n.Texts.Lat, n.Texts.Lon, n.Texts.Description,
-			n.Texts.Credit, n.Texts.CreditURL, n.AudioAllowed, stamp(now), n.Attestation, n.Operator, string(n.Probe), stamp(now), stamp(now))
+			n.Texts.Credit, n.Texts.CreditURL, n.AudioAllowed, n.Private, stamp(now), n.Attestation, n.Operator, string(n.Probe), stamp(now), stamp(now))
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed: streams.input") {
 				return ErrDuplicateInput
@@ -100,7 +112,7 @@ func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, error) {
 		}
 		sid, _ = res.LastInsertId()
 		after, _ := json.Marshal(map[string]any{"input": n.Input, "sample_rate": n.SampleRate, "texts": n.Texts, "audio_allowed": n.AudioAllowed,
-			"attestation": n.Attestation, "operator": n.Operator})
+			"private": n.Private, "attestation": n.Attestation, "operator": n.Operator})
 		return audit(ctx, tx, now, n.OwnerID, "stream", sid, "create", "", string(after))
 	})
 	if err != nil {
@@ -109,8 +121,8 @@ func (d *DB) CreateStream(ctx context.Context, n NewStream) (Stream, error) {
 	return d.Stream(ctx, sid)
 }
 
-// ErrDuplicateInput: a stream with this address exists already. Streams
-// are shared; the member is pointed to the existing one.
+// ErrDuplicateInput: a stream with this address exists already. A stream
+// exists once; the member is pointed to the existing one.
 var ErrDuplicateInput = fmt.Errorf("a stream with this address exists already")
 
 func freeSlug(ctx context.Context, tx *sql.Tx, name string) (string, error) {
@@ -165,7 +177,7 @@ func Slugify(name string) string {
 }
 
 const streamCols = `s.id, s.slug, s.owner_id, u.name, s.input, s.sample_rate, s.name, s.place, s.timezone, s.lat, s.lon, s.description,
-	s.credit, s.credit_url, s.audio_allowed, s.state, s.attested, s.attestation, s.operator, s.probe, s.created, s.updated, s.view`
+	s.credit, s.credit_url, s.audio_allowed, s.state, s.private, s.attested, s.attestation, s.operator, s.probe, s.created, s.updated, s.view`
 
 func scanStream(row interface{ Scan(...any) error }) (Stream, error) {
 	var s Stream
@@ -173,7 +185,7 @@ func scanStream(row interface{ Scan(...any) error }) (Stream, error) {
 	var view sql.NullString
 	err := row.Scan(&s.ID, &s.Slug, &s.OwnerID, &s.OwnerName, &s.Input, &s.SampleRate, &s.Texts.Name, &s.Texts.Place,
 		&s.Texts.TimeZone, &s.Texts.Lat, &s.Texts.Lon, &s.Texts.Description, &s.Texts.Credit, &s.Texts.CreditURL, &s.AudioAllowed, &s.State,
-		&attested, &s.Attestation, &s.Operator, &probe, &created, &updated, &view)
+		&s.Private, &attested, &s.Attestation, &s.Operator, &probe, &created, &updated, &view)
 	if view.Valid && view.String != "" {
 		s.View = json.RawMessage(view.String)
 	}
@@ -214,7 +226,7 @@ func (d *DB) queryStreams(ctx context.Context, where string, args ...any) ([]Str
 	return out, rows.Err()
 }
 
-// StreamsOf lists the streams a member owns.
+// StreamsOf lists the streams a member is the steward of.
 func (d *DB) StreamsOf(ctx context.Context, userID int64) ([]Stream, error) {
 	return d.queryStreams(ctx, `WHERE s.owner_id = ?`, userID)
 }
@@ -277,6 +289,18 @@ func (d *DB) DeleteStream(ctx context.Context, id, by int64) error {
 	})
 }
 
+// migrateStreamPrivate adds the steward's choice to keep a stream to
+// themselves (2026-10-18). Streams registered before are open to every
+// member, as the commons decided that day has it.
+func migrateStreamPrivate(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('streams') WHERE name = 'private'`).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := db.Exec(`ALTER TABLE streams ADD COLUMN private INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
 // migrateStreamView adds a stream's spectrogram view (2026-10-16).
 func migrateStreamView(db *sql.DB) error {
 	var n int
@@ -287,13 +311,13 @@ func migrateStreamView(db *sql.DB) error {
 	return err
 }
 
-// SetStreamView sets or clears (nil) a stream's spectrogram view; only its
-// owner may.
-func (d *DB) SetStreamView(ctx context.Context, id, ownerID int64, view json.RawMessage) error {
+// SetStreamView sets or clears (nil) a stream's spectrogram view; the
+// caller checks that by is its steward or the master admin.
+func (d *DB) SetStreamView(ctx context.Context, id, by int64, view json.RawMessage) error {
 	now := d.now()
 	return d.tx(ctx, func(tx *sql.Tx) error {
 		var old sql.NullString
-		if err := tx.QueryRowContext(ctx, `SELECT view FROM streams WHERE id = ? AND owner_id = ?`, id, ownerID).Scan(&old); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT view FROM streams WHERE id = ?`, id).Scan(&old); err != nil {
 			return notFound(err)
 		}
 		var v any
@@ -303,6 +327,6 @@ func (d *DB) SetStreamView(ctx context.Context, id, ownerID int64, view json.Raw
 		if _, err := tx.ExecContext(ctx, `UPDATE streams SET view = ?, updated = ? WHERE id = ?`, v, stamp(now), id); err != nil {
 			return err
 		}
-		return audit(ctx, tx, now, ownerID, "stream", id, "view", old.String, string(view))
+		return audit(ctx, tx, now, by, "stream", id, "view", old.String, string(view))
 	})
 }

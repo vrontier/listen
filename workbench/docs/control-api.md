@@ -214,7 +214,7 @@ Response to `PUT` and `GET`:
 
 - **For the Workbench nothing changes in the API:** a stream reports `source: "ingest"`, its states and `last_error` codes are the feed's, passed through per stream.
 - **`ingest_unavailable`** (**decided** 2026-10-16): while the engine cannot reach the ingest, its streams are `reconnecting` (not `refused`) with `last_error.code` `ingest_unavailable`. The Workbench then says on its pages that the platform's connection service does not answer, rather than that a station failed; the time counts as an absence in a run's data set.
-- **Consent stays with the Workbench:** an address the Observatory reads is refused by the Workbench's reserved list until its operator has agreed to the Workbench; once agreed, the engine's stream attaches to the ingest's existing feed, with no new connection. `shared` counts the engine's streams only; nothing about the Observatory's consumers reaches the Workbench.
+- **Consent stays with the Workbench:** an address whose operator has not agreed to the Workbench is refused by the Workbench's reserved list (since 2026-10-18 the list holds only such streams; the Observatory's stations with consent are registered like any other source); once agreed, the engine's stream attaches to the ingest's existing feed, with no new connection. `shared` counts the engine's streams only; nothing about the Observatory's consumers reaches the Workbench.
 
 The rules below are enforced where the connection is made, which is now the ingest; the engine reports them unchanged.
 

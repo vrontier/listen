@@ -8,7 +8,7 @@
 #   LOW_SMTP           mail server host:port; empty: links go to the journal
 #   LOW_SMTP_FROM      sender address
 #   LOW_SMTP_USER, LOW_SMTP_PASSWORD
-#   LOW_RESERVED_INPUTS  file of addresses the Observatory listens to
+#   LOW_RESERVED_INPUTS  file of streams whose operators have not agreed to the Workbench
 [Unit]
 Description=Listening Observatory Workbench
 Wants=network-online.target listen-engine.service

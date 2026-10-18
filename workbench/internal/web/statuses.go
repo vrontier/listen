@@ -17,6 +17,7 @@ var statusWords = map[string]map[string]status{
 		"production": {"In service", "ok"},
 		"paused":     {"Paused", "neutral"},
 		"suspended":  {"Suspended", "warn"},
+		"retired":    {"Retired", "neutral"},
 	},
 	// A source's connection at the engine.
 	"conn": {

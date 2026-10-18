@@ -106,7 +106,7 @@ func TestReservedInputs(t *testing.T) {
 		"https://radio.example.net/other.mp3": false,
 	} {
 		code, page, _ := r.post(member, "/sources/new", url.Values{"csrf": {csrf}, "input": {in}})
-		if got := code == http.StatusConflict && strings.Contains(page, "Listening Observatory listens to this stream already"); got != refused {
+		if got := code == http.StatusConflict && strings.Contains(page, "This stream cannot be registered here"); got != refused {
 			t.Fatalf("%s: %d, refused %v", in, code, got)
 		}
 	}
@@ -124,7 +124,7 @@ func TestReservedInputs(t *testing.T) {
 	if _, err := cl.Stream(ctx, st.EngineID()); !engine.IsCode(err, "not_found") {
 		t.Fatalf("a reserved source is in the engine: %v", err)
 	}
-	if _, page, _ := r.get(member, "/sources/"+st.Slug); !strings.Contains(page, "It is not connected to from the Workbench") {
+	if _, page, _ := r.get(member, "/sources/"+st.Slug); !strings.Contains(page, "It is not connected to from here") {
 		t.Fatal("source page does not say why")
 	}
 }

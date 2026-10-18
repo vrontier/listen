@@ -3,10 +3,12 @@
   <h1>Sources</h1>
   <a class="button" href="/sources/new">Register a source</a>
 </div>
-<p class="meta">A source is a live audio stream: one you run, or one whose operator has agreed to its analysis here. The Workbench keeps one connection to it however many analyses use it, and connects only while an analysis that uses it is in a run or a preview. Here are your own sources and those other members share with you. Draft and in service connect alike for now; paused stops a source for everyone, and suspended is the master admin's.</p>
+<p class="meta">A source is a live audio stream: one a member runs, or one whose operator has agreed to its analysis on this Workbench by its members. Sources are shared by all members: every source here can be used in your own analyses, without asking anyone, and your analyses stay your own. Before registering a stream, look whether it is here already; a stream exists once. The Workbench keeps one connection to a source however many analyses use it, and connects only while an analysis that uses it is in a run or a preview.</p>
+<p class="meta">Whoever registers a source looks after it as its steward: its description and credit, the operator's agreement, and its mode. Draft and in service connect alike for now; paused stops a source for everyone, retired takes it out of service for good while analyses keep their history, and suspended is the master admin's. A steward may keep a new source to themselves for now and open it to everyone later.</p>
 {{with .Data}}
+<h2>Registered by you</h2>
 {{if not .Streams}}
-  <p class="empty">No sources yet. Register a stream you run, or one whose operator has agreed to its analysis here.</p>
+  <p class="empty">None yet. Register a stream you run, or one whose operator has agreed to its analysis here, if it is not listed below.</p>
 {{end}}
 {{range .Streams}}
 <article class="card">
@@ -14,22 +16,23 @@
     <h2><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></h2>
     {{template "status" (status "source" .State)}}
   </div>
-  <p class="meta">{{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}}{{else}}not in the engine{{end}}</p>
+  <p class="meta">{{if .Private}}only you for now · {{else}}open to every member · {{end}}{{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}}{{else}}not in the engine{{end}}</p>
   <p class="meta">{{if .Analyses}}Used by {{range $i, $a := .Analyses}}{{if $i}}, {{end}}{{$a.Name}} ({{$a.OwnerName}}){{end}}.{{else}}No analysis uses it yet.{{end}}</p>
 </article>
 {{end}}
-{{if .Shared}}
-<h2>Shared with you</h2>
-<p class="meta">Sources other members share with you. You may use them in your own analyses; their settings, state and texts stay with their owners.</p>
-{{range .Shared}}
+<h2>Registered by other members</h2>
+{{if not .Others}}
+  <p class="empty">None yet.</p>
+{{end}}
+{{range .Others}}
 <article class="card">
   <div class="heading-row">
     <h2><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></h2>
     {{template "status" (status "source" .State)}}
   </div>
-  <p class="meta">{{.OwnerName}}'s · {{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}}{{else}}not in the engine{{end}}</p>
+  <p class="meta">steward {{.OwnerName}} · {{if .Texts.Place}}{{.Texts.Place}} · {{end}}{{.SampleRate}} Hz · {{if .InEngine}}connection: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}}{{else}}not in the engine{{end}}</p>
+  <p class="meta">{{if .Analyses}}Used by {{range $i, $a := .Analyses}}{{if $i}}, {{end}}{{$a.Name}} ({{$a.OwnerName}}){{end}}.{{else}}No analysis uses it yet.{{end}}</p>
 </article>
-{{end}}
 {{end}}
 {{end}}
 {{end}}

@@ -42,7 +42,7 @@ Why the layer below stays as it is:
 - The comparing analyses to run (`activity`, later `clock`, `coincidence`) are part of the analysis's settings and of its revision.
 - An analysis may have at most 8 sources at first. The cost of a comparison grows with the pairs it compares (28 pairs for 8).
 - Timing analyses need coordinates. They come from the sources (the coordinates field added on 2026-10-14). A timing analysis cannot be switched on while one of the sources has none.
-- Publishing needs the consent of the owner of every source in it, and the operators' agreement to a combined view (see [Rights](#rights)).
+- Publishing needs the operators' agreement to a combined view (see [Rights](#rights)). Since 2026-10-18 it no longer needs the consent of the member who registered a source ([members-and-streams.md](members-and-streams.md#sources-as-a-commons)).
 - The comparison's cost is counted against the member's cap, with the rest of the analysis (see [members-and-streams.md](members-and-streams.md#resources-and-caps)).
 
 ## Built so far
@@ -104,7 +104,7 @@ The Observatory's draft makes the further work conditional on a test: `activity`
 ## Rights
 
 - **Decided** (rule 4): every stream in a group is one the member may use: their own, or one whose operator agreed to its use in the Workbench.
-- **Proposed:** a combined view is a new use of each stream, as the Observatory's draft says. A private group of a member's own streams needs nothing more. Publishing a group needs each stream owner's consent in the Workbench, and the stream's attestation must cover a combined view.
+- **Proposed:** a combined view is a new use of each stream, as the Observatory's draft says. A private group of a member's own streams needs nothing more. Publishing a group needs the stream's attestation to cover a combined view (the per-member consent of the stream's owner was dropped on 2026-10-18).
 - **Proposed:** the operators are also asked how their station's clock is kept (GPS-disciplined or not), which `clock` can then confirm.
 
 ## In the engine
@@ -128,6 +128,6 @@ The Observatory's draft makes the further work conditional on a test: `activity`
 
 1. **The name.** **Decided** (2026-10-14): an analysis with several sources; "group" only inside the engine.
 2. **The first goal.** **Decided** (2026-10-15): side-by-side activity on wall time first; before `clock` and `coincidence`, a test of the station time of one real stream (see question 4). See [design.md](design.md#raised-by-groups), question 23.
-3. **Sources of other members.** With sharing, an analysis can use a source someone else registered; its settings for that source are still its own. Settings another member made for the same source are not reused, which keeps a result traceable to settings the analysis's member controls.
+3. **Sources of other members.** Since sources are a commons (2026-10-18), an analysis can use any open source someone else registered; its settings for that source are still its own. Settings another member made for the same source are not reused, which keeps a result traceable to settings the analysis's member controls.
 4. **Does a relay re-encode?** If a relay re-encodes the stations' streams, the timestamps are the relay's, not the stations'. A question for the relay's operator, carried over from the Observatory's draft.
 5. **A narrator for a group** ("all three stations grew louder after dusk") was asked in the Observatory's draft. Not proposed for the first version.

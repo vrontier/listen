@@ -18,7 +18,7 @@ import (
 // only for a token its member allowed control, within that token's limits.
 // They do what the pages do, through the same checks: caps, the disk quota,
 // revisions, the rule that nothing of an analysis changes during a run.
-// They never register, share, publish or delete anything.
+// They never register, publish or delete anything.
 
 // refused starts the text of a call a token may not make; such calls are
 // noted as refused, not as errors.
@@ -80,7 +80,7 @@ var mcpControlTools = []mcpTool{
 }
 
 // listSourcesTool reads; every MCP token has it.
-var listSourcesTool = mcpTool{Name: "list_sources", Title: "List sources", Description: "The sources (live streams) you may use in analyses: your own and those shared with you, with id, name, place, state and sample rate.",
+var listSourcesTool = mcpTool{Name: "list_sources", Title: "List sources", Description: "The sources (live streams) you may use in analyses: every member's, since sources are shared by all members, except those another member keeps private for now. With id, name, place, state, sample rate, and the steward who registered it if that is not you.",
 	InputSchema: schema(map[string]any{})}
 
 // toolsFor are the tools a token may call.
@@ -116,8 +116,8 @@ func (s *Server) usableStreams(ctx context.Context, user int64) ([]catalogue.Str
 	if err != nil {
 		return nil, err
 	}
-	shared, err := s.db.SharedWith(ctx, user)
-	return append(own, shared...), err
+	open, err := s.db.OpenStreams(ctx, user)
+	return append(own, open...), err
 }
 
 func (s *Server) listSources(ctx context.Context, user int64) (string, bool) {
@@ -132,7 +132,7 @@ func (s *Server) listSources(ctx context.Context, user int64) (string, bool) {
 			v["place"] = st.Texts.Place
 		}
 		if st.OwnerID != user {
-			v["shared_by"] = st.OwnerName
+			v["steward"] = st.OwnerName
 		}
 		out = append(out, v)
 	}

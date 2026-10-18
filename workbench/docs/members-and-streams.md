@@ -15,7 +15,7 @@ Not in scope: uploading recordings, comments or social features.
 | Role | Can |
 |---|---|
 | Visitor | see published research pages |
-| Member | register and configure streams, invite other members to work on them, define own analyses, filters and motifs, create tokens, see own unpublished work, publish, withdraw, see own resource use |
+| Member | register streams and look after them as their steward, use every member's open streams in their own analyses, define own analyses, filters and motifs, create tokens, see own unpublished work, publish, withdraw, see own resource use |
 | Master admin | invite members, set the server's caps and each member's cap, suspend streams and accounts, see the audit log, maintain built-in settings |
 
 - **Decided** (2026-10-14): the member is the one who sets up streams. There are no organisation accounts that register a feed of many streams.
@@ -46,11 +46,11 @@ browser ──► web server ──► Workbench process ──control API──
    - "I run this stream or have the right to have it analysed" (**decided** as a requirement, see rule 4 in [design.md](design.md)). **Decided** (2026-10-15, question 12): if the member does not run the stream, they also give the operator's name or contact; the Workbench takes their word for the permission. **Built** (2026-10-15): two choices, "I run this stream myself" or "someone else runs it and has agreed", the second with a field for the operator's name and an email address or web page (3 to 200 characters). Shown on the source's page to its owner and in the master admin's list of streams; streams registered before show "not asked".
    - "Audio may be played in the browser", off by default. Audio is allowed (**decided**, 2026-10-14); the owner switches it on per stream.
 2. **Probe.** On the Workbench's request the engine checks that the stream answers, delivers audio that decodes, and is not silent; it reports the sample rate, the level and the bit rate. The member sees the result at once. The sample rate becomes a property of the stream, the same for all its analyses (see [analyses-and-filters.md](analyses-and-filters.md)). A stream whose probe fails is not saved.
-3. **Draft first.** A new stream is in draft and visible only to its owner and the members they invite. It connects only while an analysis using it is in a run or a preview (decided 2026-10-15, see [design.md](design.md#runs)).
+3. **Draft first.** A new stream is in draft. **Decided** (2026-10-18): it is open to every member at once, unless its steward ticks "only me for now" (see [Sources as a commons](#sources-as-a-commons)); before, it was visible only to its owner and the members they invited. It connects only while an analysis using it is in a run or a preview (decided 2026-10-15, see [design.md](design.md#runs)).
 4. **No analysis is made.** **Decided** (2026-10-14): registering a source creates no analysis. The source's page offers "New analysis with this source"; see [design.md](design.md#analyses-and-sources).
 5. **Afterwards.** The owner can edit the texts, move the stream to production, pause or delete it. The engine reports a stream that has been offline for 24 hours; the Workbench pauses it and tells the owner.
 
-**Decided** (2026-10-14): a stream address exists once. If a second member registers an address that is already a stream, no second stream is made; the stream is shared (see [Sharing](#sharing)). **Proposed:** the second member is shown that the stream exists and who owns it, and can ask the owner to be invited. Recognising two spellings of one address is the Workbench's task. **Decided** (2026-10-15): the obvious cases are normalised when a stream is registered (`http` and `https`, the host's case, a default port, a trailing slash); redirects are left for later. **Built** (2026-10-15): the address is stored with scheme and host in lower case, without a default port, a trailing slash or a fragment; one that exists over the other of `http` and `https` counts as the same stream. Addresses with a user name and password are refused. Streams registered before are not rewritten.
+**Decided** (2026-10-14): a stream address exists once. If a second member registers an address that is already a stream, no second stream is made; the stream is shared (see [Sources as a commons](#sources-as-a-commons)). **Built** (2026-10-18): the second member is shown the existing source with a link, and can use it right away; if its steward keeps it private for now, they are told who registered it and that it appears once it is opened. Recognising two spellings of one address is the Workbench's task. **Decided** (2026-10-15): the obvious cases are normalised when a stream is registered (`http` and `https`, the host's case, a default port, a trailing slash); redirects are left for later. **Built** (2026-10-15): the address is stored with scheme and host in lower case, without a default port, a trailing slash or a fragment; one that exists over the other of `http` and `https` counts as the same stream. Addresses with a user name and password are refused. Streams registered before are not rewritten.
 
 ## States
 
@@ -69,10 +69,11 @@ any state ──► suspended (master admin)
 
 | State | Connected | Who sees it |
 |---|---|---|
-| Draft | while an analysis using it is in a run or a preview | the owner and invited members |
-| Production | as in draft | the owner and invited members; published analyses are public |
-| Paused | no | the owner and invited members see the last state |
-| Suspended | no | nobody; the owner sees the reason |
+| Draft | while an analysis using it is in a run or a preview | every member, or only its steward while private |
+| Production | as in draft | as in draft; published analyses are public |
+| Paused | no | as in draft; they see the last state |
+| Retired | no | as in draft; no new analysis can choose it, analyses that use it keep their history (**built** 2026-10-18) |
+| Suspended | no | nobody; the steward sees the reason |
 
 - **Decided:** once a stream is connected, it goes offline only when all its consumers have stopped. A consumer is a page or a token reading one of its analyses, a trial run, or an analysis in a run.
 - **Decided:** a stream always shows who is connected to it. **Proposed:** its page lists, live, each analysis on it with its member's display name, whether it is in a run, and how many pages and tokens are reading. Everyone who may see the stream sees this list. The privacy notice has to say that display names are shown to invited members.
@@ -93,12 +94,12 @@ any state ──► suspended (master admin)
 - **Decided:** publishing takes effect at once, without review.
 - **Built** (2026-10-15): publishing can be switched off for the whole Workbench (`LOW_PUBLISHING=on` turns it on); off, the analysis page shows the Publish button disabled, nothing new can be published, and what is published stays and can be withdrawn. It is off on the intranet until the public area is ready (maintainer, 2026-10-15).
 - Publishing asks once more for the rights attestation and shows the page as visitors will see it. A research page carries the name, place and credit of each of its sources.
-- **Proposed:** publishing an analysis that uses a source someone else owns needs that owner's consent, given once per member.
+- **Decided** (2026-10-18, replacing the proposal that the owner consents once per member): publishing an analysis that uses a source someone else registered needs no one's agreement. The operator agreed to analysis on this Workbench by its members, and the research page credits the source, its credit line and who registered it.
 - Withdrawing takes effect at once.
 - **Built** against the stand-in (2026-10-15), **proposed** in every detail:
   - **Publishing.** The analysis page has a section "Publication". "Publish…" shows the page as visitors will see it, says what they will and will not see, and asks for the rights once more (the confirmation is stored with the time in the audit trail) and whether to offer the data sets of finished runs. The page is public at once at `/research/<slug>`; the slug is made from the title the first time and kept.
-  - **What visitors see.** The title and description, the member's display name, each source's name, place, description, credit and owner if it is someone else, the settings and filter rules in words, the live view (spectrograms, events, motifs and the comparison) while the analysis is in a run, and the finished runs, with their files when offered. Not shown: stream addresses, coordinates (also no map), email addresses. `/research` lists everything published; "Research" is in the menu for everyone, but only once something is published (proposed, 2026-10-15: an empty list in the menu only puzzles).
-  - **Others' sources.** The owner of a shared source agrees per member on the source's page ("May publish"). Without it, publishing is refused and says whose agreement is missing. When the owner no longer agrees, or stops sharing, that member's published analyses using the source are withdrawn and the member is told by mail.
+  - **What visitors see.** The title and description, the member's display name, each source's name, place, description, credit and who registered it if it is someone else, the settings and filter rules in words, the live view (spectrograms, events, motifs and the comparison) while the analysis is in a run, and the finished runs, with their files when offered. Not shown: stream addresses, coordinates (also no map), email addresses. `/research` lists everything published; "Research" is in the menu for everyone, but only once something is published (proposed, 2026-10-15: an empty list in the menu only puzzles).
+  - **Others' sources.** Built 2026-10-15 as a per-member "May publish" on the source's page, with withdrawal when the owner no longer agreed; **removed** on 2026-10-18 with the commons. A steward can no longer make a source private while another member's analysis uses it, so nothing published has to be withdrawn for that reason.
   - **Withdrawn.** The member withdraws on the analysis page; the public address then answers `410` with "This work was withdrawn on …". Publishing again uses the same address.
   - **Reports.** Every public page has a report form (message, optional contact; a hidden field and a limit of five reports an hour per address, fifty in all, keep robots out). Each report is mailed to the master admins and listed on the admin page, where they close it. The admin page also lists what is published, and the master admin can withdraw an analysis with a reason, which is mailed to its member.
 - **Decided** (2026-10-15): public pages show a source's coordinates rounded to one decimal (about 10 km), with the map; the exact place stays with the member.
@@ -107,18 +108,25 @@ any state ──► suspended (master admin)
 - **Open:** a privacy notice and legal notice before anything is public beyond the intranet (see [Rights and privacy](#rights-and-privacy)).
 - The Workbench process checks who is asking, on every data path: the session of a logged-in member, or a token. The engine is reachable on a local socket only and checks nothing.
 
-## Sharing
+## Sources as a commons
 
-**Decided** (2026-10-14): streams are shared, analyses are individual. There are no projects. A member defines streams and filters and may let others work on them.
+**Decided** (2026-10-18, the maintainer, after the go-live; replaces the sharing by address of 2026-10-14 and 2026-10-15): sources are registered once and used by every member. `listen-ingest` exists so that a station is connected to once however many work on it; sharing by address made it hard for researchers to work on the same sources. Analyses stay individual. **Built** the same day:
 
-- **Proposed:** a stream's owner invites members by name. An invited member may add their own analyses to the stream and sees its page and its list of consumers. They cannot change the stream's settings or texts.
-- **Proposed:** each analysis belongs to one member. Others see it only if it is published or its member shares it with the stream's invited members.
-- **Built** against the stand-in (2026-10-15), **proposed** in its detail:
-  - The owner shares a source on its page by a member's address. Only existing members can be chosen; for others the page points to the master admin's invitation. The member is told by mail.
-  - The member finds it under "Shared with you" in Sources, may choose it for their own analyses (marked "shared by …"), and sees its page read-only: connection, who is connected, description and credit, no settings, state, texts, change log or delete.
-  - The owner sees whom it is shared with and can stop sharing at any time. The other member's analyses keep the source but cannot start a run, preview or trial with it any more; the refusal says why. **Decided** (2026-10-15): a run going on continues until it ends, and the sharing stops after it; the owner can pause the source to stop it at once.
-  - Deleting a source takes it out of every analysis, also other members'. Sharing and stopping it are in the source's change log.
-  - The connection's cost is split among the members whose analyses run on it, as decided.
+- **Every member may use every open source** in their own analyses, without asking. Sources lists the member's own ("Registered by you") and every other member's open ones ("Registered by other members"), the new-analysis form offers them all, and so does the MCP tool `list_sources` (with `steward` for another member's).
+- **The steward** is the member who registered the source. They keep its description, credit, place, audio switch and spectrogram view, hold the operator's agreement, and set its mode: draft, in service, paused, retired. The master admin can do all of it on every source. The steward no longer decides who uses the source.
+- **Only me for now.** At registration a steward may tick that the source is theirs alone for now, for example while they find out whether the stream is reliable; it is off by default. Other members do not see a private source; registering its address again tells them who registered it. The steward opens it on its page at any time. A source can be made private again only while no other member's analysis uses it.
+- **Retire instead of delete.** A source that other members' analyses use cannot be deleted, since that would take it out of their work. Its steward retires it instead: nothing connects, no new analysis can choose it, and the analyses that use it keep it and their history. It can be brought back. A source only its steward uses can still be deleted.
+- **The operator's agreement** is now asked for analysis on this Workbench by its members, not by one member: "Someone else runs it, and they have explicitly agreed to its analysis on this Workbench by its members."
+- **Costs** are counted as before: a source's connection in equal parts against the members whose analyses run on it.
+- **The Observatory's stations.** With every station read through `listen-ingest`, a station the Observatory listens to is not connected to a second time by the Workbench. A station whose operator agreed to the Workbench is registered once like any other source; the three VLF stations, with the maintainer as steward. `LOW_RESERVED_INPUTS` now lists only streams whose operators have not agreed.
+- The table `stream_shares` stays in the catalogue, unused.
+
+### Sharing by address (2026-10-14 to 2026-10-18, superseded)
+
+Streams were shared, analyses individual: the owner shared a stream on its page with a member by their address, the member used it read-only in their own analyses, and the owner could stop sharing at any time; publishing an analysis on another member's source needed that owner's agreement per member. Removed on 2026-10-18 (see above); the details are in the history of this file.
+
+### The shared library
+
 - **Decided:** there is a shared library for all members. **Proposed:** it is a part of the Workbench, not a git repository. A member puts a set of filter rules into it with a name and a note; others take a copy into their own analysis. A copy, not a link, so that a later change in the library never changes someone's analysis or starts a new memory behind their back. Motif definitions, captures and detections can go into the library in the same way once they exist (members' question 7).
 - **Built** against the stand-in (2026-10-15), **proposed** in its detail:
   - "Library" in the menu lists every set: name, note, the member who put it in, when, the rate of the source it came from, how often it was taken, and its rules in words.
@@ -321,7 +329,7 @@ Answers are the maintainer's of 2026-10-14 and are **decided**. Recommendations 
 6. Organisations with many receivers: an account that registers a feed?
    - **Decided:** no. The member is the one who sets up streams.
 7. May a member share a capture, its detections, or a set of rules with others?
-   - **Decided:** yes, through a shared library. See [Sharing](#sharing).
+   - **Decided:** yes, through a shared library. See [The shared library](#the-shared-library).
 8. Is sign-up open, or by invitation?
    - **Decided:** by invitation.
 9. What happens when two members register the same stream address?

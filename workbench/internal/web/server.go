@@ -57,8 +57,8 @@ type Config struct {
 	// (the default), the page and its menu entry are gone; keys saved
 	// before stay sealed in the catalogue (in the backlog, 2026-10-16).
 	LLMKeys bool
-	// Reserved are addresses the Observatory listens to, which members
-	// cannot register (reserved.go).
+	// Reserved are streams whose operators have not agreed to the
+	// Workbench, which members cannot register (reserved.go).
 	Reserved []string
 }
 
@@ -201,8 +201,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /sources/{slug}/state", s.member(s.streamState))
 	m.HandleFunc("POST /sources/{slug}/view", s.member(s.streamView))
 	m.HandleFunc("POST /sources/{slug}/delete", s.member(s.streamDelete))
-	m.HandleFunc("POST /sources/{slug}/share", s.member(s.streamShare))
-	m.HandleFunc("POST /sources/{slug}/unshare", s.member(s.streamUnshare))
+	m.HandleFunc("POST /sources/{slug}/visibility", s.member(s.streamVisibility))
 
 	m.HandleFunc("GET /analyses", s.member(s.analyses))
 	m.HandleFunc("GET /analyses/new", s.member(s.analysisNewForm))
@@ -302,7 +301,6 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /analyses/{id}/publish", s.member(s.publishForm))
 	m.HandleFunc("POST /analyses/{id}/publish", s.member(s.publish))
 	m.HandleFunc("POST /analyses/{id}/withdraw", s.member(s.withdraw))
-	m.HandleFunc("POST /sources/{slug}/consent", s.member(s.streamConsent))
 	m.HandleFunc("GET /research", s.visitor(s.researchIndex))
 	m.HandleFunc("GET /research/{slug}", s.visitor(s.researchPage))
 	m.HandleFunc("POST /research/{slug}/report", s.visitor(s.researchReport))

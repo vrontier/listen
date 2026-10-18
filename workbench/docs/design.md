@@ -168,7 +168,7 @@ Deployment is not a reason either way. A Go binary needs a one-time root step on
 |---|---|---|
 | Public presentation of research | Pages that show ongoing work: the stream, the researcher's analysis, their notes | decided: the member publishes at once, no review; an analysis is what is published (question 21); built against the stand-in (2026-10-15), detail proposed in [members-and-streams.md](members-and-streams.md#of-an-analysis); open: page design |
 | Member area | Log in, manage streams, filters, motifs and tokens through forms | decided: comes first, kept narrow (question 5); an analysis page shows the spectrogram, the events, the motifs and an export (question 13); detail proposed in [members-and-streams.md](members-and-streams.md) |
-| Sources | Register a stream, probe it, move it from draft to production, pause it, share it with invited members; see who is connected; it connects only for runs and previews | decided in outline (questions 1 to 3); detail proposed, same document. Called "Sources" in the menu (decided 2026-10-14) |
+| Sources | Register a stream, probe it, move it from draft to production, pause or retire it; every member may use it unless its steward keeps it private for now (decided 2026-10-18, [members-and-streams.md](members-and-streams.md#sources-as-a-commons)); see who is connected; it connects only for runs and previews | decided in outline (questions 1 to 3); detail proposed, same document. Called "Sources" in the menu (decided 2026-10-14) |
 | Filters and motifs | Define what an analysis ignores and what it looks for; a shared library; a trial mode | filters: rule syntax exists in the listener; library and trial mode decided (questions 9, 16); motifs: drafted as "defined motifs" in the Observatory's spec |
 | Data stream by token | The analysis events of one's own analyses | decided: SSE, follows the member area; proposed: token in the `Authorization` header (question 14); built against the stand-in (2026-10-15), see [members-and-streams.md](members-and-streams.md#tokens) |
 | MCP by token | The same data and the motif memory for AI assistants | decided: an HTTP endpoint in the Workbench process, after the data stream; proposed: the same token header; built against the stand-in (2026-10-15) with nine read-only tools; proposed (2026-10-16): two more for language-model sessions (a summary and a "since" cursor), resources and prompts; decided (2026-10-16): control per token (making and editing analyses, previews and runs) with limits per token, built against the stand-in, see [members-and-streams.md](members-and-streams.md#tokens) |
@@ -223,7 +223,7 @@ This replaces the earlier drafts in which an analysis was made under a stream, a
 - **"Always on" is removed** (decided 2026-10-15): with sources connecting only for runs and previews it had no effect left. A run "until stopped" does what it did.
 - **The lock is enforced by the Workbench:** during a run the settings form is shown read-only, and a save is refused with the reason. Runs made before the lock may span revisions; their list entry shows the range ("rev-1 to rev-3"), and every event carries its revision.
 - **Absences are recorded.** A source can still drop out during a run: its station goes offline, or its owner pauses it. The recording keeps every change of each source's state that the engine reports, and the data set lists the periods of a second or more in which a source was not connected, with what the engine reported meanwhile (connecting, removed, …): in the JSON per source, as rows `source.absent` in `events.csv`, and as "not heard" on the run's page. The comparison already marks absent seconds per source.
-- **A paused source does not run**, even in a run; the analysis page says so. Pausing stays the owner's way to stop a stream for everyone.
+- **A paused source does not run**, even in a run; the analysis page says so. Pausing stays the steward's way to stop a stream for everyone.
 - **A run ends at its planned end on its own**, checked every 30 seconds; the audit trail records start, stop, end and the deletion of a data set.
 - **In the engine** a run needs nothing new: the analysis is put in, and the stream is put with `mode` `continuous` instead of `on_demand` ([control-api.md](control-api.md#streams)). When the run ends, the analysis is taken out once the data set is made, and the stream goes back to `on_demand`.
 - **Caps.** A run reserves its sources' and analyses' cost for its length, as in [Resources and caps](members-and-streams.md#resources-and-caps). Starting a run whose reservation would exceed a cap is refused. Not enforced yet, like the caps themselves.
@@ -325,7 +325,7 @@ Answers are the maintainer's of 2026-10-14 and are **decided**. Where an answer 
 3. **Who may add an analysis to someone else's stream, and what is published?**
    - **Decided:** the shared model. A stream is shared, its analyses are individual. Once connected, a stream goes offline only when all its consumers have stopped. A stream always shows who is connected to it.
    - **Decided** (question 21): what is published is an analysis.
-   - **Proposed:** the owner invites members by name; the owner can still pause the stream (see [members-and-streams.md](members-and-streams.md#of-a-stream)).
+   - ~~**Proposed:** the owner invites members by name~~; **decided** (2026-10-18): every member may add analyses to every open stream, without an invitation; the stream's steward can still pause or retire it (see [members-and-streams.md](members-and-streams.md#sources-as-a-commons)).
 4. **Who builds the engine step, and in which order?**
    - **Decided:** as recommended. The control API is written as a spec here; the engine session in the listen repository reads it against the engine's code before it counts as stable, and changes found there come back as edits to the spec here.
 
@@ -342,7 +342,7 @@ Answers are the maintainer's of 2026-10-14 and are **decided**. Where an answer 
    - **Decided:** the HTTP endpoint, in the Workbench process.
 9. May a researcher see or reuse another researcher's filters and motifs?
    - **Decided:** yes, through a shared library for all members.
-   - **Proposed:** the library is part of the Workbench, not a git repository, and taking from it makes a copy. See [members-and-streams.md](members-and-streams.md#sharing).
+   - **Proposed:** the library is part of the Workbench, not a git repository, and taking from it makes a copy. See [members-and-streams.md](members-and-streams.md#the-shared-library).
 10. Does audio leave the Workbench at all?
     - **Decided:** audio is allowed (members' question 3).
     - Asked back: is audio needed for the analysis? No. The analysis runs on the decoded samples inside the engine; nothing about it needs audio to leave the server. Audio leaving serves the researcher: hearing what a detection was is often the quickest way to tell a bird from a bearing.

@@ -110,62 +110,6 @@ func (d *DB) AnyPublished(ctx context.Context) (bool, error) {
 	return n > 0, err
 }
 
-// SetPublishConsent records whether a stream's owner agrees that the
-// member it is shared with publishes analyses that use it.
-func (d *DB) SetPublishConsent(ctx context.Context, streamID, userID, by int64, ok bool) error {
-	now := d.now()
-	return d.tx(ctx, func(tx *sql.Tx) error {
-		var v any
-		action := "publish consent withdrawn"
-		if ok {
-			v, action = stamp(now), "publish consent"
-		}
-		res, err := tx.ExecContext(ctx, `UPDATE stream_shares SET publish_ok = ? WHERE stream_id = ? AND user_id = ?`, v, streamID, userID)
-		if err != nil {
-			return err
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return ErrNotFound
-		}
-		after, _ := json.Marshal(map[string]any{"member": userID})
-		return audit(ctx, tx, now, by, "stream", streamID, action, "", string(after))
-	})
-}
-
-// MayPublishWith reports whether a member may publish analyses using a
-// stream: their own, or shared with the owner's consent.
-func (d *DB) MayPublishWith(ctx context.Context, userID int64, st Stream) (bool, error) {
-	if st.OwnerID == userID {
-		return true, nil
-	}
-	var n int
-	err := d.db.QueryRowContext(ctx, `SELECT count(*) FROM stream_shares WHERE stream_id = ? AND user_id = ? AND publish_ok IS NOT NULL`, st.ID, userID).Scan(&n)
-	return n > 0, err
-}
-
-// PublishConsents lists the members a stream is shared with who may
-// publish analyses of it.
-func (d *DB) PublishConsents(ctx context.Context, streamID int64) (map[int64]bool, error) {
-	rows, err := d.db.QueryContext(ctx, `SELECT user_id FROM stream_shares WHERE stream_id = ? AND publish_ok IS NOT NULL`, streamID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[int64]bool{}
-	for rows.Next() {
-		var id int64
-		rows.Scan(&id)
-		out[id] = true
-	}
-	return out, rows.Err()
-}
-
-// PublishedUsing lists a member's published analyses that use a stream.
-func (d *DB) PublishedUsing(ctx context.Context, userID, streamID int64) ([]Analysis, error) {
-	return d.queryAnalyses(ctx, `WHERE a.owner_id = ? AND a.state = ? AND a.id IN (SELECT analysis_id FROM analysis_sources WHERE stream_id = ?)`,
-		userID, AnalysisPublished, streamID)
-}
-
 // Report is a visitor's report about a public page.
 type Report struct {
 	ID         int64

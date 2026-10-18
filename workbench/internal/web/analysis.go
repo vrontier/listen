@@ -91,7 +91,7 @@ type sourceView struct {
 	Prefix    string // of its form fields
 	Form      settingsForm
 	Running   bool   // the stream is in a state that connects
-	Reserved  bool   // an address the Observatory listens to: not analysed here
+	Reserved  bool   // a stream not open to the Workbench: not analysed here
 	Live      bool   // and the page shows it live: in a run or a preview
 	TrialLive bool   // a trial runs next to the run on this source
 	TrialPath string // of its live data, …/trial/live/<source>
@@ -147,7 +147,7 @@ func running(st catalogue.Stream) bool {
 }
 
 // running reports whether a source is analysed here: in a state that
-// connects, and not an address reserved for the Observatory.
+// connects, and not a reserved address (reserved.go).
 func (s *Server) running(st catalogue.Stream) bool { return running(st) && !s.reserved(st.Input) }
 
 // --- the list and a new analysis ---
@@ -185,20 +185,24 @@ type newAnalysisData struct {
 func (d newAnalysisData) FormError() string { return d.Err }
 
 // picks lists the sources a member may use, marking the chosen ones: their
-// own and those shared with them.
+// own and every other member's open ones. A retired source is offered only
+// where it is chosen already.
 func (s *Server) picks(r *http.Request, chosen map[int64]bool) ([]pick, error) {
 	sess, _ := sessionFrom(r)
 	streams, err := s.db.StreamsOf(r.Context(), sess.User.ID)
 	if err != nil {
 		return nil, err
 	}
-	shared, err := s.db.SharedWith(r.Context(), sess.User.ID)
+	open, err := s.db.OpenStreams(r.Context(), sess.User.ID)
 	if err != nil {
 		return nil, err
 	}
-	streams = append(streams, shared...)
+	streams = append(streams, open...)
 	var out []pick
 	for _, st := range streams {
+		if st.State == catalogue.StreamRetired && !chosen[st.ID] {
+			continue
+		}
 		out = append(out, pick{Stream: st, Checked: chosen[st.ID], Shared: st.OwnerID != sess.User.ID})
 	}
 	return out, nil

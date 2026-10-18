@@ -44,8 +44,8 @@ type engineSync struct {
 
 	failures map[string]engine.AnalysisState // "stream/analysis" → its failure
 
-	// reserved, if set, names addresses the Observatory listens to: they
-	// are never put into the engine (reserved.go).
+	// reserved, if set, names streams whose operators have not agreed to
+	// the Workbench: they are never put into the engine (reserved.go).
 	reserved func(input string) bool
 }
 

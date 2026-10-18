@@ -5,23 +5,23 @@
   <h1>{{.Stream.Texts.Name}}</h1>
   {{template "status" (status "source" .Stream.State)}}
 </div>
-<p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz · registered {{when .Stream.Created}} by {{.Stream.OwnerName}}</p>
-<p class="meta">{{if .IsOwner}}Your source: its connection, who uses it, its description, with whom you share it, and every change made to it. Its settings for analysis live in each analysis, not here.{{else}}A source {{.Stream.OwnerName}} shares with you: its connection and who uses it. You can use it in your own analyses; its description and state stay with {{.Stream.OwnerName}}.{{end}}</p>
+<p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{.Stream.SampleRate}} Hz · registered {{when .Stream.Created}} by {{.Stream.OwnerName}}, its steward · {{if .Stream.Private}}only {{.Stream.OwnerName}} for now{{else}}open to every member{{end}}</p>
+<p class="meta">{{if .IsOwner}}Your source, which you look after as its steward: its connection, who uses it, its description, who may use it, and every change made to it. Its settings for analysis live in each analysis, not here.{{else if .IsSteward}}A source {{.Stream.OwnerName}} looks after as its steward. As master admin you can change it as they can.{{else}}A source {{.Stream.OwnerName}} registered and looks after as its steward. Like every open source, you can use it in your own analyses without asking; your analyses and their settings stay your own. Its description and mode stay with {{.Stream.OwnerName}}.{{end}}</p>
 
 <div class="grid">
 <section>
   <h2>Connection</h2>
-  {{if .Reserved}}<p class="note warn-note">The Listening Observatory listens to this stream already. It is not connected to from the Workbench, so that the station is not connected to twice; it can be analysed here once its operator has agreed to the Workbench and it reaches the Workbench through the Observatory's own connection.</p>{{end}}
+  {{if .Reserved}}<p class="note warn-note">This address is on this server's list of streams whose operators have not agreed to their analysis on the Workbench. It is not connected to from here.</p>{{end}}
   {{if .InEngine}}
     <p>State: {{with status "conn" .Engine.State}}<span class="conn conn-{{.Tone}}">{{.Word}}</span>{{end}} for {{since .Engine.Since}}.
     {{if .Engine.LastData}}Last audio {{since (deref .Engine.LastData)}} ago.{{end}}</p>
     {{if .Engine.LastError}}<p class="field-error">{{.Engine.LastError.Message}}</p>{{end}}
   {{else}}
-    <p>Not in the engine{{if eq .Stream.State "paused"}}: the stream is paused{{end}}.</p>
+    <p>Not in the engine{{if eq .Stream.State "paused"}}: the stream is paused{{else if eq .Stream.State "retired"}}: the stream is retired{{end}}.</p>
   {{end}}
   <p class="meta">{{if or (eq .Stream.State "draft") (eq .Stream.State "production")}}The source connects only while an analysis that uses it is in a run or a preview.{{end}}</p>
 
-  <p><a class="button" href="/analyses/new?source={{.Stream.Slug}}">New analysis with this source</a></p>
+  {{if and .CanUse (ne .Stream.State "retired") (ne .Stream.State "suspended")}}<p><a class="button" href="/analyses/new?source={{.Stream.Slug}}">New analysis with this source</a></p>{{end}}
   <h3>Who is connected</h3>
   <table>
     <thead><tr><th>Analysis</th><th>Member</th><th>State</th><th>Reading now</th></tr></thead>
@@ -35,11 +35,14 @@
     </tbody>
   </table>
 
-  {{if and .IsOwner (ne .Stream.State "suspended")}}
+  {{if and .IsSteward (ne .Stream.State "suspended")}}
   <h3>Mode</h3>
   <div class="actions">
-    {{if eq .Stream.State "paused"}}
+    {{if eq .Stream.State "retired"}}
+      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="unretire">Bring back</button></form>
+    {{else if eq .Stream.State "paused"}}
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="resume">Resume</button></form>
+      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="retire" class="secondary">Retire</button></form>
     {{else}}
       {{if eq .Stream.State "draft"}}
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="production">Put in service</button></form>
@@ -47,15 +50,17 @@
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="draft" class="secondary">Back to draft</button></form>
       {{end}}
       <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="pause" class="secondary">Pause</button></form>
+      <form method="post" action="/sources/{{.Stream.Slug}}/state"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="retire" class="secondary">Retire</button></form>
     {{end}}
   </div>
+  <p class="meta">The mode holds for every member who uses the source. Pause it for a while, for example when the station is down or its operator asks; retire it when it goes out of service for good: nothing connects, no new analysis can choose it, and analyses that use it keep their history. Both can be undone.</p>
   {{end}}
 </section>
 
 <section>
   <h2>Spectrogram view</h2>
   <p class="meta">What the spectrogram of every analysis of this source shows: by default each analysis's own bands, on a log scale over its analysed range and after its filter rules. A view of the source's own shows the whole signal instead, unfiltered, on a linear or log scale over a range you choose, for example 0 to 16 kHz for VLF radio. It is computed once for the source and changes nothing in the analyses.</p>
-  {{if .IsOwner}}
+  {{if .IsSteward}}
   <form method="post" action="/sources/{{.Stream.Slug}}/view" class="stack wide-form">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <div class="row">
@@ -67,15 +72,15 @@
     <button>Save the view</button>
   </form>
   {{end}}
-  {{with .Engine.View}}<p class="meta">In effect: {{.Scale}}, {{.MinHz}} to {{.MaxHz}} Hz in {{.Bands}} bands.</p>{{else}}{{if .Stream.View}}<p class="meta">Saved; in effect once the source is in the engine.</p>{{else if not .IsOwner}}<p class="meta">Each analysis's own bands.</p>{{end}}{{end}}
+  {{with .Engine.View}}<p class="meta">In effect: {{.Scale}}, {{.MinHz}} to {{.MaxHz}} Hz in {{.Bands}} bands.</p>{{else}}{{if .Stream.View}}<p class="meta">Saved; in effect once the source is in the engine.</p>{{else if not .IsSteward}}<p class="meta">Each analysis's own bands.</p>{{end}}{{end}}
 </section>
 
 <section>
   <h2>Description</h2>
-  {{if not .IsOwner}}
+  {{if not .IsSteward}}
   <p>{{if .Stream.Texts.Description}}{{.Stream.Texts.Description}}{{else}}<span class="meta">No description.</span>{{end}}</p>
   <p class="meta">{{with .Stream.Texts.Credit}}Credit: {{.}}{{end}}{{with .Stream.Texts.CreditURL}} · <a href="{{.}}" rel="noopener">{{.}}</a>{{end}}</p>
-  <p class="meta">{{.Stream.OwnerName}} shares this source with you. Its settings, state and texts stay with them; your analyses of it are your own.</p>
+  <p class="meta">{{.Stream.OwnerName}} looks after this source's description, credit and mode, and holds its operator's agreement. Your analyses of it are your own.</p>
   {{else}}
   <form method="post" action="/sources/{{.Stream.Slug}}" class="stack">
     <input type="hidden" name="csrf" value="{{$csrf}}">
@@ -94,32 +99,27 @@
     <label class="check"><input type="checkbox" name="audio" {{if .Stream.AudioAllowed}}checked{{end}}> Audio may be played in the browser</label>
     <button>Save</button>
   </form>
-  <p class="meta">Address: <code>{{.Stream.Input}}</code><br>{{if eq .Stream.Attestation "own"}}Run by {{.Stream.OwnerName}}, as stated {{when .Stream.Attested}}.<br>{{else if eq .Stream.Attestation "operator"}}Run by {{.Stream.Operator}}, who agreed to its analysis here, as {{.Stream.OwnerName}} stated {{when .Stream.Attested}}.<br>{{end}}Checked: {{.Probe.Codec}}, {{.Probe.SampleRate}} Hz, {{.Probe.BitrateKbps}} kbit/s. The address and the sample rate cannot be changed.</p>
+  <p class="meta">Address: <code>{{.Stream.Input}}</code><br>{{if eq .Stream.Attestation "own"}}Run by {{.Stream.OwnerName}}, as stated {{when .Stream.Attested}}.<br>{{else if eq .Stream.Attestation "operator"}}Run by {{.Stream.Operator}}, who agreed to its analysis on this Workbench by its members, as {{.Stream.OwnerName}} stated {{when .Stream.Attested}}.<br>{{end}}Checked: {{.Probe.Codec}}, {{.Probe.SampleRate}} Hz, {{.Probe.BitrateKbps}} kbit/s. The address and the sample rate cannot be changed.</p>
   {{end}}
 </section>
 </div>
 
-{{if .IsOwner}}
+{{if .IsSteward}}
 <section>
-  <h2>Shared with</h2>
-  {{if .Shares}}
-  <table>
-    <thead><tr><th>Member</th>{{if .Publish}}<th>May publish</th>{{end}}<th></th></tr></thead>
-    <tbody>{{$consents := .Consents}}{{range .Shares}}<tr><td>{{.Name}}</td>
-      {{if $.Data.Publish}}<td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/consent" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}">{{if index $consents .ID}}yes · <button class="link" name="agree" value="0">no longer</button>{{else}}no · <button class="link" name="agree" value="1">agree</button>{{end}}</form></td>{{end}}
-      <td><form method="post" action="/sources/{{$.Data.Stream.Slug}}/unshare" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="member" value="{{.ID}}"><button class="link">stop sharing</button></form></td></tr>{{end}}</tbody>
-  </table>
-  {{else}}<p class="meta">Nobody else. Only you can use this source.</p>{{end}}
-  <form method="post" action="/sources/{{.Stream.Slug}}/share" class="inline-form">
-    <input type="hidden" name="csrf" value="{{$csrf}}">
-    <label>Member's address <input type="email" name="email" required></label>
-    <button class="secondary">Share</button>
-  </form>
-  <p class="meta">A member you share the source with may use it in their own analyses and sees this page and who is connected; they cannot change it. The source keeps one connection however many use it, and its cost is split among those whose analyses run on it. Share only what your operator's agreement covers. Pausing the source stops it for everyone.{{if .Publish}} A member may publish an analysis that uses the source only once you agree; when you no longer agree, or stop sharing, their published analyses that use it are withdrawn and they are told.{{end}}</p>
+  <h2>Who may use it</h2>
+  {{if .Stream.Private}}
+  <p>Only {{.Stream.OwnerName}}, for now. Other members do not see it under Sources.</p>
+  <form method="post" action="/sources/{{.Stream.Slug}}/visibility" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="open">Open to every member</button></form>
+  {{else}}
+  <p>Every member: they find it under Sources and may use it in their own analyses without asking, and publish those analyses where publishing is open.</p>
+  {{if .Others}}<p class="meta">{{.Others}} analys{{if eq .Others 1}}is{{else}}es{{end}} of other members use{{if eq .Others 1}}s{{end}} it, so it stays open. To stop it, pause or retire it.</p>
+  {{else}}<form method="post" action="/sources/{{.Stream.Slug}}/visibility" class="inline-form"><input type="hidden" name="csrf" value="{{$csrf}}"><button name="to" value="private" class="secondary">Keep it to {{if .IsOwner}}myself{{else}}{{.Stream.OwnerName}}{{end}} for now</button></form>{{end}}
+  {{end}}
+  <p class="meta">Sources are shared by all members, so that a station is registered once and connected to once however many study it. Open a source only if its operator's agreement covers analysis on this Workbench by its members and the publication of their results; research pages credit the source, its credit line and its operator. Its connection counts in equal parts against the members whose analyses run on it.</p>
 </section>
 {{end}}
 
-{{if .IsOwner}}
+{{if .IsSteward}}
 <section>
   <h2>Changes</h2>
   <table class="audit">
@@ -130,12 +130,16 @@
 
 <section class="danger">
   <h2>Delete</h2>
-  <p>Deleting removes the source and its memories. Analyses that use it, also those of members you share it with, lose this source and keep their others. The change log keeps a record.</p>
+  {{if .Others}}
+  <p>Other members' analyses use this source, so it cannot be deleted: that would take it out of their work. Retire it instead, under Mode; their analyses keep its history.</p>
+  {{else}}
+  <p>Deleting removes the source and its memories. Analyses of {{if .IsOwner}}yours{{else}}{{.Stream.OwnerName}}'s{{end}} that use it lose this source and keep their others. The change log keeps a record.</p>
   <form method="post" action="/sources/{{.Stream.Slug}}/delete" class="inline-form">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <label>Type the name to confirm <input name="confirm" autocomplete="off"></label>
     <button class="danger">Delete</button>
   </form>
+  {{end}}
 </section>
 {{end}}
 {{end}}

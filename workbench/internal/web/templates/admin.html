@@ -58,8 +58,8 @@
       <button class="secondary">Set</button>{{if .OwnCap}} <button class="link" name="default" value="1">default</button>{{else}} <span class="meta">default</span>{{end}}
     </form></td></tr>{{end}}</tbody></table>
   <h3>Streams</h3>
-  <table><thead><tr><th>Name</th><th>Owner</th><th>Run by</th><th>State</th></tr></thead>
-  <tbody>{{range .Streams}}<tr><td>{{.Texts.Name}}</td><td>{{.OwnerName}}</td><td>{{if eq .Attestation "own"}}the owner{{else if eq .Attestation "operator"}}{{.Operator}}{{else}}<span class="meta">not asked</span>{{end}}</td><td>{{.State}}</td></tr>{{end}}</tbody></table>
+  <table><thead><tr><th>Name</th><th>Steward</th><th>Run by</th><th>State</th></tr></thead>
+  <tbody>{{range .Streams}}<tr><td><a href="/sources/{{.Slug}}">{{.Texts.Name}}</a></td><td>{{.OwnerName}}</td><td>{{if eq .Attestation "own"}}the steward{{else if eq .Attestation "operator"}}{{.Operator}}{{else}}<span class="meta">not asked</span>{{end}}</td><td>{{.State}}{{if .Private}}, only the steward for now{{end}}</td></tr>{{end}}</tbody></table>
 </section>
 </div>
 <section>

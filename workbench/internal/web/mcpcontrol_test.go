@@ -204,7 +204,7 @@ func TestMCPControl(t *testing.T) {
 	if text, isErr := r.toolText(ctl, "start_run", aid+`}`); isErr || !strings.Contains(text, `"ends": "when stopped"`) {
 		t.Fatalf("unlimited run: %s", text)
 	}
-	if _, page, _ := r.get(member, "/"); !strings.Contains(page, "1 with control") || !strings.Contains(page, "1 run started by a token going on") || !strings.Contains(page, "never registers, shares, publishes or deletes") {
+	if _, page, _ := r.get(member, "/"); !strings.Contains(page, "1 with control") || !strings.Contains(page, "1 run started by a token going on") || !strings.Contains(page, "never registers, publishes or deletes") {
 		t.Fatal("Home does not tell of control")
 	}
 	if _, page, _ := r.get(member, "/runs"); !strings.Contains(page, `class="stop-x"`) || !strings.Contains(page, `data-confirm="Stop run`) || !strings.Contains(page, `id="confirm"`) {

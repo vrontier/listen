@@ -74,13 +74,13 @@ if ! grep -q '^LOW_KEYS_SECRET=' "$ENV"; then
 	say "creating the sealing key of language-model keys in $ENV"
 	echo "LOW_KEYS_SECRET=$(openssl rand -base64 32)" >> "$ENV"
 fi
-# Addresses the Observatory listens to, which members cannot register and
-# which are never put into the engine; one host or address per line. Kept
-# on this host only.
+# Streams whose operators have not agreed to the Workbench, which members
+# cannot register and which are never put into the engine; one host or
+# address per line. Kept on this host only.
 RESERVED=/etc/low/reserved-inputs
 if [ ! -f "$RESERVED" ]; then
 	say "creating $RESERVED (empty)"
-	printf '# Addresses the Listening Observatory listens to: one host or address per line.\n' > "$RESERVED"
+	printf '# Streams whose operators have not agreed to the Workbench: one host or address per line.\n' > "$RESERVED"
 fi
 chown root:low "$RESERVED"
 chmod 0640 "$RESERVED"

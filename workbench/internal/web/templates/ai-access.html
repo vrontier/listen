@@ -2,7 +2,7 @@
 {{$csrf := .CSRF}}
 <h1>AI: access</h1>
 {{with .Data}}
-<p class="meta">A token lets a program or an AI assistant read your analyses: their settings, their live events while they are in a run or a preview, and your runs' data sets. It reads only your own analyses. Only if you allow <strong>control</strong> for a token may an assistant also make and change analyses and start and stop previews and runs with it, through MCP, within the limits you set for that token; it never registers, shares or deletes anything. You get a mail whenever a token starts a run.</p>
+<p class="meta">A token lets a program or an AI assistant read your analyses: their settings, their live events while they are in a run or a preview, and your runs' data sets. It reads only your own analyses. Only if you allow <strong>control</strong> for a token may an assistant also make and change analyses and start and stop previews and runs with it, through MCP, within the limits you set for that token; it never registers, publishes or deletes anything. You get a mail whenever a token starts a run.</p>
 
 {{if .Secret}}
 <section class="notice">

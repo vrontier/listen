@@ -25,8 +25,8 @@ var sampleRates = []int{22050, 32000, 44100, 48000}
 const probeValid = 15 * time.Minute
 
 type accountData struct {
-	Streams []streamRow
-	Shared  []streamRow // shared with the member by others
+	Streams []streamRow // registered by the member
+	Others  []streamRow // other members' open sources
 }
 
 type streamRow struct {
@@ -36,7 +36,8 @@ type streamRow struct {
 	Analyses []catalogue.Analysis // that use it
 }
 
-// sources lists the member's sources.
+// sources lists the sources a member may use: their own and every other
+// member's open ones (decided 2026-10-18, sources are a commons).
 func (s *Server) sources(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)
 	streams, err := s.db.StreamsOf(r.Context(), sess.User.ID)
@@ -44,13 +45,13 @@ func (s *Server) sources(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	shared, err := s.db.SharedWith(r.Context(), sess.User.ID)
+	others, err := s.db.OpenStreams(r.Context(), sess.User.ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	var d accountData
-	for i, list := range [][]catalogue.Stream{streams, shared} {
+	for i, list := range [][]catalogue.Stream{streams, others} {
 		for _, st := range list {
 			row := streamRow{Stream: st}
 			row.Engine, row.InEngine = s.sync.stream(st.EngineID())
@@ -61,7 +62,7 @@ func (s *Server) sources(w http.ResponseWriter, r *http.Request) {
 			if i == 0 {
 				d.Streams = append(d.Streams, row)
 			} else {
-				d.Shared = append(d.Shared, row)
+				d.Others = append(d.Others, row)
 			}
 		}
 	}
@@ -74,12 +75,14 @@ type newStreamData struct {
 	Input      string
 	Texts      textsForm
 	Audio      bool
+	Private    bool   // only the member for now
 	Attest     string // catalogue.AttestOwn or AttestOperator
 	Operator   string
 	Probe      *engine.ProbeResult
 	Rates      []int
 	SampleRate int
 	Existing   *catalogue.Stream
+	Usable     bool // the member may use Existing
 	Errs       map[string]string
 	Err        string
 }
@@ -214,7 +217,7 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)
 	d := newStreamData{
 		Input: strings.TrimSpace(r.PostFormValue("input")), Texts: readTexts(r),
-		Audio: r.PostFormValue("audio") == "on", Attest: r.PostFormValue("attest"),
+		Audio: r.PostFormValue("audio") == "on", Private: r.PostFormValue("private") == "on", Attest: r.PostFormValue("attest"),
 		Operator: strings.TrimSpace(r.PostFormValue("operator")),
 		Errs:     map[string]string{},
 	}
@@ -228,14 +231,15 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Input = input
 	if s.reserved(input) {
-		d.Errs["input"] = "already analysed by the Listening Observatory"
-		d.Err = "The Listening Observatory listens to this stream already. It can be used here once its operator has agreed to the Workbench, and it then reaches the Workbench through the Observatory's own connection, so that the station is not connected to twice. Until then it cannot be registered."
+		d.Errs["input"] = "not open to the Workbench"
+		d.Err = "This stream cannot be registered here: it is on this server's list of streams whose operators have not agreed to their analysis on the Workbench."
 		s.render(w, r, 409, "source-new", "Register a source", d)
 		return
 	}
 	for _, in := range []string{input, otherScheme(input)} {
 		if existing, err := s.db.StreamByInput(r.Context(), in); err == nil {
 			d.Existing = &existing
+			d.Usable, _ = s.db.MayUseStream(r.Context(), sess.User.ID, existing)
 			d.Err = "This stream is registered already."
 			s.render(w, r, 409, "source-new", "Register a source", d)
 			return
@@ -318,10 +322,10 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	probe, _ := json.Marshal(p.result)
 	st, err := s.db.CreateStream(r.Context(), catalogue.NewStream{
 		OwnerID: sess.User.ID, Input: d.Input, SampleRate: d.SampleRate, Texts: d.Texts.StreamTexts, AudioAllowed: d.Audio,
-		Attestation: d.Attest, Operator: d.Operator, Probe: probe,
+		Private: d.Private, Attestation: d.Attest, Operator: d.Operator, Probe: probe,
 	})
 	if errors.Is(err, catalogue.ErrDuplicateInput) {
-		d.Err = "This stream was registered a moment ago by someone else."
+		d.Err = "This stream was registered a moment ago by someone else; look for it under Sources."
 		s.render(w, r, 409, "source-new", "Register a source", d)
 		return
 	}
@@ -332,7 +336,10 @@ func (s *Server) streamNew(w http.ResponseWriter, r *http.Request) {
 	s.probesMu.Lock()
 	delete(s.probes, key)
 	s.probesMu.Unlock()
-	flash := "Source registered, in draft. Create an analysis with it to see what it hears."
+	flash := "Source registered, in draft, and open to every member. Create an analysis with it to see what it hears."
+	if d.Private {
+		flash = "Source registered, in draft, for you only for now. Create an analysis with it to see what it hears; open it to every member on this page when it is ready."
+	}
 	defer s.syncGroups(r.Context())
 	if err := s.sync.push(r.Context(), st); engine.IsCode(err, "rate_conflict") {
 		var ee *engine.Error
@@ -359,15 +366,16 @@ type consumer struct {
 type streamData struct {
 	Stream    catalogue.Stream
 	View      engine.ViewSpec // the view as saved, for the form
-	Reserved  bool            // an address the Observatory listens to
+	Reserved  bool            // a stream not open to the Workbench (reserved.go)
 	Engine    engine.Stream
 	InEngine  bool
 	Probe     engine.ProbeResult
 	Consumers []consumer
 	Audit     []catalogue.AuditEntry
-	IsOwner   bool
-	Shares    []catalogue.User // whom the owner shared it with
-	Consents  map[int64]bool   // who of them may publish analyses of it
+	IsOwner   bool // the member is its steward
+	IsSteward bool // its steward or the master admin: may change it
+	CanUse    bool // the member may use it in analyses
+	Others    int  // analyses of other members that use it
 	Errs      map[string]string
 	Texts     textsForm
 	Publish   bool // members may publish on this Workbench
@@ -376,13 +384,13 @@ type streamData struct {
 
 func (d streamData) FormError() string { return d.Err }
 
-// viewStream finds a stream the member may see: their own, or one shared
-// with them.
+// viewStream finds a stream the member may see: their own, any open one,
+// and for the master admin every one.
 func (s *Server) viewStream(w http.ResponseWriter, r *http.Request) (catalogue.Stream, bool) {
 	sess, _ := sessionFrom(r)
 	st, err := s.db.StreamBySlug(r.Context(), r.PathValue("slug"))
 	ok := err == nil
-	if ok {
+	if ok && !sess.User.Admin {
 		ok, err = s.db.MayUseStream(r.Context(), sess.User.ID, st)
 	}
 	if !ok {
@@ -395,12 +403,12 @@ func (s *Server) viewStream(w http.ResponseWriter, r *http.Request) (catalogue.S
 	return st, ok
 }
 
-// ownStream finds a stream the member owns, for what only its owner may
-// do.
+// ownStream finds a stream the member looks after: as its steward, or as
+// the master admin, for what only they may do.
 func (s *Server) ownStream(w http.ResponseWriter, r *http.Request) (catalogue.Stream, bool) {
 	sess, _ := sessionFrom(r)
 	st, err := s.db.StreamBySlug(r.Context(), r.PathValue("slug"))
-	if err != nil || st.OwnerID != sess.User.ID {
+	if err != nil || st.OwnerID != sess.User.ID && !sess.User.Admin {
 		if err != nil && !isNotFound(err) {
 			s.fail(w, r, err)
 			return st, false
@@ -414,21 +422,14 @@ func (s *Server) ownStream(w http.ResponseWriter, r *http.Request) (catalogue.St
 func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, error) {
 	sess, _ := sessionFrom(r)
 	d := streamData{Stream: st, Texts: textsOf(st.Texts), IsOwner: st.OwnerID == sess.User.ID, Errs: map[string]string{}, Publish: s.cfg.Publishing}
+	d.IsSteward = d.IsOwner || sess.User.Admin
+	d.CanUse, _ = s.db.MayUseStream(r.Context(), sess.User.ID, st)
 	if d.Stream.View != nil {
 		json.Unmarshal(d.Stream.View, &d.View)
 	}
 	d.Reserved = s.reserved(st.Input)
 	json.Unmarshal(st.Probe, &d.Probe)
 	d.Engine, d.InEngine = s.sync.stream(st.EngineID())
-	if d.IsOwner {
-		var err error
-		if d.Shares, err = s.db.StreamShares(r.Context(), st.ID); err != nil {
-			return d, err
-		}
-		if d.Consents, err = s.db.PublishConsents(r.Context(), st.ID); err != nil {
-			return d, err
-		}
-	}
 	analyses, err := s.db.AnalysesUsing(r.Context(), st.ID)
 	if err != nil {
 		return d, err
@@ -440,8 +441,11 @@ func (s *Server) streamData(r *http.Request, st catalogue.Stream) (streamData, e
 		}
 		d.Consumers = append(d.Consumers, consumer{Analysis: a, Owner: a.OwnerName,
 			Readers: s.live.readers(st.EngineID(), a.EngineID()).add(s.live.readers(st.EngineID(), previewID(a))), State: state, Mine: a.OwnerID == sess.User.ID})
+		if a.OwnerID != st.OwnerID {
+			d.Others++
+		}
 	}
-	if d.IsOwner {
+	if d.IsSteward {
 		d.Audit, err = s.db.AuditOf(r.Context(), "stream", st.ID)
 	}
 	return d, err
@@ -507,6 +511,10 @@ func (s *Server) streamState(w http.ResponseWriter, r *http.Request) {
 		state, flash = catalogue.StreamPaused, "Paused. The stream is disconnected; its memories are kept."
 	case "resume":
 		state, flash = catalogue.StreamDraft, "Resumed, in draft."
+	case "retire":
+		state, flash = catalogue.StreamRetired, "Retired. Nothing connects to it; analyses that use it keep their history, and no new analysis can choose it."
+	case "unretire":
+		state, flash = catalogue.StreamDraft, "Back in service, in draft."
 	default:
 		http.Error(w, "unknown state", http.StatusBadRequest)
 		return
@@ -539,6 +547,12 @@ func (s *Server) streamDelete(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	for _, a := range using {
+		if a.OwnerID != st.OwnerID {
+			s.redirect(w, r, "/sources/"+st.Slug, "Not deleted: other members' analyses use this source. Retire it instead, which keeps their history.")
+			return
+		}
+	}
 	if err := s.db.DeleteStream(r.Context(), st.ID, sess.User.ID); err != nil {
 		s.fail(w, r, err)
 		return
@@ -554,64 +568,41 @@ func (s *Server) streamDelete(w http.ResponseWriter, r *http.Request) {
 	s.redirect(w, r, "/sources", msg)
 }
 
-// --- sharing ---
+// --- visibility ---
 
-// streamShare shares the stream with a member, by their address.
-func (s *Server) streamShare(w http.ResponseWriter, r *http.Request) {
+// streamVisibility opens a source to every member, or keeps it to its
+// steward for now. It can be made private only while no analysis of
+// another member uses it.
+func (s *Server) streamVisibility(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r)
 	st, ok := s.ownStream(w, r)
 	if !ok {
 		return
 	}
 	back := "/sources/" + st.Slug
-	email := strings.TrimSpace(r.PostFormValue("email"))
-	u, err := s.db.UserByEmail(r.Context(), email)
-	switch {
-	case isNotFound(err):
-		s.redirect(w, r, back, email+" is not a member. The master admin can invite them; then share the source.")
-		return
-	case err != nil:
-		s.fail(w, r, err)
-		return
-	case u.ID == sess.User.ID:
-		s.redirect(w, r, back, "The source is yours already.")
-		return
-	}
-	if err := s.db.ShareStream(r.Context(), st.ID, u.ID, sess.User.ID); err != nil {
-		if errors.Is(err, catalogue.ErrAlreadyShared) {
-			s.redirect(w, r, back, "Already shared with "+u.Name+".")
+	private := r.PostFormValue("to") == "private"
+	if private {
+		using, err := s.db.AnalysesUsing(r.Context(), st.ID)
+		if err != nil {
+			s.fail(w, r, err)
 			return
 		}
-		s.fail(w, r, err)
-		return
-	}
-	body := fmt.Sprintf("Hello %s,\n\n%s has shared the source \"%s\" with you in the %s. You may use it in your own analyses; its settings stay with %s.\n\n%s/sources/%s\n",
-		u.Name, sess.User.Name, st.Texts.Name, s.cfg.SiteName, sess.User.Name, s.cfg.BaseURL, st.Slug)
-	if err := s.mail.Send(u.Email, "A source shared with you: "+st.Texts.Name, body); err != nil {
-		log.Printf("share mail: %v", err)
-	}
-	s.redirect(w, r, back, "Shared with "+u.Name+", who has been told by mail.")
-}
-
-// streamUnshare ends a member's use of the stream.
-func (s *Server) streamUnshare(w http.ResponseWriter, r *http.Request) {
-	sess, _ := sessionFrom(r)
-	st, ok := s.ownStream(w, r)
-	if !ok {
-		return
-	}
-	id, _ := strconv.ParseInt(r.PostFormValue("member"), 10, 64)
-	if err := s.db.UnshareStream(r.Context(), st.ID, id, sess.User.ID); err != nil && !isNotFound(err) {
-		s.fail(w, r, err)
-		return
-	}
-	flash := "No longer shared. Analyses of that member that use the source cannot start with it any more; a run going on continues until it ends, unless you pause the source."
-	if u, err := s.db.User(r.Context(), id); err == nil {
-		if n := s.withdrawUsing(r.Context(), sess.User.ID, u, st); n > 0 {
-			flash += fmt.Sprintf(" %d published analys%s of theirs withdrawn.", n, map[bool]string{true: "is", false: "es"}[n == 1])
+		for _, a := range using {
+			if a.OwnerID != st.OwnerID {
+				s.redirect(w, r, back, "Still open: other members' analyses use this source. You can pause or retire it instead.")
+				return
+			}
 		}
 	}
-	s.redirect(w, r, "/sources/"+st.Slug, flash)
+	if err := s.db.SetStreamPrivate(r.Context(), st.ID, sess.User.ID, private); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if private {
+		s.redirect(w, r, back, "Private: only "+st.OwnerName+" can use this source now.")
+		return
+	}
+	s.redirect(w, r, back, "Open: every member can now find this source under Sources and use it in their own analyses.")
 }
 
 // normalInput writes a stream address the one way it is stored, so that

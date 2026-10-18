@@ -8,7 +8,7 @@
   <h2>Name</h2>
   <form method="post" action="/account/name" class="stack short">
     <input type="hidden" name="csrf" value="{{$csrf}}">
-    <label>Display name <small>shown to members you share sources with, on runs you start, and on what you publish</small><input name="name" value="{{.Name}}" required maxlength="60"></label>
+    <label>Display name <small>shown to other members on the sources you register and the analyses that use them, on runs you start, and on what you publish</small><input name="name" value="{{.Name}}" required maxlength="60"></label>
     <button>Save the name</button>
   </form>
 </section>

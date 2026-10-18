@@ -14,7 +14,7 @@ import (
 type welcomeData struct {
 	Name     string
 	Sources  int // own
-	Shared   int // shared with the member
+	Others   int // other members' sources open to every member
 	Analyses int
 	Running  int // runs going on
 	Finished int
@@ -43,7 +43,7 @@ func (s *Server) welcome(w http.ResponseWriter, r *http.Request) {
 	if fail(err) {
 		return
 	}
-	shared, err := s.db.SharedWith(ctx, user)
+	others, err := s.db.OpenStreams(ctx, user)
 	if fail(err) {
 		return
 	}
@@ -61,7 +61,7 @@ func (s *Server) welcome(w http.ResponseWriter, r *http.Request) {
 	if d.tokenCounts, err = s.tokenCountsOf(ctx, user); fail(err) {
 		return
 	}
-	d.Sources, d.Shared, d.Analyses = len(own), len(shared), len(as)
+	d.Sources, d.Others, d.Analyses = len(own), len(others), len(as)
 	now := time.Now().UTC()
 	for _, run := range runs {
 		if run.Active(now) {

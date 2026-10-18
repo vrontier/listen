@@ -217,7 +217,7 @@ func (s *Server) capRefusal(ctx context.Context, user int64, a catalogue.Analysi
 			return "", err
 		}
 		if !ok {
-			return src.Stream.Texts.Name + " is no longer shared with you; take it out of the analysis to go on without it.", nil
+			return src.Stream.Texts.Name + " is kept private by " + src.Stream.OwnerName + " for now; take it out of the analysis to go on without it.", nil
 		}
 	}
 	est := s.estimate(a)

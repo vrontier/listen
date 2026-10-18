@@ -7,11 +7,12 @@ import (
 	"strings"
 )
 
-// Reserved inputs (decided 2026-10-16): addresses the Observatory listens
-// to. Until a stream reaches the engine through a local input from the
-// Observatory's listener, with its operator's consent, the Workbench does
-// not register them, so that the station is not connected to twice. The
-// list is set on the server, never in the repository.
+// Reserved inputs: streams whose operators have not agreed to their
+// analysis on the Workbench, which members therefore cannot register
+// (decided 2026-10-16 for the Observatory's stations; since 2026-10-18,
+// when the engine reads every station through listen-ingest and a station
+// is connected to once, only streams without consent). The list is set on
+// the server, never in the repository.
 
 // ParseReserved reads one entry per line: a host name (every address on
 // it) or a URL (that address, with or without its scheme). Empty lines

@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -24,7 +23,6 @@ func TestPublishing(t *testing.T) {
 		Texts: catalogue.StreamTexts{Name: "Ridge", Place: "a hill", Lat: &lat, Lon: &lon, Credit: "Ridge station"}, Probe: []byte(`{}`)})
 	sb, _ := r.db.CreateStream(ctx, catalogue.NewStream{OwnerID: bob.ID, Input: "https://s.example.org/b", SampleRate: 22050,
 		Texts: catalogue.StreamTexts{Name: "Valley"}, Probe: []byte(`{}`)})
-	r.db.ShareStream(ctx, sb.ID, ann.ID, bob.ID)
 	a, _ := r.db.CreateAnalysis(ctx, ann.ID, "Dawn chorus", "Line one.\nLine two.", []int64{sa.ID, sb.ID}, nil)
 	aURL := "/analyses/" + strconv.FormatInt(a.ID, 10)
 	annC := r.loginAs("ann@example.org")
@@ -34,19 +32,14 @@ func TestPublishing(t *testing.T) {
 		t.Fatal("Research in the menu with nothing published")
 	}
 
-	// Bob has not agreed yet: the page says so and publishing is refused.
+	// Bob's source is open to every member: Ann needs nobody's agreement
+	// to publish an analysis that uses it (decided 2026-10-18).
 	_, page, _ := r.get(annC, aURL+"/publish")
-	if !strings.Contains(page, "belongs to Bob, who has not agreed") || !strings.Contains(page, "Dawn chorus") {
-		t.Fatal("missing consent not shown")
+	if strings.Contains(page, "agreed") && strings.Contains(page, "Bob, who") || !strings.Contains(page, "Dawn chorus") {
+		t.Fatal("publish page asks for Bob's agreement")
 	}
 	csrf := csrfOf(t, page)
-	r.post(annC, aURL+"/publish", url.Values{"csrf": {csrf}, "attest": {"on"}})
-	if got, _ := r.db.Analysis(ctx, a.ID); got.State != catalogue.AnalysisPrivate {
-		t.Fatalf("published without consent: %s", got.State)
-	}
 	bobC := r.loginAs("bob@example.org")
-	_, spage, _ := r.get(bobC, "/sources/"+sb.Slug)
-	r.post(bobC, "/sources/"+sb.Slug+"/consent", url.Values{"csrf": {csrfOf(t, spage)}, "member": {fmt.Sprint(ann.ID)}, "agree": {"1"}})
 
 	// Without the attestation, no; with it, published.
 	r.post(annC, aURL+"/publish", url.Values{"csrf": {csrf}})
@@ -61,7 +54,7 @@ func TestPublishing(t *testing.T) {
 	// A visitor sees it, without the addresses or coordinates.
 	visitor := r.browser()
 	code, page, _ = r.get(visitor, "/research/dawn-chorus")
-	if code != 200 || !strings.Contains(page, "By Ann") || !strings.Contains(page, "Ridge station") || !strings.Contains(page, "run by Bob") || !strings.Contains(page, "No filter rules") {
+	if code != 200 || !strings.Contains(page, "By Ann") || !strings.Contains(page, "Ridge station") || !strings.Contains(page, "registered by Bob") || !strings.Contains(page, "No filter rules") {
 		t.Fatalf("public page: %d", code)
 	}
 	if strings.Contains(page, "s.example.org") || strings.Contains(page, "50.12345") || !strings.Contains(page, "near 50.1, 10.5") {
@@ -130,12 +123,18 @@ func TestPublishing(t *testing.T) {
 	if got, _ := r.db.Analysis(ctx, a.ID); got.State != catalogue.AnalysisPublished || got.Slug != "dawn-chorus" {
 		t.Fatalf("published again: %s %s", got.State, got.Slug)
 	}
-	r.post(bobC, "/sources/"+sb.Slug+"/consent", url.Values{"csrf": {csrfOf(t, spage)}, "member": {fmt.Sprint(ann.ID)}, "agree": {"0"}})
-	if got, _ := r.db.Analysis(ctx, a.ID); got.State != catalogue.AnalysisWithdrawn {
-		t.Fatalf("not withdrawn after consent ended: %s", got.State)
+	// Bob cannot take his source back from under Ann's analysis: it stays
+	// open, and her work stays published.
+	_, spage, _ := r.get(bobC, "/sources/"+sb.Slug)
+	_, _, hdr = r.post(bobC, "/sources/"+sb.Slug+"/visibility", url.Values{"csrf": {csrfOf(t, spage)}, "to": {"private"}})
+	if _, page, _ = r.get(bobC, hdr.Get("Location")); !strings.Contains(page, "other members&#39; analyses use this source") {
+		t.Fatal("making a used source private not refused with a reason")
 	}
-	if m, _ := r.mail.Last("ann@example.org"); !strings.Contains(m.Body, "no longer agrees") {
-		t.Fatal("member not told of the withdrawal")
+	if got, _ := r.db.Stream(ctx, sb.ID); got.Private {
+		t.Fatal("a source others use became private")
+	}
+	if got, _ := r.db.Analysis(ctx, a.ID); got.State != catalogue.AnalysisPublished {
+		t.Fatalf("Ann's analysis: %s", got.State)
 	}
 }
 

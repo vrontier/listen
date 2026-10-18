@@ -135,7 +135,7 @@
   {{range .Sources}}
   <article class="card">
     <h3>{{.Stream.Texts.Name}}</h3>
-    <p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{if and .Stream.Texts.Lat .Stream.Texts.Lon}}near {{publicCoord .Stream.Texts.Lat}}, {{publicCoord .Stream.Texts.Lon}} · {{end}}{{.Stream.SampleRate}} Hz{{if ne .Stream.OwnerID $.Analysis.OwnerID}} · run by {{.Stream.OwnerName}}{{end}}</p>
+    <p class="meta">{{if .Stream.Texts.Place}}{{.Stream.Texts.Place}} · {{end}}{{if and .Stream.Texts.Lat .Stream.Texts.Lon}}near {{publicCoord .Stream.Texts.Lat}}, {{publicCoord .Stream.Texts.Lon}} · {{end}}{{.Stream.SampleRate}} Hz{{if ne .Stream.OwnerID $.Analysis.OwnerID}} · registered by {{.Stream.OwnerName}}{{end}}</p>
     {{if .Stream.Texts.Description}}<p>{{.Stream.Texts.Description}}</p>{{end}}
     {{if or .Stream.Texts.Credit .Stream.Texts.CreditURL}}<p class="meta">Credit: {{.Stream.Texts.Credit}}{{with .Stream.Texts.CreditURL}} · <a href="{{.}}" rel="noopener nofollow">{{.}}</a>{{end}}</p>{{end}}
     <p>Analysed: {{.Settings}}. {{if .Rules}}Filter rules, which remove spectral peaks at known interference before resonances and motifs are derived from them:{{else}}No filter rules: nothing is left out.{{end}}</p>
