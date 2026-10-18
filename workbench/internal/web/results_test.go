@@ -163,4 +163,13 @@ func TestHome(t *testing.T) {
 	if _, page, _ := r.get(http.DefaultClient, "/"); !strings.Contains(page, "log in") || strings.Contains(page, "Welcome,") {
 		t.Fatal("visitor's front page")
 	}
+	// Nothing published: no link to Research. Publishing off: no word of it.
+	if _, page, _ := r.get(http.DefaultClient, "/"); strings.Contains(page, `href="/research"`) || !strings.Contains(page, "until they choose to publish them") {
+		t.Error("front page with nothing published")
+	}
+	r.srv.cfg.Publishing = false
+	if _, page, _ := r.get(http.DefaultClient, "/"); strings.Contains(page, "publish") {
+		t.Error("front page speaks of publishing while it is off")
+	}
+	r.srv.cfg.Publishing = true
 }

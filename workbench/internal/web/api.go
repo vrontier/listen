@@ -62,7 +62,7 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request, scope stri
 	secret, ok := strings.CutPrefix(h, "Bearer ")
 	if !ok || !strings.HasPrefix(secret, catalogue.TokenPrefix) {
 		w.Header().Set("WWW-Authenticate", `Bearer realm="workbench"`)
-		apiError(w, http.StatusUnauthorized, "no_token", "This needs a token in the header \"Authorization: Bearer low_…\". Members create tokens under Tokens.")
+		apiError(w, http.StatusUnauthorized, "no_token", "This needs a token in the header \"Authorization: Bearer low_…\". Members create tokens under AI, Access.")
 		return r, false
 	}
 	t, u, err := s.db.APIToken(r.Context(), strings.TrimSpace(secret))

@@ -143,7 +143,7 @@ func (s *Server) listSources(ctx context.Context, user int64) (string, bool) {
 func (s *Server) checkLimit(ctx context.Context, t catalogue.APIToken, name string, a controlArgs) (string, error) {
 	day := time.Now().Add(-24 * time.Hour)
 	l := t.Limits
-	where := " Its member sets the limits under Tokens."
+	where := " Its member sets the limits under AI, Access."
 	switch {
 	case slices.Contains(changeTools, name) && l.ChangesPerDay > 0:
 		n, err := s.db.TokenCalls(ctx, t.ID, changeTools, day)
@@ -189,7 +189,7 @@ func (s *Server) callControl(ctx context.Context, name string, rawArgs json.RawM
 	user := sess.User.ID
 	t, _ := ctx.Value(tokenKey).(catalogue.APIToken)
 	if !t.Has(catalogue.ScopeControl) {
-		return refused + "this token may only read. Its member can allow control for it under Tokens.", true
+		return refused + "this token may only read. Its member can allow control for it under AI, Access.", true
 	}
 	var a controlArgs
 	if len(rawArgs) > 0 {

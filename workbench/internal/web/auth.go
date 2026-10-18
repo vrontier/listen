@@ -18,7 +18,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		s.welcome(w, r2)
 		return
 	}
-	s.render(w, r, 200, "home", "", nil)
+	s.render(w, r, 200, "home", "", map[string]bool{"Publishing": s.cfg.Publishing})
 }
 
 type loginData struct {

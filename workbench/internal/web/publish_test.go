@@ -63,6 +63,9 @@ func TestPublishing(t *testing.T) {
 	if _, page, _ = r.get(visitor, "/research"); !strings.Contains(page, "Dawn chorus") || !strings.Contains(page, `href="/research"`) {
 		t.Fatal("not in the index, or Research not in the menu")
 	}
+	if _, page, _ = r.get(visitor, "/"); !strings.Contains(page, "Published research</a> is open to everyone") {
+		t.Fatal("the front page does not point to what is published")
+	}
 	if code, _, _ := r.get(visitor, "/research/dawn-chorus/live/"+strconv.FormatInt(sa.ID, 10)); code != http.StatusConflict {
 		t.Fatalf("live outside a run: %d", code)
 	}

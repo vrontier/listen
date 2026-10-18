@@ -237,6 +237,9 @@ form.stack { display: flex; flex-direction: column; gap: 0.8rem; }
 form.inline, form.inline-form { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
 form.inline-form button { align-self: flex-end; padding-top: 0.5rem; padding-bottom: 0.5rem; }
 .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.8rem; }
+/* Fields side by side: the controls line up at the bottom, whether or not
+   a field has a hint above its control. */
+.row > label > :last-child { margin-top: auto; }
 label { display: flex; flex-direction: column; gap: 0.25rem; font-weight: 600; }
 label small { font-weight: 400; color: var(--muted); }
 label.check { flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 400; }
